@@ -34,6 +34,7 @@ export function StudioAdded({
   onEdit,
   crossSell,
   also,
+  sideLabels,
 }: {
   line: CartLine;
   /** The line was a cart line edited again (not a new one). */
@@ -44,6 +45,8 @@ export function StudioAdded({
   /** «Designul tău pe alte produse» (mugs / pens / notebooks). */
   crossSell?: ReactNode;
   also?: StudioAlsoProduct | null;
+  /** Names of the two pictures (apparel: «Față» / «Spate» instead of the card's «Verso»). */
+  sideLabels?: { front: string; back: string };
 }) {
   const t = studioShopT(lang);
   const { href } = useShopLang();
@@ -51,8 +54,8 @@ export function StudioAdded({
   const v = addedLineView(line);
   const sum = cartSummary(cart);
   const pics: { src: string; label: string | null }[] = [
-    ...(v.front ? [{ src: v.front, label: v.back ? t("doneFront") : null }] : []),
-    ...(v.back ? [{ src: v.back, label: t("doneBack") }] : []),
+    ...(v.front ? [{ src: v.front, label: v.back ? (sideLabels?.front ?? t("doneFront")) : null }] : []),
+    ...(v.back ? [{ src: v.back, label: sideLabels?.back ?? t("doneBack") }] : []),
   ];
   return (
     <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5 px-4 py-6 md:px-6 md:py-8" data-studio-added>

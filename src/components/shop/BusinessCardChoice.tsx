@@ -21,7 +21,8 @@ export interface BusinessCardChoiceText {
  * «Creează online» (the card Studio) and «Încarcă fișierul tău» (the upload
  * form, unchanged, passed as `upload`). Editing an uploaded cart line opens on
  * the upload form. Flyers (`kind: "flyer"`, `/p/flyere`) use the same choice
- * with their own texts and Studio link (the CTA is `data-studio-flyer-cta`).
+ * with their own texts and Studio link (the CTA is `data-studio-flyer-cta`); so do the
+ * DTF garments (`kind: "apparel"`, T-shirt / polo / cap pages, `data-studio-apparel-cta`).
  */
 export function BusinessCardChoice({
   text,
@@ -34,7 +35,7 @@ export function BusinessCardChoice({
   studioHref: string;
   initial: "create" | "upload";
   upload: ReactNode;
-  kind?: "card" | "flyer";
+  kind?: "card" | "flyer" | "apparel";
 }) {
   const [tab, setTab] = useState<"create" | "upload">(initial);
   const tabCls = (on: boolean) =>
@@ -66,7 +67,7 @@ export function BusinessCardChoice({
               </li>
             ))}
           </ol>
-          <Link href={studioHref} {...(kind === "flyer" ? { "data-studio-flyer-cta": true } : { "data-studio-card-cta": true })} className="shop-btn-dark self-start rounded-xl bg-(--ink) px-6 py-3.5 text-[17px] font-extrabold text-white no-underline">
+          <Link href={studioHref} {...(kind === "flyer" ? { "data-studio-flyer-cta": true } : kind === "apparel" ? { "data-studio-apparel-cta": true } : { "data-studio-card-cta": true })} className="shop-btn-dark self-start rounded-xl bg-(--ink) px-6 py-3.5 text-[17px] font-extrabold text-white no-underline">
             {text.createCta}
           </Link>
         </div>

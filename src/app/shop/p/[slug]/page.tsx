@@ -13,7 +13,10 @@ import { printShopPageOf } from "@/lib/storefront/printShop/listing";
 import { printShopPageMetadata } from "@/lib/storefront/printShop/seo";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductView } from "@/components/shop/ProductView";
-import { studioCardAllowed, studioEditorAllowed, studioFlyerAllowed } from "@/lib/studio/flagServer";
+import { studioApparelAllowed, studioCardAllowed, studioEditorAllowed, studioFlyerAllowed } from "@/lib/studio/flagServer";
+import { isStudioApparelEnabled } from "@/lib/studio/flag";
+import { isApparelProduct } from "@/lib/studio/apparel";
+import { ApparelChoice } from "@/components/shop/ApparelChoice";
 import { designRequestKindOf } from "@/lib/studio/designerHelp";
 import { getDesignerHelpPrice } from "@/lib/studio/designerHelpServer";
 import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
@@ -119,9 +122,11 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
   const category = catalog.categories.find((c) => c.slug === product.category);
   const path = `/p/${product.slug}`;
   // Studio v2: the Studio flag (staff / tester / env) and the «Помощь дизайнера» price (mugs, pens).
-  const [studioOn, designerPriceLei] = await Promise.all([
+  const [studioOn, designerPriceLei, apparelStudio] = await Promise.all([
     product.editorHref || product.studioKind ? studioEditorAllowed() : Promise.resolve(false),
     designRequestKindOf(product) ? getDesignerHelpPrice() : Promise.resolve(null),
+    // T-shirt / polo / cap: «Creează online» with the apparel Studio gate (`SHOP_STUDIO_APPAREL=1` or staff / tester).
+    isApparelProduct(product) && product.available ? studioApparelAllowed() : Promise.resolve(false),
   ]);
 
   return (
@@ -158,7 +163,11 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
         ) : null}
         <span aria-current="page">{product.name}</span>
       </nav>
-      <ProductView product={product} editId={editId} extras={{ studioOn, designerPriceLei }} />
+      {apparelStudio ? (
+        <ApparelChoice product={product} editId={editId} extras={{ studioOn, designerPriceLei }} badge={!isStudioApparelEnabled()} />
+      ) : (
+        <ProductView product={product} editId={editId} extras={{ studioOn, designerPriceLei }} />
+      )}
     </main>
   );
 }

@@ -75,10 +75,13 @@ const StudioCanvasLazy = dynamic(() => loadStudioCanvas().then((m) => m.StudioCa
   ),
 });
 
-export const STUDIO_TOOLS = ["templates", "text", "images", "elements", "qr", "background", "mydata"] as const;
+export const STUDIO_TOOLS = ["templates", "text", "images", "elements", "qr", "background", "mydata", "product"] as const;
 export type StudioToolId = (typeof STUDIO_TOOLS)[number];
+/** The tool bar of every kind that does not pick its own (`StudioExtensions.tools`): «Produs» is the apparel panel. */
+const DEFAULT_TOOLS: readonly StudioToolId[] = STUDIO_TOOLS.filter((t) => t !== "product");
 
 const TOOL_LABEL: Record<StudioToolId, StudioEditorKey> = {
+  product: "toolProduct",
   templates: "toolTemplates",
   text: "toolText",
   images: "toolImages",
@@ -174,6 +177,10 @@ export interface StudioExtensions {
   initialTool?: StudioToolId;
   /** Over the top of the canvas, centred (business cards: «Față» / «Verso»). */
   surfaceBar?: (api: StudioEditorApi) => ReactNode;
+  /** Tool bar of this kind, in order (default: every tool but «Produs»). Apparel: no background (DTF prints transparent). */
+  tools?: readonly StudioToolId[];
+  /** Phones: the surface bar at the top-left instead of centred (apparel: the garment preview sits top-right). */
+  surfaceBarStart?: boolean;
 }
 
 function useMedia(query: string): boolean {
@@ -201,6 +208,8 @@ export function StudioApp({
   editId,
   extensions = {},
   printOverride = null,
+  specsOverride = null,
+  colorOverride = null,
 }: {
   kind: StudioKind;
   product: ShopProduct;
@@ -209,6 +218,13 @@ export function StudioApp({
   extensions?: StudioExtensions;
   /** Print area chosen on the page instead of the catalog item's (flyers: the format switch, `flyerPrint`). */
   printOverride?: PrintSizeCm | null;
+  /**
+   * The surfaces themselves, decided by the page (apparel: one surface per print zone at the picked DTF format,
+   * `apparelSurfaceSpecs`); no catalog item is loaded then.
+   */
+  specsOverride?: StudioSurfaceSpec[] | null;
+  /** Colour of the product under the design (apparel: the garment colour picked on the page). */
+  colorOverride?: string | null;
 }) {
   const { lang, href } = useShopLang();
   const t = useMemo(() => studioEditorT(lang), [lang]);
@@ -272,8 +288,8 @@ export function StudioApp({
   const [items, setItems] = useState<StudioCatalogItem[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    // Business cards / flyers are not catalog items: their print size is fixed (or the page's format).
-    if (isSheetKind(kind)) {
+    // Business cards / flyers are not catalog items: their print size is fixed (or the page's format). Apparel: the page's zones.
+    if (isSheetKind(kind) || kind === "apparel") {
       setItems([]);
       return;
     }
@@ -290,17 +306,19 @@ export function StudioApp({
     () => studioUvItem(kind, product, variant, items?.find((i) => i.id === variant?.id) ?? null) as StudioCatalogItem | null,
     [kind, product, variant, items],
   );
-  const printKey = printOverride
+  const printKey = specsOverride
+    ? `specs:${specsOverride.map((s) => `${s.id}=${s.widthMm}x${s.heightMm}@${s.dpi}`).join(",")}`
+    : printOverride
     ? `override:${printOverride.widthCm}x${printOverride.heightCm}@${printOverride.dpi}`
     : item
       ? `${item.printWidthCm}x${item.printHeightCm}@${item.printDpi}`
       : "default";
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the print area numbers
-  const specs: StudioSurfaceSpec[] = useMemo(() => studioSurfaces(kind, printOverride ?? printOfItem(kind, item)), [kind, printKey]);
+  const specs: StudioSurfaceSpec[] = useMemo(() => specsOverride ?? studioSurfaces(kind, printOverride ?? printOfItem(kind, item)), [kind, printKey]);
   /** The first surface (print size checks); the edited one is `spec` further down. */
   const firstSpec: StudioSurfaceSpec = specs[0]!;
   // A magic mug prints on white ceramic (the black coating clears when hot): design on white.
-  const productColor = kind === "mug" && isMagicMug(product.slug, typeof item?.sku === "string" ? item.sku : null) ? "#ffffff" : itemColor(kind, item, variant);
+  const productColor = colorOverride ? colorOverride : kind === "mug" && isMagicMug(product.slug, typeof item?.sku === "string" ? item.sku : null) ? "#ffffff" : itemColor(kind, item, variant);
 
   // ─── Document + history ────────────────────────────────────────────────
   const [hist, setHist] = useState<History<StudioDoc> | null>(null);
@@ -337,8 +355,12 @@ export function StudioApp({
   useEffect(() => {
     setHist((h) => {
       if (!h) return h;
-      const s = h.present.surfaces[0];
-      if (s && s.widthMm === firstSpec.widthMm && s.heightMm === firstSpec.heightMm) return h;
+      // Every surface (apparel: another print format on the back resizes only the back).
+      const same: boolean = h.present.surfaces.every((s) => {
+        const sp = specs.find((x) => x.id === s.id);
+        return !sp || (s.widthMm === sp.widthMm && s.heightMm === sp.heightMm);
+      });
+      if (same) return h;
       return replacePresent(h, fitDocToSurfaces(h.present, docSurfaceBases(h.present, specs)));
     });
   }, [firstSpec, specs]);
@@ -593,7 +615,11 @@ export function StudioApp({
   const labels: StudioCanvasLabels = {
     bleed: t("bleed", { mm: String(surface.bleedMm).replace(".", lang === "en" ? "." : ",") }),
     cutLine: t("cutLine"),
-    safeZone: t("safeZone"),
+    // Apparel: the zone edge is the transfer's edge (no safe band): name the zone and its size instead.
+    safeZone:
+      kind === "apparel"
+        ? t("printZone", { size: `${String(surface.widthMm / 10).replace(".", lang === "en" ? "." : ",")}×${String(surface.heightMm / 10).replace(".", lang === "en" ? "." : ",")}` })
+        : t("safeZone"),
     handle: t("handle"),
     seam: t("seam"),
     center: t("center"),
@@ -676,7 +702,11 @@ export function StudioApp({
   );
 
   const surfaceBar: ReactNode = extensions.surfaceBar ? (
-    <div className="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2 [&>*]:pointer-events-auto md:top-3">{extensions.surfaceBar(api)}</div>
+    <div
+      className={`pointer-events-none absolute top-2 z-10 [&>*]:pointer-events-auto md:top-3 ${extensions.surfaceBarStart ? "left-2 md:left-1/2 md:-translate-x-1/2" : "left-1/2 -translate-x-1/2"}`}
+    >
+      {extensions.surfaceBar(api)}
+    </div>
   ) : null;
 
   const backHref = href(`/shop/p/${product.slug}`);
@@ -790,7 +820,7 @@ export function StudioApp({
             ) : null}
             {selected && sheet !== "props" ? <PhoneContextStrip ctx={ctx} onEdit={() => setSheet("props")} /> : null}
             <nav aria-label={t("tools")} className="flex flex-none items-stretch justify-between border-t border-(--line) bg-white px-1 pb-[env(safe-area-inset-bottom)]">
-              {STUDIO_TOOLS.map((tl) => (
+              {(extensions.tools ?? DEFAULT_TOOLS).map((tl) => (
                 <button
                   key={tl}
                   type="button"
@@ -820,7 +850,7 @@ export function StudioApp({
       ) : (
         <div className="relative flex min-h-0 flex-1">
           <nav aria-label={t("tools")} className="flex w-[84px] flex-none flex-col gap-1 border-r border-(--line) px-1.5 py-2.5">
-            {STUDIO_TOOLS.map((tl) => (
+            {(extensions.tools ?? DEFAULT_TOOLS).map((tl) => (
               <button
                 key={tl}
                 type="button"

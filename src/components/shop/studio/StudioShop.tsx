@@ -33,6 +33,7 @@ import { StudioCardStart } from "./StudioCardGallery";
 import { StudioCardShort } from "./StudioCardShort";
 import { useShopLang } from "../ShopLangProvider";
 import { StudioAdded, type StudioAlsoProduct } from "./StudioAdded";
+import { StudioApparelBody, type ApparelPageData } from "./StudioApparel";
 import { StudioApp, type StudioCatalogItem, type StudioEditorApi, type StudioExtensions } from "./StudioApp";
 import { StudioCrossSell, type StudioCrossSellTarget } from "./StudioCrossSell";
 import { StudioMyDataPanel } from "./StudioMyData";
@@ -76,6 +77,8 @@ export function StudioShop(props: {
   crossSell: StudioCrossSellProduct[];
   /** Business cards / flyers: the other one, offered on the «added» screen. */
   also?: StudioAlsoProduct | null;
+  /** Apparel (`/studio/apparel`): the live price data and the other garments. */
+  apparel?: ApparelPageData | null;
 }) {
   const lines = useCart();
   const hydrated = useHydrated();
@@ -108,6 +111,19 @@ export function StudioShop(props: {
   const editId: string | null = live ? live.edit : props.editId;
   const editLine: CartLine | null = editId ? (lines.find((l) => l.id === editId && isStudioCartLine(l, props.kind)) ?? null) : null;
   const fromId: string | null = live ? null : props.fromId;
+  if (props.kind === "apparel") {
+    return (
+      <StudioApparelBody
+        key={`${live?.round ?? 0}:${props.product.slug}:${editLine?.id ?? "new"}`}
+        product={props.product}
+        data={props.apparel ?? { pricing: null, products: [] }}
+        editLine={editLine}
+        cartDocIds={lines.map((l) => l.design?.studio?.docId).filter((x): x is string => !!x)}
+        forceNew={live ? live.edit == null : props.forceNew}
+        onStartOver={startOver}
+      />
+    );
+  }
   return (
     <StudioShopBody
       key={`${live?.round ?? 0}:${editLine?.id ?? fromId ?? "new"}`}

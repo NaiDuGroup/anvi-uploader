@@ -64,3 +64,6 @@ public/*.glb
 .env.vercel.*
 backups/
 .env.cron.local
+
+# Local design screenshots for the owner (not shipped)
+/editor-research/

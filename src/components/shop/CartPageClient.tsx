@@ -213,8 +213,8 @@ function CartRow({
           <span className={`text-sm ${line.files.length ? (lowRes ? "text-(--warn)" : "text-(--ok)") : "text-(--muted2)"}`}>
             {line.files.length === 0
               ? t("noFile")
-              : // A business card / flyer made in the Studio: its two print files are one design.
-                designHref && (line.design?.editor === "card" || line.design?.editor === "flyer")
+              : // A business card / flyer / garment made in the Studio: its print files (one per side / zone) are one design.
+                designHref && (line.design?.editor === "card" || line.design?.editor === "flyer" || line.design?.editor === "apparel")
                 ? t("designAttached")
                 : line.files.length === 1
                 ? // A design made in the editor: its generated file name means nothing to the customer.
@@ -247,8 +247,8 @@ function CartRow({
               {t("editDesign")}
             </Link>
           ) : null}
-          {/* A Studio business card / flyer is edited in the Studio only (the upload page would replace the design). */}
-          {designHref && (line.design?.editor === "card" || line.design?.editor === "flyer") ? null : (
+          {/* A Studio business card / flyer / garment is edited in the Studio only (the upload page would replace the design). */}
+          {designHref && (line.design?.editor === "card" || line.design?.editor === "flyer" || line.design?.editor === "apparel") ? null : (
             <Link
               href={editHref}
               aria-label={t("editAria", { title: text.title })}

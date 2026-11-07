@@ -15,7 +15,9 @@ import { shopHref } from "@/lib/storefront/shopHost";
 import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 import type { ShopProduct } from "@/lib/storefront/types";
 import { STUDIO_KINDS, isStudioKind, type StudioKind } from "@/lib/studio/document";
-import { studioCardAllowed, studioEditorAllowed, studioFlyerAllowed } from "@/lib/studio/flagServer";
+import { studioApparelAllowed, studioCardAllowed, studioEditorAllowed, studioFlyerAllowed } from "@/lib/studio/flagServer";
+import { APPAREL_GARMENTS, isApparelProduct } from "@/lib/studio/apparel";
+import { loadApparelPricing } from "@/lib/studio/apparelServer";
 import { flyerShopProduct } from "@/lib/studio/flyerProduct";
 import { shopBusinessCardProduct } from "@/lib/storefront/businessCardProduct";
 
@@ -47,7 +49,7 @@ function crossSellProducts(products: readonly ShopProduct[], kind: StudioKind): 
   const out: StudioCrossSellProduct[] = [];
   for (const k of STUDIO_KINDS) {
     // Business cards / flyers are not offered as «your design on other products» (their own packs and pages).
-    if (k === kind || k === "card" || k === "flyer") continue;
+    if (k === kind || k === "card" || k === "flyer" || k === "apparel") continue;
     // The old-editor product first (its catalog item has the print area and the 3D look).
     const p = products.find((x) => x.editorHref && productStudioKind(x) === k && x.available) ?? products.find((x) => productStudioKind(x) === k && x.available);
     if (!p) continue;
@@ -79,7 +81,8 @@ export default async function StudioPage({ params, searchParams }: Props) {
   if (!isStudioKind(kind)) notFound();
   // Business cards have their own gate (`SHOP_STUDIO_CARD=1` or staff / tester): the Studio flag is on for everyone.
   // Flyers too (`SHOP_STUDIO_FLYER=1` or staff / tester): neither the Studio nor the card flag opens them.
-  if (!(await (kind === "card" ? studioCardAllowed() : kind === "flyer" ? studioFlyerAllowed() : studioEditorAllowed()))) notFound();
+  // Apparel too (`SHOP_STUDIO_APPAREL=1` or staff / tester).
+  if (!(await (kind === "card" ? studioCardAllowed() : kind === "flyer" ? studioFlyerAllowed() : kind === "apparel" ? studioApparelAllowed() : studioEditorAllowed()))) notFound();
   const sp = await searchParams;
   const lang = await getShopLang();
   if (kind === "card") {
@@ -120,6 +123,42 @@ export default async function StudioPage({ params, searchParams }: Props) {
   const base = await getShopBase();
   const catalog = await tryLoadShopCatalog(lang);
   if (!catalog) return <CatalogError lang={lang} />;
+  if (kind === "apparel") {
+    // The DTF garments of the apparel Studio (config order), those on sale now.
+    const garments: ShopProduct[] = APPAREL_GARMENTS.map((g) => catalog.products.find((p) => p.slug === g.slug)).filter(
+      (p): p is ShopProduct => p != null && isApparelProduct(p) && p.available,
+    );
+    const slug = one(sp.slug);
+    const picked: ShopProduct | null = garments.find((p) => p.slug === slug) ?? garments[0] ?? null;
+    if (!picked) {
+      return (
+        <main className="mx-auto flex max-w-xl flex-col items-start gap-4 px-4 py-12">
+          <p className="m-0 text-lg text-(--muted)">{t("editorUnavailable")}</p>
+          <Link href={shopHref(base, "/shop")} className="shop-btn-dark rounded-xl bg-(--ink) px-6 py-3 font-bold no-underline">
+            {t("backToCatalog")}
+          </Link>
+        </main>
+      );
+    }
+    const pricing = await loadApparelPricing(picked);
+    return (
+      <main data-studio-fonts className={EDITOR_FONT_VARIABLE_CLASSES.join(" ")}>
+        <StudioShop
+          kind="apparel"
+          product={picked}
+          variantId={null}
+          editId={one(sp.edit, 64)}
+          fromId={null}
+          forceNew={one(sp.new, 5) != null}
+          crossSell={[]}
+          apparel={{
+            pricing,
+            products: garments.map((p) => ({ slug: p.slug, name: p.name, image: p.image, fromPrice: p.fromPrice })),
+          }}
+        />
+      </main>
+    );
+  }
   const product = pickProduct(catalog.products, kind, one(sp.slug));
   if (!product) {
     return (

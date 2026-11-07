@@ -16,6 +16,7 @@ export const STUDIO_ICONS = {
   qr: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2",
   background: "M4 20 20 4M4 13l9-9M11 20l9-9M4 4h16v16H4z",
   mydata: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0",
+  product: "M8 3 3 6l2 5 2-1v11h10V10l2 1 2-5-5-3a4 4 0 0 1-8 0z",
   undo: "M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3",
   redo: "m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3",
   duplicate: "M8 8h12v12H8zM16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3",
