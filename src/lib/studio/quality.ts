@@ -56,6 +56,7 @@ export const STUDIO_QUALITY_CODES = [
   "dtfThinLine",
   "dtfSmallText",
   "dtfEdge",
+  "dtfSampleText",
 ] as const;
 export type StudioQualityCode = (typeof STUDIO_QUALITY_CODES)[number];
 
@@ -450,6 +451,8 @@ const qualityStrings = defineStudioStrings({
     dtfSmallText_fix: "Literele mai mici de ~2 mm ({pt} pt) se pot pierde pe tricou. Mărește textul la cel puțin 9 pt.",
     dtfEdge_title: "Designul atinge marginea zonei",
     dtfEdge_fix: "Ce iese peste marginea zonei de imprimare se taie. Mută-l sau micșorează-l puțin.",
+    dtfSampleText_title: "{zone}: textul de exemplu nu a fost schimbat",
+    dtfSampleText_fix: "„{text}” se va imprima așa. Scrie textul tău în locul lui sau șterge-l.",
     summaryRed: "{n} problemă de rezolvat",
     summaryRedMany: "{n} probleme de rezolvat",
     summaryYellow: "{n} avertismente",
@@ -509,6 +512,8 @@ const qualityStrings = defineStudioStrings({
     dtfSmallText_fix: "Буквы меньше ~2 мм ({pt} pt) могут потеряться на футболке. Увеличьте текст хотя бы до 9 pt.",
     dtfEdge_title: "Дизайн касается края зоны",
     dtfEdge_fix: "Всё, что выходит за край зоны печати, обрежется. Сдвиньте или немного уменьшите.",
+    dtfSampleText_title: "{zone}: текст-образец не изменён",
+    dtfSampleText_fix: "«{text}» напечатается именно так. Впишите свой текст или удалите его.",
     summaryRed: "{n} проблема — нужно исправить",
     summaryRedMany: "Проблем: {n} — нужно исправить",
     summaryYellow: "Предупреждений: {n}",
@@ -568,6 +573,8 @@ const qualityStrings = defineStudioStrings({
     dtfSmallText_fix: "Letters under ~2 mm ({pt} pt) can get lost on a shirt. Make the text at least 9 pt.",
     dtfEdge_title: "The design touches the zone edge",
     dtfEdge_fix: "Anything past the edge of the print zone is cut off. Move it in or make it a little smaller.",
+    dtfSampleText_title: "{zone}: the sample text was not changed",
+    dtfSampleText_fix: "«{text}» will be printed as it is. Type your own text or delete it.",
     summaryRed: "{n} problem to fix",
     summaryRedMany: "{n} problems to fix",
     summaryYellow: "{n} warnings",

@@ -143,6 +143,8 @@ export interface StudioEditorApi {
   isPhone: boolean;
   /** Edit line in the cart (`?edit=`), if any. */
   editId: string | null;
+  /** Select a text and open it for typing (its text selected, so typing replaces it). */
+  editText: (layerId: string) => void;
 }
 
 export interface StudioExtensions {
@@ -583,6 +585,11 @@ export function StudioApp({
     openTool,
     isPhone,
     editId,
+    editText: (id: string) => {
+      setSelectedId(id);
+      if (isPhone) setSheet("props");
+      setEditTextNonce((n) => n + 1);
+    },
   };
   apiRef.current = api;
 

@@ -1,4 +1,5 @@
 import { MM_PER_PT, imageEffectiveDpi, layerBounds, rectsIntersect, type StudioDoc, type StudioImageLayer, type StudioLayer } from "./document";
+import { isApparelSampleText } from "./apparel";
 import { evaluateStudioQuality, type StudioQualityItem, type StudioQualityOptions } from "./quality";
 import type { StudioSurfaceSpec } from "./surfaces";
 import { textInkBox } from "./textFit";
@@ -13,7 +14,8 @@ import { textInkBox } from "./textFit";
  *   that box on the garment → yellow, with «Elimină fundalul» in the editor;
  * - lines thinner than 1 mm and letters under ~2 mm cap height may not
  *   transfer → yellow;
- * - anything touching / crossing the zone edge is cut there → yellow.
+ * - anything touching / crossing the zone edge is cut there → yellow;
+ * - a sample text («Textul tău») left unchanged prints as it is → yellow, naming the zone.
  *
  * An empty zone is simply not printed: only a design with nothing on any
  * zone is red. Pure.
@@ -39,10 +41,12 @@ export interface ApparelQualityOptions extends StudioQualityOptions {
   used: readonly string[];
   /** The image's edges are opaque (its background prints). Without it: JPEG / other non-PNG sources count as opaque. */
   opaqueImage?: (layer: StudioImageLayer) => boolean | null;
+  /** Zone name in the shop language («Față»), for the sample-text warning. */
+  zoneName?: (surfaceId: string) => string;
 }
 
 /** Codes of the base checks replaced here by their DTF version (or not relevant on a transfer). */
-const REPLACED = new Set(["photoDpi", "textTiny", "outlineThin", "trim", "safeZone", "bleedShort", "designEmpty", "seam", "handle", "neonRgb"]);
+const REPLACED = new Set(["textPlaceholder", "photoDpi", "textTiny", "outlineThin", "trim", "safeZone", "bleedShort", "designEmpty", "seam", "handle", "neonRgb"]);
 
 /** An image source that cannot hold transparency. */
 export function imageMimeOpaque(layer: StudioImageLayer): boolean {
@@ -76,7 +80,9 @@ export function evaluateApparelQuality(doc: StudioDoc, specs: readonly StudioSur
       out.push({ id: `${code}:${l.id}`, level: "yellow", code, layerId: l.id, surfaceId: surface.id, ...(vars ? { vars } : {}) });
     for (const l of surface.layers) {
       if (l.hidden) continue;
-      if (l.kind === "text" && (l.text.trim() === "" || l.placeholder)) continue;
+      if (l.kind === "text" && l.text.trim() === "") continue;
+      // Never dropped: a sample text left as it is prints — say so, naming the zone.
+      if (l.kind === "text" && isApparelSampleText(l)) add("dtfSampleText", l, { zone: opts.zoneName?.(surface.id) ?? surface.id, text: l.text.trim().slice(0, 40) });
       if (l.kind === "image" && l.src) {
         const dpi: number | null = imageEffectiveDpi(l);
         if (dpi != null && dpi < APPAREL_DPI_WARN) add("dtfPhotoDpi", l, { dpi: Math.round(dpi) });

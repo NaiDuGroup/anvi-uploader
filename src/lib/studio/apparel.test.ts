@@ -29,6 +29,8 @@ import {
   apparelClampSizes,
   apparelStartSizes,
   isApparelProduct,
+  isApparelSampleText,
+  APPAREL_SAMPLE_TEXTS,
   parseApparelDraftState,
   type ApparelPricing,
 } from "./apparel";
@@ -395,6 +397,21 @@ describe("apparel quality (DTF)", () => {
   it("is red only when no zone has anything; an empty back is fine", () => {
     expect(codes(docWith(specs, {}))).toEqual(["red:designEmpty@front"]);
     expect(codes(docWith(specs, { front: [text()] }))).toEqual([]);
+  });
+
+  it("warns, naming the zone, when the quick button's sample text is left unchanged — and still prints it", () => {
+    const sample = text({ text: "Textul tău", placeholder: true, sizePt: 40 });
+    const d = docWith(specs, { back: [sample] });
+    // It prints (the zone is used, so priced and exported), it is not dropped.
+    expect(apparelUsedZones(tee, d)).toEqual(["back"]);
+    const items = evaluateApparelQuality(d, specs, { used: apparelUsedZones(tee, d), zoneName: (id) => (id === "back" ? "Spate" : "Față") });
+    expect(items.map((i) => `${i.level}:${i.code}@${i.surfaceId}`)).toEqual(["yellow:dtfSampleText@back"]);
+    expect(items[0]!.vars).toEqual({ zone: "Spate", text: "Textul tău" });
+    // The same words without the flag (another language, an older draft) count too; a typed text does not.
+    for (const t of Object.values(APPAREL_SAMPLE_TEXTS)) expect(isApparelSampleText({ kind: "text", text: ` ${t.toUpperCase()} ` })).toBe(true);
+    expect(isApparelSampleText({ kind: "text", text: "ANVI Studio" })).toBe(false);
+    expect(codes(docWith(specs, { front: [text({ text: "Ваш текст" })] }))).toEqual(["yellow:dtfSampleText@front"]);
+    expect(codes(docWith(specs, { front: [text({ text: "ANVI" })] }))).toEqual([]);
   });
 
   it("warns (never blocks) on a photo under 150 dpi at the printed size", () => {

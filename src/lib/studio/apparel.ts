@@ -204,13 +204,25 @@ export function apparelPlacement(shape: ApparelShape, zone: ApparelZoneId, forma
 
 // ─── What is printed ─────────────────────────────────────────────────────
 
+/** What the quick «Text» button writes (marked `placeholder` until the customer types). */
+export const APPAREL_SAMPLE_TEXTS = { ro: "Textul tău", ru: "Ваш текст", en: "Your text" } as const;
+
+/** A text still showing a sample: flagged as such, or one of the quick button's texts in any language. */
+export function isApparelSampleText(l: { kind: string; text?: string; placeholder?: boolean }): boolean {
+  if (l.kind !== "text") return false;
+  if (l.placeholder) return true;
+  const t: string = (l.text ?? "").trim().toLowerCase();
+  return Object.values(APPAREL_SAMPLE_TEXTS).some((s) => s.toLowerCase() === t);
+}
+
 /** A layer that puts ink on the transfer. */
 export function apparelLayerPrints(l: StudioLayer): boolean {
   if (l.hidden) return false;
   if (l.opacity != null && l.opacity <= 0.01) return false;
   switch (l.kind) {
     case "text":
-      return l.text.trim() !== "" && !l.placeholder;
+      // A sample text left as it is prints too (the verify step warns, `dtfSampleText`).
+      return l.text.trim() !== "";
     case "image":
       return l.src != null;
     case "shape":

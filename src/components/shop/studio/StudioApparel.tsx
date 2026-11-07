@@ -34,6 +34,7 @@ import {
   apparelUsedZones,
   apparelZoneDelta,
   apparelZoneFormats,
+  APPAREL_SAMPLE_TEXTS,
   parseApparelDraftState,
   type ApparelDraftState,
   type ApparelFormat,
@@ -422,7 +423,7 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
   const zoneName = (id: ApparelZoneId) => (id === "back" ? t("zoneBack") : t("zoneFront"));
   const addText = () => {
     if (!surface) return;
-    const raw = newTextLayer(surface, "title", api.lang === "ru" ? "Ваш текст" : api.lang === "en" ? "Your text" : "Textul tău");
+    const raw = newTextLayer(surface, "title", APPAREL_SAMPLE_TEXTS[api.lang]);
     // A line across ~60 % of the zone (the title preset is sized for mugs / covers).
     const small: boolean = surface.heightMm < 120;
     const sizePt: number = Math.max(9, Math.round(Math.min(raw.sizePt, surface.widthMm * (small ? 0.24 : 0.32), surface.heightMm * 0.5)));
@@ -430,9 +431,10 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
     let l = fitTextBox({ ...raw, fontFamily: "Montserrat", sizePt, w: surface.widthMm * 0.9, x: surface.widthMm * 0.05 });
     // A logo-size zone: in the middle; a chest / back print: near the top (where a print usually starts).
     l = { ...l, x: (surface.widthMm - l.w) / 2, y: Math.max(0, small ? (surface.heightMm - l.h) / 2 : surface.heightMm * 0.18 - l.h / 2) };
-    l = { ...l, color: studioInkFor(surface, layerBounds(l), api.productColor) };
+    // A sample: flagged, and opened for typing with the text selected (typing replaces it).
+    l = { ...l, placeholder: true, color: studioInkFor(surface, layerBounds(l), api.productColor) };
     api.setDoc(addLayer(api.doc, surface.id, l));
-    api.select(l.id);
+    api.editText(l.id);
   };
   const addImage = async (file: File) => {
     if (!surface || !(STUDIO_PHOTO_TYPES as readonly string[]).includes(file.type) || file.size > STUDIO_PHOTO_MAX_BYTES) return;
@@ -999,12 +1001,13 @@ function useApparelQuality(api: StudioEditorApi, garment: ApparelGarmentConfig):
       ...(photoColorAt ? { photoColorAt } : {}),
       used,
       opaqueImage: (l) => imageOpaque({ renderAssets }, l),
+      zoneName: (id) => (id === "back" ? studioApparelT(api.lang)("zoneBack") : studioApparelT(api.lang)("zoneFront")),
     });
     const c = studioQualityCounts(items);
     items.sort((a, b) => (a.level === b.level ? 0 : a.level === "red" ? -1 : 1));
     return { items, red: c.red, yellow: c.yellow, blocks: studioQualityBlocks(items) };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- version: photos finished loading
-  }, [doc, specs, productColor, renderAssets, version, garment]);
+  }, [doc, specs, productColor, renderAssets, version, garment, api.lang]);
 }
 
 function ApparelQualityPanel({ api, garment }: { api: StudioEditorApi; garment: ApparelGarmentConfig }) {
@@ -1284,7 +1287,21 @@ function ApparelVerify({
         <ApparelPriceBox api={api} product={product} garment={garment} pricing={data.pricing} sel={sel} server={serverLine} />
         <section className="flex flex-col gap-2">
           {q.items.length ? (
-            <StudioQualityList q={q} lang={api.lang} selectedId={null} onPick={() => onBack()} />
+            <StudioQualityList
+              q={q}
+              lang={api.lang}
+              selectedId={null}
+              onPick={(it) => {
+                // Back to the editor on that zone, the element selected (a sample text opened for typing).
+                if (it.surfaceId) api.setSurface(it.surfaceId);
+                onBack();
+                if (it.layerId) {
+                  const id = it.layerId;
+                  if (it.code === "dtfSampleText") window.setTimeout(() => api.editText(id), 0);
+                  else api.select(id);
+                }
+              }}
+            />
           ) : (
             <>
               <h2 className="m-0 text-base font-extrabold">{t("checklist")}</h2>
