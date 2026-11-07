@@ -43,12 +43,12 @@ export type MeasureText = (layer: StudioTextLayer) => { w: number; h: number };
  * The layer with its measured box, centred where it was; with `band`, a box
  * wider than the band shrinks the text (sizePt) so it fits the band width.
  */
-export function fitTextLayer(layer: StudioTextLayer, measure: MeasureText, band: number | null): StudioTextLayer {
+export function fitTextLayer(layer: StudioTextLayer, measure: MeasureText, band: number | null, minPt: number = TEXT_FIT_MIN_PT): StudioTextLayer {
   let l: StudioTextLayer = layer;
   let m = measure(l);
   if (band != null && m.w > band + 0.01) {
-    for (let i = 0; i < 4 && m.w > band + 0.01 && l.sizePt > TEXT_FIT_MIN_PT; i++) {
-      const sizePt: number = Math.max(TEXT_FIT_MIN_PT, Math.floor(l.sizePt * (band / m.w) * 10) / 10);
+    for (let i = 0; i < 4 && m.w > band + 0.01 && l.sizePt > minPt; i++) {
+      const sizePt: number = Math.max(minPt, Math.floor(l.sizePt * (band / m.w) * 10) / 10);
       const strokeK: number = sizePt / l.sizePt;
       l = { ...l, sizePt, ...(l.stroke ? { stroke: { ...l.stroke, widthMm: Math.max(0.05, l.stroke.widthMm * strokeK) } } : {}) };
       m = measure(l);
@@ -113,4 +113,41 @@ export function fitDocTexts(doc: StudioDoc, measure: MeasureText, mode: TextBand
     return { ...s, layers };
   });
   return changed ? { ...doc, surfaces } : doc;
+}
+
+/**
+ * A text typed into a fixed print zone (DTF apparel): it never grows past the
+ * zone. Wider than the zone (less `marginMm` each side) → the font shrinks to
+ * fit, down to `minPt`; still too wide there → the words wrap onto lines.
+ * The box stays where it was (centre), pulled inside the zone sideways.
+ */
+export function fitTextInZone(
+  layer: StudioTextLayer,
+  measure: MeasureText,
+  zone: { widthMm: number },
+  opts: { marginMm: number; minPt: number },
+): StudioTextLayer {
+  if (Math.abs(Math.sin(((layer.rotation ?? 0) * Math.PI) / 180)) > 1e-6 || Math.abs(layer.arcDeg ?? 0) >= 1) return layer;
+  const band: number = Math.max(5, zone.widthMm - 2 * opts.marginMm);
+  let l: StudioTextLayer = fitTextLayer(layer, measure, band, Math.min(opts.minPt, layer.sizePt));
+  if (l.w > band + 0.01 && /\s/.test(l.text.trim())) {
+    // Greedy wrap at the smallest size: as many words per line as fit.
+    const words: string[] = l.text.trim().split(/\s+/);
+    const lines: string[] = [];
+    let cur = "";
+    for (const w of words) {
+      const next: string = cur ? `${cur} ${w}` : w;
+      if (cur && measure({ ...l, text: next }).w > band + 0.01) {
+        lines.push(cur);
+        cur = w;
+      } else cur = next;
+    }
+    if (cur) lines.push(cur);
+    l = fitTextLayer({ ...l, text: lines.join("\n") }, measure, band, Math.min(opts.minPt, layer.sizePt));
+  }
+  if (l.w <= band + 0.01) {
+    const x: number = Math.min(Math.max(l.x, opts.marginMm), zone.widthMm - opts.marginMm - l.w);
+    if (x !== l.x) l = { ...l, x };
+  }
+  return l;
 }

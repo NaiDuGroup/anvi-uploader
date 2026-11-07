@@ -72,6 +72,8 @@ export function evaluateApparelQuality(doc: StudioDoc, specs: readonly StudioSur
     out.unshift({ id: `designEmpty:${doc.surfaces[0]?.id ?? "front"}`, level: "red", code: "designEmpty", surfaceId: doc.surfaces[0]?.id ?? "front" });
     return out;
   }
+  // Cut-off content first in the list (it is what the customer must not miss).
+  const outside: StudioQualityItem[] = [];
   for (const surface of doc.surfaces) {
     if (!used.has(surface.id)) continue;
     const W: number = surface.widthMm;
@@ -94,11 +96,14 @@ export function evaluateApparelQuality(doc: StudioDoc, specs: readonly StudioSur
       const b = l.kind === "text" && !l.rotation ? textInkBox(l) : layerBounds(l);
       if (rectsIntersect(b, { x: 0, y: 0, w: W, h: H })) {
         const sides: number[] = [b.x, b.y, W - (b.x + b.w), H - (b.y + b.h)];
-        if (sides.some((d) => d < APPAREL_EDGE_MM)) add("dtfEdge", l);
+        // Past the edge = really cut («… iese din zonă și se va tăia»); merely touching it = the softer note.
+        if (sides.some((d) => d < -APPAREL_EDGE_MM))
+          outside.push({ id: `dtfOutside:${l.id}`, level: "yellow", code: "dtfOutside", layerId: l.id, surfaceId: surface.id, vars: { zone: opts.zoneName?.(surface.id) ?? surface.id } });
+        else if (sides.some((d) => d < APPAREL_EDGE_MM)) add("dtfEdge", l);
       }
     }
   }
-  return out;
+  return [...outside, ...out];
 }
 
 // ─── Image background (pixels) ───────────────────────────────────────────

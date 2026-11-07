@@ -19,6 +19,7 @@ import {
   type StudioImageLayer,
   type StudioKind,
   type StudioLayer,
+  type StudioTextLayer,
   type StudioSurface,
 } from "@/lib/studio/document";
 import type { CanvasReserve } from "@/lib/studio/canvasFit";
@@ -173,6 +174,8 @@ export interface StudioExtensions {
   onDocChange?: (doc: StudioDoc, api: StudioEditorApi) => void;
   /** Text colours offered first (brand colours). */
   extraColors?: (api: StudioEditorApi) => readonly string[];
+  /** A text being typed into a fixed zone: its box adjusted (apparel: shrink, then wrap). */
+  fitText?: (layer: StudioTextLayer, api: StudioEditorApi) => StudioTextLayer;
   /** «Datele mele» (QR prefill). */
   myFields?: (api: StudioEditorApi) => StudioFields;
   /** First tool open on desktop (default «text»). */
@@ -616,6 +619,7 @@ export function StudioApp({
     editTextNonce,
     photoMissing: (id) => assets.current.isMissing(id),
     extraColors: extensions.extraColors?.(api),
+    ...(extensions.fitText ? { fitText: (l: StudioTextLayer) => extensions.fitText!(l, api) } : {}),
     fields: extensions.myFields?.(api),
     lang,
     renderAssets,

@@ -66,6 +66,8 @@ export interface StudioPanelCtx {
   photoMissing: (localId: string) => boolean;
   /** Text colours offered first (C: brand colours from «Datele mele»). */
   extraColors?: readonly string[];
+  /** Typing / a font change: the text box adjusted to its zone (apparel: shrink, then wrap, never past the zone). */
+  fitText?: (layer: StudioTextLayer) => StudioTextLayer;
   /** «Datele mele»: prefill of the QR phone / contact forms. */
   fields?: StudioFields;
   /** Shop language (photo tools strings). */
@@ -355,7 +357,8 @@ export function DpiBadge({ ctx, layer }: { ctx: StudioPanelCtx; layer: StudioIma
 function TextProps({ ctx, l }: { ctx: StudioPanelCtx; l: StudioTextLayer }) {
   const { t, doc, commit, productColor, editTextNonce } = ctx;
   const patch = (p: Partial<StudioTextLayer>, field: string) => {
-    const next = fitTextBox({ ...l, ...p });
+    let next = fitTextBox({ ...l, ...p });
+    if (ctx.fitText && (field === "text" || field === "font" || field === "spacing")) next = ctx.fitText(next);
     commit(updateLayer(doc, l.id, { ...next, placeholder: p.text != null ? false : l.placeholder }), `text:${l.id}:${field}`);
   };
   const ta = useRef<HTMLTextAreaElement>(null);

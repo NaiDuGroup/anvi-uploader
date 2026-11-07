@@ -52,7 +52,8 @@ import { STUDIO_PHOTO_MAX_BYTES, STUDIO_PHOTO_TYPES } from "@/lib/studio/assets"
 import type { StudioCartProgress } from "@/lib/studio/cartProgress";
 import { addLayer, emptyStudioDoc, layerBounds, updateLayer, type StudioDoc, type StudioImageLayer } from "@/lib/studio/document";
 import { exportStudioPng, renderPreviewCanvas } from "@/lib/studio/exportClient";
-import { fitTextBox } from "@/lib/studio/fonts";
+import { fitTextBox, measureText } from "@/lib/studio/fonts";
+import { fitTextInZone } from "@/lib/studio/textFit";
 import { studioApparelT } from "@/lib/studio/i18n.apparel";
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import { newImageLayer, newTextLayer } from "@/lib/studio/layerFactory";
@@ -292,6 +293,11 @@ function ApparelEditor({
       scheduleSave();
     },
     status: () => (saveState === "saving" ? st("saving") : st("saved")),
+    // Typing never runs a text past its zone (it would be cut on the transfer): shrink, then wrap (≥ 9 pt).
+    fitText: (l, api) => {
+      const zone = api.doc.surfaces.find((x) => x.layers.some((y) => y.id === l.id)) ?? api.spec;
+      return fitTextInZone(l, measureText, { widthMm: zone.widthMm }, { marginMm: 1.5, minPt: 9 });
+    },
     panels: {
       product: (api) => <ApparelProductPanel api={api} product={product} garment={garment} data={data} sel={sel} onSel={setSel} />,
     },
@@ -428,6 +434,17 @@ function useApparelLine(api: Pick<StudioEditorApi, "doc">, product: ShopProduct,
   return { used, line };
 }
 
+/** «9×5 cm» / «9×5 см». */
+function sizeText(lang: ShopLang, w: number, h: number): string {
+  return `${w}×${h} ${studioApparelT(lang)("cm")}`;
+}
+
+/** Short name of a price-list format («A4»; «Logo» translated: «Логотип»). */
+function formatName(lang: ShopLang, label: string): string {
+  const first: string = label.split(" ")[0] ?? label;
+  return /^(logo|лого)$/i.test(first) ? studioApparelT(lang)("logoName") : first;
+}
+
 /** A zone's price chip: «inclus» (cap), «+180 lei», or nothing when it cannot be priced. */
 function zoneChip(lang: ShopLang, delta: number | null, fixed: boolean): string | null {
   const t = studioApparelT(lang);
@@ -493,7 +510,7 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
               >
                 <span className="text-[13px] font-extrabold whitespace-nowrap">
                   {zoneName(z.id)}
-                  {f ? <span className={`ml-1 font-semibold ${on ? "text-white/75" : "text-(--muted)"}`}>· {f.label.split(" ")[0]}</span> : null}
+                  {f ? <span className={`ml-1 font-semibold ${on ? "text-white/75" : "text-(--muted)"}`}>· {formatName(api.lang, f.label)}</span> : null}
                 </span>
                 <span className={`text-[11px] font-bold whitespace-nowrap ${printed ? (on ? "text-[#e5c45a]" : "text-[#1f6b3c]") : on ? "text-white/60" : "text-(--muted2)"}`}>
                   {printed ? chip : `${t("zoneEmpty")}${chip && z.formats !== "fixed" ? ` · ${chip}` : ""}`}
@@ -503,7 +520,8 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
           })}
         </div>
       ) : null}
-      <ApparelBgTool api={api} />
+      {/* In the canvas corner too: under the tabs it went under the right panel (a drawer below 1280 px). */}
+      {canvasArea ? createPortal(<div className="pointer-events-auto absolute right-2 bottom-12 left-2 z-20 md:top-3 md:right-auto md:bottom-auto md:left-3">{<ApparelBgTool api={api} />}</div>, canvasArea) : null}
       {empty && surface && canvasArea
         ? createPortal(
         <div
@@ -923,7 +941,7 @@ function ApparelFormatsPicker({ api, product, garment, data, sel, onSel, compact
             </span>
             {z.formats === "fixed" ? (
               <span className="rounded-lg bg-[#e7f5ec] px-3 py-2 text-sm font-semibold text-[#1f6b3c]">
-                {cur ? `${cur.widthCm}×${cur.heightCm} cm · ` : ""}
+                {cur ? `${sizeText(api.lang, cur.widthCm, cur.heightCm)} · ` : ""}
                 {t("includedLong")}
               </span>
             ) : (
@@ -943,9 +961,9 @@ function ApparelFormatsPicker({ api, product, garment, data, sel, onSel, compact
                       }}
                       className={`flex min-h-12 flex-col items-start justify-center rounded-lg border-[1.5px] px-2 py-1 text-left leading-tight ${on ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"}`}
                     >
-                      <span className="text-[13px] font-extrabold">{f.label.split(" ")[0]}</span>
+                      <span className="text-[13px] font-extrabold">{formatName(api.lang, f.label)}</span>
                       <span className={`text-[11px] ${on ? "text-white/75" : "text-(--muted)"}`}>
-                        {f.widthCm}×{f.heightCm} cm
+                        {sizeText(api.lang, f.widthCm, f.heightCm)}
                       </span>
                       {delta != null ? <span className={`text-[11px] font-bold ${on ? "text-[#e5c45a]" : "text-[#1f6b3c]"}`}>+{formatPrice(delta, api.lang)}</span> : null}
                     </button>
@@ -1215,7 +1233,7 @@ function ApparelBgTool({ api }: { api: StudioEditorApi }) {
     }
   };
   return (
-    <section className="flex w-[calc(100vw-132px)] md:w-[340px] flex-col gap-1.5 rounded-xl border border-[#f0d9a8] bg-[#fffaf0] p-2.5 shadow-[0_2px_10px_rgba(20,33,61,0.12)]" data-apparel-bg-tool>
+    <section className="flex w-full md:w-[300px] flex-col gap-1.5 rounded-xl border border-[#f0d9a8] bg-[#fffaf0] p-2.5 shadow-[0_2px_10px_rgba(20,33,61,0.12)]" data-apparel-bg-tool>
       {mine !== "done" ? <span className="text-xs font-semibold text-[#7a5a12]">{t("removeBgLead")}</span> : null}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" disabled={mine === "working"} onClick={() => void run()} data-apparel-remove-bg className="min-h-10 flex-none rounded-lg bg-(--ink) px-3 text-sm font-bold text-white disabled:opacity-50">

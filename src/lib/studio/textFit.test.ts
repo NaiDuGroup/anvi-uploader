@@ -4,7 +4,7 @@ import { evaluateStudioQuality } from "./quality";
 import { studioSurfaces } from "./surfaces";
 import { STUDIO_TEMPLATES, instantiateStudioTemplate, templateKinds } from "./templates";
 import { STUDIO_PRODUCT_PRINTS } from "./productPrints.testdata";
-import { TEXT_FIT_MIN_PT, fitDocTexts, fitTextLayer, textBandWidth, textInkBox } from "./textFit";
+import { TEXT_FIT_MIN_PT, fitDocTexts, fitTextInZone, fitTextLayer, textBandWidth, textInkBox } from "./textFit";
 
 /** Crude metrics: every glyph 0.6 em wide (wider than most real fonts), lines × line height. */
 const crude = (l: StudioTextLayer) => {
@@ -95,5 +95,32 @@ describe("textInkBox", () => {
   it("keeps the box of a rotated text and never grows past the box", () => {
     expect(textInkBox({ ...base, rotation: 30 }).w).toBeGreaterThan(50);
     expect(textInkBox({ ...base, h: 4 }).h).toBe(4);
+  });
+});
+
+describe("text typed into a DTF zone (apparel)", () => {
+  const zone = { widthMm: 210 };
+  const opts = { marginMm: 1.5, minPt: 9 };
+  it("shrinks «ECHIPA ANVI 2026» on an A4 back so it stays inside the 21 cm zone", () => {
+    const typed = text({ text: "ECHIPA ANVI 2026", sizePt: 90, x: 20, w: 170 });
+    const l = fitTextInZone({ ...typed, ...crude(typed) }, crude, zone, opts);
+    expect(l.sizePt).toBeLessThan(90);
+    expect(l.sizePt).toBeGreaterThanOrEqual(9);
+    expect(l.text).toBe("ECHIPA ANVI 2026");
+    expect(l.x).toBeGreaterThanOrEqual(1.5 - 1e-6);
+    expect(l.x + l.w).toBeLessThanOrEqual(210 - 1.5 + 0.02);
+  });
+  it("wraps instead of going below the legible size", () => {
+    const long = "Echipa noastră de prieteni care aleargă maratonul de la Chișinău în fiecare an";
+    const typed = text({ text: long, sizePt: 40, x: 0 });
+    const l = fitTextInZone({ ...typed, ...crude(typed) }, crude, { widthMm: 60 }, opts);
+    expect(l.sizePt).toBe(9);
+    expect(l.text.split("\n").length).toBeGreaterThan(1);
+    expect(l.w).toBeLessThanOrEqual(57 + 0.02);
+  });
+  it("leaves a text that fits alone", () => {
+    const typed = text({ text: "ANVI", sizePt: 40, x: 80 });
+    const fitted = { ...typed, ...crude(typed) };
+    expect(fitTextInZone(fitted, crude, zone, opts)).toEqual(fitted);
   });
 });

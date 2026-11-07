@@ -442,7 +442,7 @@ describe("apparel quality (DTF)", () => {
     expect(capHeightMm(9)).toBeGreaterThan(2);
     expect(codes(docWith(specs, { front: [text({ sizePt: 7, h: 4 })] }))).toEqual(["yellow:dtfSmallText@front"]);
     expect(codes(docWith(specs, { front: [text({ sizePt: 9, h: 5 })] }))).toEqual([]);
-    expect(codes(docWith(specs, { front: [image({ x: -5 })] }))).toEqual(["yellow:dtfEdge@front"]);
+    expect(codes(docWith(specs, { front: [image({ x: -5 })] }))).toEqual(["yellow:dtfOutside@front"]);
     expect(codes(docWith(specs, { front: [image({ x: 0.2 })] }))).toEqual(["yellow:dtfEdge@front"]);
   });
 });
