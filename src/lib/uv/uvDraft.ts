@@ -179,9 +179,10 @@ export function uvDraftQuantity(draft: UvDraft): number {
 export function uvDraftToInput(draft: UvDraft): UvLineInput | null {
   const description: string = draft.description.trim();
   const notes: string = draft.notes.trim();
+  const technique: UvTechnique = draft.source === "stickers" ? "transfer" : (draft.technique ?? "direct");
   const candidate = {
     source: draft.source,
-    technique: draft.source === "stickers" ? "transfer" : (draft.technique ?? "direct"),
+    technique,
     variantId: draft.source === "stock" ? (draft.variantId ?? undefined) : undefined,
     clientItem:
       draft.source === "client" && description
@@ -194,7 +195,8 @@ export function uvDraftToInput(draft: UvDraft): UvLineInput | null {
       placementLabel: z.placementLabel.trim() || undefined,
       widthCm: parseCm(z.widthStr),
       heightCm: parseCm(z.heightStr),
-      whiteLayers: z.whiteLayers,
+      // UV-DTF is always printed with two white layers.
+      whiteLayers: technique === "transfer" ? UV_DTF_WHITE_LAYERS : z.whiteLayers,
       varnish: z.varnish,
       primer: z.primer,
     })),
@@ -231,7 +233,8 @@ export function quoteUvDraft(draft: UvDraft, customerType: UvCustomerType, catal
 
 /** Editor state for a saved line (edit mode). */
 export function uvDraftFromLineData(data: UvLineData): UvDraft {
-  return {
+  const transfer: boolean = data.technique === "transfer" || data.source === "stickers";
+  const draft: UvDraft = {
     source: data.source,
     ...(data.technique === "transfer" ? { technique: "transfer" as const } : {}),
     variantId: data.item?.variantId ?? null,
@@ -249,4 +252,6 @@ export function uvDraftFromLineData(data: UvLineData): UvDraft {
       primer: z.primer === true,
     })),
   };
+  // Old UV-DTF lines may hold other white layer counts: UV-DTF is always two.
+  return transfer ? { ...draft, zones: draft.zones.map(transferZone) } : draft;
 }

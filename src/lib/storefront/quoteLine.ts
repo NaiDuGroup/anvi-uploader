@@ -1,3 +1,4 @@
+import { UV_DTF_WHITE_LAYERS } from "@/lib/uv/uvConstants";
 import type { ShopQuoteLine, ShopSimpleKind, ShopUvNorms, ShopVariant } from "./types";
 
 /** Norms when an item card has none (the UV engine's defaults). */
@@ -26,6 +27,16 @@ export function simpleQuoteLine(
     ...(n.transfer ? { technique: "transfer" as const } : {}),
     variantId: variant.id,
     quantity,
-    zones: [{ id: "main", placement: "front", ...size, whiteLayers: n.whiteLayers, varnish: n.varnish, primer: n.primer }],
+    zones: [
+      {
+        id: "main",
+        placement: "front",
+        ...size,
+        // UV-DTF is always two white layers (the server forces it too).
+        whiteLayers: n.transfer ? UV_DTF_WHITE_LAYERS : n.whiteLayers,
+        varnish: n.varnish,
+        primer: n.primer,
+      },
+    ],
   };
 }

@@ -1,6 +1,10 @@
+import { UV_DTF_WHITE_LAYERS } from "@/lib/uv/uvConstants";
 import { UV_LINE_DATA_VERSION, type UvLineData } from "@/lib/uv/types";
 
-/** Read `OrderLine.uvLineData`; null for missing or foreign shapes. */
+/**
+ * Read `OrderLine.uvLineData`; null for missing or foreign shapes. UV-DTF zones
+ * always read as two white layers (lines saved before 2026-11-07 could hold others).
+ */
 export function parseUvLineData(raw: unknown): UvLineData | null {
   if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
   const d = raw as Partial<UvLineData>;
@@ -15,5 +19,9 @@ export function parseUvLineData(raw: unknown): UvLineData | null {
   ) {
     return null;
   }
-  return d as UvLineData;
+  const data = d as UvLineData;
+  if (data.technique === "transfer" && data.zones.some((z) => z.whiteLayers !== UV_DTF_WHITE_LAYERS)) {
+    return { ...data, zones: data.zones.map((z) => ({ ...z, whiteLayers: UV_DTF_WHITE_LAYERS })) };
+  }
+  return data;
 }

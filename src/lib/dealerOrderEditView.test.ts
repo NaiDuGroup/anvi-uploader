@@ -182,6 +182,9 @@ describe("toDealerEditLine: cost-free prefill", () => {
     expect(uvDraftFromLineData(parseUvLineData(lines[1]!.uvLineData)!)).toEqual(
       uvDraftFromLineData(parseUvLineData(uvFull)!),
     );
+    // An old UV-DTF line with one white layer opens with the fixed two.
+    expect((lines[1]!.uvLineData as { zones: { whiteLayers: number }[] }).zones[0]!.whiteLayers).toBe(2);
+    expect(uvDraftFromLineData(parseUvLineData(uvFull)!).zones[0]!.whiteLayers).toBe(2);
     expect(sublimationDraftFromLineData(parseSublimationLineData(lines[2]!.sublimationLineData)!)).toEqual(
       sublimationDraftFromLineData(parseSublimationLineData(sublFull)!),
     );

@@ -356,18 +356,13 @@ async function quoteUv(line: PublicUvLineInput, locale: PublicQuoteLocale) {
     throw e;
   }
   const p = data.pricing;
-  // UV-DTF: extra white layers are a share of the film price, so they go with the transfer.
-  const transferWhiteMdl: number = data.technique === "transfer" ? p.whiteSurchargeTotalMdl : 0;
   return priced("uv", data.quantity, p.totalSellPriceMdl, locale, [
     ["item", p.itemSellTotalMdl],
     [
       "print",
-      p.printSellTotalMdl +
-        (p.whiteSurchargeTotalMdl - transferWhiteMdl) +
-        p.varnishSurchargeTotalMdl +
-        (p.primerSurchargeTotalMdl ?? 0),
+      p.printSellTotalMdl + p.whiteSurchargeTotalMdl + p.varnishSurchargeTotalMdl + (p.primerSurchargeTotalMdl ?? 0),
     ],
-    ["transfer", (p.transferSellTotalMdl ?? 0) + transferWhiteMdl],
+    ["transfer", p.transferSellTotalMdl ?? 0],
     ["setup", p.setupFeeMdl],
     ["minimum", p.minimumLineUpliftMdl],
   ]);

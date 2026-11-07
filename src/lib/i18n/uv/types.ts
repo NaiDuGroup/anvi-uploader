@@ -13,8 +13,8 @@ export interface UvDictionary {
     techniques: Record<UvTechnique, string>;
     stickersHint: string;
     byMeter: string;
-    /** UV-DTF: white layers in the film price and the surcharge for each further layer. */
-    dtfWhiteHint: (included: number, pct: number) => string;
+    /** UV-DTF: always two white layers, shown instead of the layer picker. */
+    dtfWhiteFixed: string;
     source: string;
     item: string;
     noItems: string;
@@ -96,8 +96,6 @@ export interface UvDictionary {
       /** Area price was below the zone minimum. */
       zoneMinimum: (byArea: string) => string;
       extraWhite: (layers: number, pct: string) => string;
-      /** UV-DTF: extra white layers above the ones in the film price. */
-      dtfExtraWhite: (layers: string, included: number, pct: string) => string;
       pctOfPrint: (pct: string) => string;
       itemPrice: string;
       perPiece: string;
