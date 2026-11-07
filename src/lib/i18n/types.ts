@@ -353,6 +353,8 @@ export interface TranslationDictionary {
     };
     /** Sheet line with a staff manual price: shown under the row's total. */
     sheetManualPriceNote: (computedMdl: number | null) => string;
+    /** Paper / mug / notebook / pen: staff price per piece next to the calculated one. */
+    manualUnitPriceNote: (computedUnitMdl: number | null) => string;
     productTypePen: string;
     /** Admin order list: LF line size badge, e.g. 60×90 cm */
     lfOrderLineSizeLabel: (widthCm: number, heightCm: number) => string;

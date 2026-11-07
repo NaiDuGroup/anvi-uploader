@@ -8,6 +8,8 @@ import {
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { nanoid } from "nanoid";
+import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
+import { applyManualLinePriceToResolved } from "@/lib/orderLines/applyManualLinePrice";
 import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import {
@@ -73,6 +75,10 @@ export async function POST(request: NextRequest) {
 
     const lineInputs = normalizeAdminOrderLineInputs(validated);
     const { resolved } = await resolveOrderLines(lineInputs);
+    // Staff «ручная цена» of non-sheet lines (sheet lines: in the resolver).
+    for (const r of resolved) {
+      if (!isSheetProductType(r.input.productType)) applyManualLinePriceToResolved(r, r.input, null);
+    }
 
     const orderProductType = computeOrderProductTypeForAdmin(resolved);
     const denorm = buildOrderDenormalizedScalars(orderProductType, resolved);

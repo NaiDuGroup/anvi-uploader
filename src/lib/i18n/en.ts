@@ -313,6 +313,7 @@ export const en: TranslationDictionary = {
       runPieces: (pieces) => `${pieces} pcs`,
     },
     sheetManualPriceNote: (computed) => computed != null ? `Manual price · calculated ${computed} MDL` : "Manual price",
+    manualUnitPriceNote: (computed) => computed != null ? `Manual price per piece · calculated ${computed} MDL` : "Manual price per piece",
     productTypePen: "Pen",
     lfOrderLineSizeLabel: (w, h) => `${w}×${h} cm`,
     lfOrderLineQtyLabel: (n) => `Quantity: ${n}`,

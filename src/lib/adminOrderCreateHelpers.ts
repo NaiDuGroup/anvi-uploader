@@ -164,6 +164,8 @@ export function expandToOneFilePerLine<T extends OneFileLine<F>, F>(
       out.push({
         ...line,
         ...("orderLineId" in line && i > 0 ? { orderLineId: undefined } : {}),
+        // A manual line total belongs to the line once, not to every split part.
+        ...("manualLineTotalMdl" in line && i > 0 ? { manualLineTotalMdl: null } : {}),
         quantity:
           line.productType === "large_format_print" && copies != null
             ? copies
@@ -213,6 +215,8 @@ export type ResolvedAdminOrderLine = {
   sublimationExtras?: {
     sublimationLineData: SublimationLineData;
   };
+  /** Paper / mug / notebook / pen: staff «ручная цена» per piece (`OrderLine.manualUnitPriceMdl`; `orderLines/manualLinePrice.ts`). */
+  manualUnitPriceMdl?: number | null;
 };
 
 /** `OrderLine.stockVariantId` of a resolved line: the unified mug / pen / notebook variant, if any. */

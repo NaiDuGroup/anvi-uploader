@@ -691,7 +691,7 @@ export const createOrderSchema = z
     );
   });
 
-/** Staff manual line total of a sheet line (rounded to bani on the server). */
+/** Staff manual line total / price per piece (rounded to bani on the server). */
 const manualLineTotalMdlSchema = z.number().nonnegative().max(99_999_999.99).nullable().optional();
 
 const adminOrderLineSchema = z.object({
@@ -724,8 +724,13 @@ const adminOrderLineSchema = z.object({
   cardTrimHeightCm: z.number().optional(),
   /** Sticker sheets: shape, size, cut, format. */
   sticker: stickerLineInputSchema.optional(),
-  /** Sheet lines: staff «ручная цена» — the line total (MDL); null/absent = calculated. Not for dealers. */
+  /**
+   * Staff «ручная цена» — the line total (MDL) of a sheet, large-format, DTF, UV or
+   * sublimation line; null/absent = calculated. Not for dealers.
+   */
   manualLineTotalMdl: manualLineTotalMdlSchema,
+  /** Staff «ручная цена» per piece of a paper / mug / notebook / pen line (MDL); null/absent = catalog. Not for dealers. */
+  manualUnitPriceMdl: manualLineTotalMdlSchema,
   /** DTF on garments: garment, sizes and print zones. */
   dtf: dtfLineInputSchema.optional(),
   /** UV print: stock or client item, quantity and print zones. */
@@ -855,7 +860,7 @@ export const dealerWizardOrderSchema = z
     /** «Срочно»: the server checks the dealer's card and adds its fee (a client amount is never read). */
     urgent: z.boolean().optional(),
     lines: z
-      .array(adminOrderLineSchema.omit({ customerType: true, designId: true, manualLineTotalMdl: true }))
+      .array(adminOrderLineSchema.omit({ customerType: true, designId: true, manualLineTotalMdl: true, manualUnitPriceMdl: true }))
       .min(1)
       .max(50),
   })
@@ -914,11 +919,14 @@ export const adminOrderUpdateLineSchema = z.object({
   cardTrimHeightCm: z.number().optional(),
   sticker: stickerLineInputSchema.optional(),
   /**
-   * Sheet lines: staff «ручная цена» (line total, MDL). A number sets it, null
-   * clears it (back to the calculated price), absent keeps the stored one while
-   * the run is unchanged. Not for dealers.
+   * Staff «ручная цена» (line total, MDL) of a sheet, large-format, DTF, UV or
+   * sublimation line. A number sets it, null clears it (back to the calculated
+   * price), absent keeps the stored one (sheets: while the run is unchanged).
+   * Not for dealers.
    */
   manualLineTotalMdl: manualLineTotalMdlSchema,
+  /** Paper / mug / notebook / pen: staff price per piece (MDL); same rules as above. Not for dealers. */
+  manualUnitPriceMdl: manualLineTotalMdlSchema,
   dtf: dtfLineInputSchema.optional(),
   uv: uvLineInputSchema.optional(),
   sublimation: sublimationLineInputSchema.optional(),
@@ -976,7 +984,7 @@ export const dealerOrderUpdateSchema = z
     /** «Срочно» on / off; omitted = unchanged. Staff urgency is never removed by the dealer. */
     urgent: z.boolean().optional(),
     lines: z
-      .array(adminOrderUpdateLineSchema.omit({ customerType: true, designId: true, manualLineTotalMdl: true }))
+      .array(adminOrderUpdateLineSchema.omit({ customerType: true, designId: true, manualLineTotalMdl: true, manualUnitPriceMdl: true }))
       .min(1)
       .max(50),
   })

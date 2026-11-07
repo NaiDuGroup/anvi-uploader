@@ -35,6 +35,7 @@ import {
   parseBusinessCardLineData,
 } from "@/lib/businessCard/parseBusinessCardLineData";
 import { priceEditedSheetLine } from "@/lib/businessCard/manualSheetLinePrice";
+import { applyManualLinePriceToResolved } from "@/lib/orderLines/applyManualLinePrice";
 import { returnPrinterConsumablesForOrder } from "@/lib/stock/unified/printers";
 import { toOrderPriceDecimal } from "@/lib/orderPriceDecimal";
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
@@ -330,6 +331,15 @@ export async function resolveLinesForAdminOrderUpdate(
     };
   });
 
+  // Other lines: the manual line total in the snapshot / price per piece on the
+  // line (`orderLines/manualLinePrice.ts`); absent keeps the stored one.
+  validated.lines.forEach((pl, i) => {
+    const r = resolved[i];
+    if (!r || isSheetProductType(r.input.productType)) return;
+    const dbLine = pl.orderLineId ? lineById.get(pl.orderLineId) : undefined;
+    applyManualLinePriceToResolved(r, pl, dbLine ?? null);
+  });
+
   return resolved;
 }
 
@@ -404,6 +414,7 @@ function orderLinePersistFields(
       li.productType === "sublimation_print" && r.sublimationExtras
         ? (r.sublimationExtras.sublimationLineData as unknown as Prisma.InputJsonValue)
         : PrismaNs.JsonNull,
+    manualUnitPriceMdl: r.manualUnitPriceMdl ?? null,
   };
 }
 
