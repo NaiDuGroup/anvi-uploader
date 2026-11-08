@@ -1438,7 +1438,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
               >
                 {f.fileName}
               </button>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 {f.pageCount ? (
                   <span className="text-gray-400">{t.admin.pagesCount(f.pageCount)}</span>
                 ) : null}

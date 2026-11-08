@@ -60,9 +60,9 @@ function ArchivedInLibraryBadge({ fileId, libraryId }: { fileId: string; library
     markInLibrary([{ fileId, libraryId }]);
   };
   return (
-    <span className="inline-flex items-center gap-1" data-testid="archived-in-library">
+    <span className="inline-flex flex-wrap items-center gap-x-1" data-testid="archived-in-library">
       <span
-        className="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1.5 py-px text-[10px] font-semibold text-gray-600 ring-1 ring-gray-200"
+        className="inline-flex items-center gap-0.5 whitespace-nowrap rounded bg-gray-100 px-1.5 py-px text-[10px] font-semibold text-gray-600 ring-1 ring-gray-200"
         title={d.archivedTitle}
       >
         <BookmarkCheck className="h-3 w-3" aria-hidden />
@@ -73,7 +73,7 @@ function ArchivedInLibraryBadge({ fileId, libraryId }: { fileId: string; library
           type="button"
           onClick={() => void restore()}
           disabled={busy}
-          className="inline-flex items-center gap-0.5 rounded px-1 py-px text-[10px] font-semibold text-amber-700 hover:bg-amber-50 hover:text-amber-900 disabled:opacity-50"
+          className="inline-flex items-center gap-0.5 whitespace-nowrap rounded px-1 py-px text-[10px] font-semibold text-amber-700 hover:bg-amber-50 hover:text-amber-900 disabled:opacity-50"
           data-testid="restore-from-library-archive"
         >
           {busy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <ArchiveRestore className="h-3 w-3" aria-hidden />}
