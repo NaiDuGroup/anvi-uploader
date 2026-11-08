@@ -31,6 +31,8 @@ import {
   SaveFileToLibraryButton,
   SaveOrderToLibraryLink,
 } from "@/app/admin/_components/library/LibraryFileControl";
+import { LibraryCompletionHint, type LibraryHintOrder } from "@/app/admin/_components/library/LibraryCompletionHint";
+import { LIBRARY_HINT_STATUSES, libraryHintCandidateIds } from "@/lib/library/libraryHint";
 import { ShopOrderBadge, ShopOrderRow } from "@/app/admin/_components/ShopOrderPanel";
 import { ShopTesterButton } from "@/app/admin/_components/ShopTesterButton";
 import { playNotificationSound } from "@/lib/notificationSound";
@@ -577,6 +579,10 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   // «Нужен макет» lines met by an order-level status write (kept, or the write refused).
   const { notice: statusNotice, show: showStatusNotice, hide: hideStatusNotice } = useStatusWriteNotice();
 
+  /** «Сохранить макеты в библиотеку?» after an order was set to ready / delivered. */
+  const [libraryHint, setLibraryHint] = useState<LibraryHintOrder | null>(null);
+  const closeLibraryHint = useCallback(() => setLibraryHint(null), []);
+
   const handleStatusChange = useCallback(
     async (orderId: string, newStatus: string) => {
       if (newStatus === "ISSUE") {
@@ -587,6 +593,20 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       try {
         const outcome = await updateOrder(orderId, { status: newStatus as OrderStatus });
         showStatusNotice(orderStatusWriteNotice(t, outcome));
+        if (outcome?.kind === "ok" && LIBRARY_HINT_STATUSES.has(newStatus)) {
+          const st = useOrdersStore.getState();
+          const order = st.orders.find((o) => o.id === orderId) ?? st.workshopOrders.find((o) => o.id === orderId);
+          const fileIds = order ? libraryHintCandidateIds(order.files) : [];
+          if (order && fileIds.length > 0) {
+            setLibraryHint({
+              orderId,
+              orderNumber: order.orderNumber,
+              orderClient: order.clientId ? { clientId: order.clientId, clientName: order.clientName ?? null } : null,
+              fileIds,
+              fileCount: order.files.length,
+            });
+          }
+        }
       } finally {
         setOrderSaving(null);
       }
@@ -1197,6 +1217,9 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       )}
 
       <StatusWriteNotice notice={statusNotice} onClose={hideStatusNotice} />
+      {libraryHint ? (
+        <LibraryCompletionHint key={libraryHint.orderId} order={libraryHint} onClose={closeLibraryHint} />
+      ) : null}
 
       {toast && (
         <div className="fixed top-4 right-4 max-sm:left-4 z-[60] flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-lg">
