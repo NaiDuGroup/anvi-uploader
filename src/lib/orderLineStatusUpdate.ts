@@ -91,7 +91,7 @@ export async function lockOrders(tx: Tx, orderIds: readonly string[]): Promise<M
  * «Набор»: the box line of a set follows its set's lines (`giftSetBoxLineStatuses`);
  * writes the box lines that change and returns the lines with their new statuses.
  */
-async function followGiftSetBoxLines<L extends { id: string; productType?: string; setGroupId?: string | null; productionStatus: string }>(
+export async function followGiftSetBoxLines<L extends { id: string; productType?: string; setGroupId?: string | null; productionStatus: string }>(
   tx: Tx,
   orderId: string,
   lines: readonly L[],
