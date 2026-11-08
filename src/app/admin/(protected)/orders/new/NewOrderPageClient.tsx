@@ -5577,7 +5577,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       <AdminConfirmDialog
         open={giftSetRemove !== null}
         title={t.giftSet.removeConfirmTitle(giftSetRemove?.name ?? "")}
-        description={t.giftSet.removeConfirm(giftSetRemove?.ids.length ?? 0)}
+        description={t.giftSet.removeConfirm}
         confirmLabel={t.giftSet.remove}
         cancelLabel={t.giftSet.cancel}
         onConfirm={() => {

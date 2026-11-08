@@ -3005,7 +3005,7 @@ export const ro: TranslationDictionary = {
     change: "Modifică setul",
     remove: "Elimină setul",
     removeConfirmTitle: (name) => (name ? `Eliminați setul «${name}»?` : "Eliminați setul?"),
-    removeConfirm: (rows) => `Toate cele ${rows} rânduri ale setului și fișierele atașate vor fi eliminate din comandă. Setul poate fi adăugat din nou.`,
+    removeConfirm: "Toate rândurile setului și fișierele atașate vor fi eliminate din comandă. Setul poate fi adăugat din nou.",
     fileFor: (label) => `Machetă: ${label}`,
     zoneSize: (w, h) => `${w}×${h} cm`,
     box: (size) => `+ cutie ${size}`,

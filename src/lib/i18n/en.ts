@@ -2992,7 +2992,7 @@ export const en: TranslationDictionary = {
     change: "Change set",
     remove: "Remove set",
     removeConfirmTitle: (name) => (name ? `Remove the set «${name}»?` : "Remove the set?"),
-    removeConfirm: (rows) => `All ${rows} rows of the set and their attached files will be removed from the order. You can add the set again.`,
+    removeConfirm: "All rows of the set and their attached files will be removed from the order. You can add the set again.",
     fileFor: (label) => `Artwork: ${label}`,
     zoneSize: (w, h) => `${w}×${h} cm`,
     box: (size) => `+ box ${size}`,
