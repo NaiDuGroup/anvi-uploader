@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BookmarkPlus, Loader2 } from "lucide-react";
 import { defaultLibraryTitle } from "@/lib/library/libraryKeys";
@@ -10,6 +10,7 @@ import { libraryFetch, libraryOrderNumber, type LibraryItem } from "./libraryCli
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { markArchivedInLibrary, markInLibrary } from "./useLibraryStatus";
 import { LibraryThumb, ThumbImage, orderFileThumbUrl } from "./LibraryThumb";
+import { useAnnouncementHint } from "../announcements/AnnouncementsProvider";
 
 export type SaveToLibraryTarget =
   | { kind: "file"; fileId: string; fileName: string; orderNumber: number; orderClient: LibraryOwner | null }
@@ -30,6 +31,12 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<{ saved: LibraryItem[]; skipped: Skipped[] } | null>(null);
+  // «Что нового»: any way into this dialog («В библиотеку», «Все в библиотеку», the
+  // completion hint) counts as using the feature — the «В библиотеку» dot goes away.
+  const { markUsed: markSaveHintUsed } = useAnnouncementHint("library-2026-11", "save-hint");
+  useEffect(() => {
+    markSaveHintUsed();
+  }, [markSaveHintUsed]);
 
   const submit = async () => {
     if (libraryOwnerIncomplete(owner)) {

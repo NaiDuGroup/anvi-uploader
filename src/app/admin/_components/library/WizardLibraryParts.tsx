@@ -3,6 +3,7 @@
 import { AlertTriangle, BookMarked, X } from "lucide-react";
 import type { WizardReusedFile } from "./wizardReuse";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { useAnnouncementHint } from "../announcements/AnnouncementsProvider";
 
 /** «Из библиотеки» trigger for a wizard row (or the files panel). */
 export function WizardLibraryPickButton({
@@ -15,15 +16,29 @@ export function WizardLibraryPickButton({
   label?: string;
 }) {
   const d = useLanguageStore((s) => s.t.library);
+  const newLabel = useLanguageStore((s) => s.t.announcements.newBadge);
+  // «Что нового»: «Новое» chip until this user has picked from the library once.
+  const hint = useAnnouncementHint("library-2026-11", "pick-hint");
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={() => {
+        hint.markUsed();
+        onClick();
+      }}
       className={className ?? "ml-7 inline-flex items-center gap-1 text-xs font-medium text-amber-700 hover:text-amber-900"}
       data-testid="wizard-library-pick"
     >
       <BookMarked className="h-3.5 w-3.5" aria-hidden />
       {label ?? d.fromLibrary}
+      {hint.visible ? (
+        <span
+          className="shrink-0 rounded-full bg-amber-500 px-1.5 py-px text-[9px] font-bold uppercase leading-tight tracking-wide text-white"
+          data-testid="announcement-hint-new"
+        >
+          {newLabel}
+        </span>
+      ) : null}
     </button>
   );
 }

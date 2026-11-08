@@ -13,6 +13,7 @@ import { shopReportEn } from "./shopReport/en";
 import { shopFunnelEn } from "./shopFunnel/en";
 import { shopPromoEn } from "./shopPromo/en";
 import { libraryEn } from "./library/en";
+import { announcementsEn } from "./announcements/en";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const en: TranslationDictionary = {
@@ -2943,6 +2944,7 @@ export const en: TranslationDictionary = {
     historyDerived: "(from lines)",
   },
   library: libraryEn,
+  announcements: announcementsEn,
   giftSet: {
     typeLabel: "Gift set",
     typeHint: "Pen + notebook (+ mug) in a box, or a ready set with a thermos",

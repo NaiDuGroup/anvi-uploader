@@ -32,6 +32,7 @@ import { getInitials } from "@/lib/initials";
 import AdminFooter, { hasFixedBottomBar, isFullScreenPage } from "./AdminFooter";
 import { AdminMobileNav, type AdminMobileNavEntry } from "./AdminMobileNav";
 import { CORPORATE_COUNT_CHANGED_EVENT } from "../(protected)/shop/corporate-requests/corporateUi";
+import { WhatsNewAvatarDot, WhatsNewButton } from "./announcements/WhatsNewButton";
 
 export type AdminShellUser = {
   name: string;
@@ -297,16 +298,18 @@ export default function AdminAppShell({
             >
               {roleName}
             </Badge>
+            <WhatsNewButton />
             <LanguageSwitcher />
             {/* Phones: initials avatar opens the full menu sheet. */}
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-[11px] font-bold uppercase text-gold-dark transition-colors hover:bg-gray-50 sm:hidden"
+              className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-[11px] font-bold uppercase text-gold-dark transition-colors hover:bg-gray-50 sm:hidden"
               aria-label={t.admin.mobileNavMenu}
               title={displayName}
             >
               {initials}
+              <WhatsNewAvatarDot />
             </button>
             <Button
               variant="outline"
