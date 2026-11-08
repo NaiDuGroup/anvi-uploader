@@ -29,7 +29,9 @@ export function uvLineSummaryText(
 ): { item: string; notes: string | null; quantity: string; zones: string } {
   const item: string = data.item
     ? uvItemDisplayName(data.item, locale)
-    : data.source === "stickers"
+    : data.giftSetItem
+      ? (data.clientItemDescription ?? "—")
+      : data.source === "stickers"
       ? t.uv.workshop.stickers
       : `${t.uv.workshop.clientItem}: ${data.clientItemDescription ?? "—"}`;
   return {
@@ -42,14 +44,17 @@ export function uvLineSummaryText(
 
 export function UvLineSummary({
   dataRaw,
+  setData,
   t,
   className,
 }: {
   dataRaw: unknown;
+  /** The line's «Набор» data: a ready set's zone line names the set's item, not a client item. */
+  setData?: unknown;
   t: TranslationDictionary;
   className?: string;
 }) {
-  const data: UvPublicSummary | null = toUvPublicSummary(dataRaw, { production: true });
+  const data: UvPublicSummary | null = toUvPublicSummary(dataRaw, { production: true, setData });
   if (!data) return null;
   return <UvLineSummaryView data={data} t={t} className={className} />;
 }

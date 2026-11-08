@@ -19,6 +19,7 @@ import {
   giftSetChoiceProblem,
   giftSetComponentOptions,
   giftSetComponentTitle,
+  giftSetItemAlt,
   giftSetShortNames,
   giftSetSwatchHex,
   readyGiftSetVariants,
@@ -61,7 +62,8 @@ function VariantPicker({
       {items.length === 0 ? (
         <p className="text-xs text-amber-700">{g.noVariants}</p>
       ) : (
-        <div className="flex flex-wrap gap-1.5">
+        // Phone width: two chips per row (one per row made a long list); wider: chips wrap.
+        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
           {items.map((i) => {
             const selected = i.id === value;
             const left = available(i);
@@ -73,13 +75,13 @@ function VariantPicker({
                 onClick={() => onChange(i.id)}
                 title={`${i.itemNames.ru ?? i.name} · ${i.sku} · ${out ? g.variantOutOfStock : g.stockLeft(left)}`}
                 className={cn(
-                  "inline-flex items-center gap-2 rounded-lg border py-1 pl-1 pr-2 text-left text-xs",
+                  "inline-flex min-w-0 items-center gap-2 rounded-lg border py-1 pl-1 pr-2 text-left text-xs",
                   selected ? "border-amber-500 bg-amber-50 font-semibold text-amber-900 ring-1 ring-amber-400" : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
                   out && !selected && "opacity-60",
                 )}
               >
-                <GiftSetItemThumb imageUrl={i.imageUrl} swatch={giftSetSwatchHex(i)} alt={i.itemNames.ru ?? i.name} size="sm" />
-                <span className="flex flex-col leading-tight">
+                <GiftSetItemThumb imageUrl={i.imageUrl} swatch={giftSetSwatchHex(i)} alt={giftSetItemAlt(i, names.get(i.id))} size="sm" />
+                <span className="flex min-w-0 flex-col leading-tight">
                   <span className="inline-flex items-center gap-1">
                     {i.imageUrl ? (
                       <span
@@ -265,7 +267,7 @@ export function GiftSetDialog({
                   <div data-testid="gift-set-ready-unit">
                     <p className="mb-1.5 text-sm font-semibold text-gray-900">{g.readyUnitSection(giftSetReadyUnitLabel(template))}</p>
                     <div className="flex items-center gap-2 text-xs text-gray-600">
-                      <GiftSetItemThumb imageUrl={readyItem.imageUrl} swatch={giftSetSwatchHex(readyItem)} alt={readyItem.sku} size="sm" icon="gift" />
+                      <GiftSetItemThumb imageUrl={readyItem.imageUrl} swatch={giftSetSwatchHex(readyItem)} alt={giftSetItemAlt(readyItem)} size="sm" icon="gift" />
                       <span className="flex flex-col leading-tight">
                         <span>
                           {giftSetReadyUnitLabel(template)}

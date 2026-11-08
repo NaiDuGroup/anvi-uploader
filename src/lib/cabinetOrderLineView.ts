@@ -77,6 +77,8 @@ export type CabinetOrderLineSource = {
   dtfLineData: unknown;
   uvLineData: unknown;
   sublimationLineData: unknown;
+  /** «Набор»: a ready set's zone line names the set's item, not a client item. */
+  setData?: unknown;
 };
 
 /**
@@ -97,7 +99,7 @@ export function toCabinetOrderLineView(
       k === "notebook" ? toPublicProductSnapshot(line.notebookProductSnapshot) : null,
     penProductSnapshot: k === "pen" ? toPublicProductSnapshot(line.penProductSnapshot) : null,
     dtfSummary: k === "dtf_apparel" ? toDtfPublicSummary(line.dtfLineData) : null,
-    uvSummary: k === "uv_print" ? toUvPublicSummary(line.uvLineData) : null,
+    uvSummary: k === "uv_print" ? toUvPublicSummary(line.uvLineData, { setData: line.setData }) : null,
     sublimationSummary:
       k === "sublimation_print" ? toSublimationPublicSummary(line.sublimationLineData) : null,
     largeFormatSummary:

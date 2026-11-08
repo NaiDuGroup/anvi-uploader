@@ -100,6 +100,7 @@ export async function GET(
           businessCardLineData: true,
           dtfLineData: true,
           uvLineData: true,
+          setData: true,
           sublimationLineData: true,
           // «Нужен макет»: shown to the owner (reason, workshop comment, since when);
           // also locks edit / cancel once any line prints.

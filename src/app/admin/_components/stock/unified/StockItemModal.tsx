@@ -257,6 +257,9 @@ export function StockItemModal({
     return g.color ?? s.tiersAllVariants;
   }
 
+  /** SKU inputs: as wide as the longest SKU + padding (monospace `ch`), 11–32. */
+  const skuInputCh: number = Math.min(32, Math.max(11, ...drafts.map((d) => d.sku.length)) + 2);
+
   /** 1-piece price from the group's valid tiers, for the read-only «Цена» cell. */
   function tierPriceFor(d: VariantDraft): number | null {
     if (!tierScope) return null;
@@ -971,7 +974,10 @@ export function StockItemModal({
                                 skuEdited: true,
                               })
                             }
-                            className="h-8 w-44 font-mono"
+                            // Monospace: as wide as the longest SKU (GIFT-SET-THERMOS-BLACK is not cut off), same on every row.
+                            className="h-8 font-mono"
+                            style={{ width: `${skuInputCh}ch` }}
+                            title={d.sku}
                             disabled={saving}
                           />
                         </td>

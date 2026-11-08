@@ -231,6 +231,7 @@ export async function GET(request: NextRequest) {
               businessCardLineData: true,
               dtfLineData: true,
               uvLineData: true,
+              setData: true,
               sublimationLineData: true,
               productionStatus: true,
               layoutIssueReason: true,

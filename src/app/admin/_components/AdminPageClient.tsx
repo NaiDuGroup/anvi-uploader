@@ -1585,7 +1585,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                   <DtfNoFileBadge t={t} className="mb-2" />
                 )}
                 {line.productType === "uv_print" && (
-                  <UvLineSummary dataRaw={line.uvLineData} t={t} className="mb-2" />
+                  <UvLineSummary dataRaw={line.uvLineData} setData={line.setData} t={t} className="mb-2" />
                 )}
                 {line.productType === "sublimation_print" && (
                   <SublimationLineSummary dataRaw={line.sublimationLineData} t={t} className="mb-2" />
@@ -3043,7 +3043,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 <DtfNoFileBadge t={t} className="mb-2" />
               )}
               {line.productType === "uv_print" && (
-                <UvLineSummary dataRaw={line.uvLineData} t={t} className="mb-2" />
+                <UvLineSummary dataRaw={line.uvLineData} setData={line.setData} t={t} className="mb-2" />
               )}
               {line.productType === "sublimation_print" && (
                 <SublimationLineSummary dataRaw={line.sublimationLineData} t={t} className="mb-2" />

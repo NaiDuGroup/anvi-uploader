@@ -1,3 +1,4 @@
+import { parseOrderLineSetData } from "@/lib/giftSet/giftSet";
 import { parseUvLineData } from "./parseUvLineData";
 import type { UvLineData } from "./types";
 
@@ -6,6 +7,8 @@ export type UvPublicSummary = {
   source: UvLineData["source"];
   item: Pick<NonNullable<UvLineData["item"]>, "name" | "names" | "variantLabel" | "colorHex"> | null;
   clientItemDescription: string | null;
+  /** «Набор» C: the item is the set's («Термос из набора · чёрный»), not the client's. */
+  giftSetItem?: boolean;
   /** Staff notes on the client's item; production views only. */
   clientItemNotes?: string | null;
   quantity: number;
@@ -34,11 +37,12 @@ export function uvZoneSizeLabel(z: Pick<UvLineData["zones"][number], "widthCm" |
  */
 export function toUvPublicSummary(
   raw: unknown,
-  opts: { production?: boolean } = {},
+  opts: { production?: boolean; setData?: unknown } = {},
 ): UvPublicSummary | null {
   const data: UvLineData | null = parseUvLineData(raw);
   if (!data) return null;
   const production: boolean = opts.production === true;
+  const set = opts.setData != null ? parseOrderLineSetData(opts.setData) : null;
   return {
     source: data.source,
     item: data.item
@@ -50,6 +54,7 @@ export function toUvPublicSummary(
         }
       : null,
     clientItemDescription: data.clientItem?.description ?? null,
+    ...(set?.kind === "ready" && set.zoneId && data.source === "client" ? { giftSetItem: true } : {}),
     ...(production ? { clientItemNotes: data.clientItem?.notes ?? null } : {}),
     quantity: data.quantity,
     zones: data.zones.map((z) => ({

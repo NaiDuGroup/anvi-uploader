@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Gift, Package } from "lucide-react";
+import { PRODUCT_TYPE_ICONS } from "@/lib/productTypeIcons";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,8 +23,11 @@ export function GiftSetItemThumb({
   swatch: string | null | undefined;
   alt: string;
   size?: "sm" | "md";
-  /** Set stock line: icon instead of the colour dot when there is no photo. */
-  icon?: "box" | "gift";
+  /**
+   * Icon instead of the colour dot when there is no photo: the set's stock line (box / gift),
+   * or a ready set's notebook / pen row (the set photo would show the whole set there).
+   */
+  icon?: "box" | "gift" | "notebook" | "pen";
   className?: string;
 }) {
   const box = size === "sm" ? "h-8 w-8" : "h-10 w-10";
@@ -49,7 +53,16 @@ export function GiftSetItemThumb({
     >
       {icon ? (
         <span className="relative inline-flex" data-testid="gift-set-item-icon">
-          {icon === "gift" ? <Gift className="h-5 w-5 text-fuchsia-700/80" /> : <Package className="h-5 w-5 text-amber-800/70" />}
+          {icon === "gift" ? (
+            <Gift className="h-5 w-5 text-fuchsia-700/80" />
+          ) : icon === "notebook" || icon === "pen" ? (
+            (() => {
+              const TypeIcon = PRODUCT_TYPE_ICONS[icon];
+              return <TypeIcon className="h-5 w-5 text-gray-600" />;
+            })()
+          ) : (
+            <Package className="h-5 w-5 text-amber-800/70" />
+          )}
           {swatch ? (
             <span className="absolute -bottom-1 -right-1.5 h-2.5 w-2.5 rounded-full border border-white ring-1 ring-black/10" style={{ backgroundColor: swatch }} />
           ) : null}
