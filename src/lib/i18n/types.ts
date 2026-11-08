@@ -189,6 +189,7 @@ export interface TranslationDictionary {
     title: string;
     workshopTitle: string;
     navOrders: string;
+    navLibrary: string;
     navClients: string;
     /** Top nav: warehouse hub (workshop / super admin only) */
     navStock: string;

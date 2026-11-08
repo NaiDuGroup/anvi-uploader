@@ -19,6 +19,7 @@ import {
   Users,
   UserCog,
   type LucideIcon,
+  BookMarked,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ type NavLabelKey =
   | "navInvoices"
   | "navBookkeeping"
   | "navClients"
+  | "navLibrary"
   | "navTrash"
   | "navDesignStudio"
   | "navUsers"
@@ -72,6 +74,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/invoices", labelKey: "navInvoices", Icon: FileText, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/bookkeeping", labelKey: "navBookkeeping", Icon: Landmark, roles: ["superadmin"] },
   { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin", "workshop"] },
+  { href: "/admin/library", labelKey: "navLibrary", Icon: BookMarked, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/corporate-requests", labelKey: "navCorporate", Icon: Building2, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/users", labelKey: "navUsers", Icon: UserCog, roles: ["superadmin"] },
@@ -130,6 +133,7 @@ export default function AdminAppShell({
     navInvoices: t.admin.navInvoices,
     navBookkeeping: t.admin.navBookkeeping,
     navClients: t.admin.navClients,
+    navLibrary: t.admin.navLibrary,
     navTrash: t.admin.navTrash,
     navDesignStudio: t.admin.navDesignStudio,
     navUsers: t.admin.navUsers,

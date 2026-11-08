@@ -165,6 +165,7 @@ export const en: TranslationDictionary = {
     mobileNavAria: "Mobile navigation",
     orderMoreActions: "More actions",
     appShellSubtitle: "Print studio",
+    navLibrary: "Design library",
     navClients: "Clients",
     navStock: "Stock",
     stockHubIntro: "Stock areas",

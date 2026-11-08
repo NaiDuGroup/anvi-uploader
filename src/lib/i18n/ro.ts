@@ -165,6 +165,7 @@ export const ro: TranslationDictionary = {
     mobileNavAria: "Navigare mobilă",
     orderMoreActions: "Mai multe acțiuni",
     appShellSubtitle: "Tipografie",
+    navLibrary: "Bibliotecă machete",
     navClients: "Clienți",
     navStock: "Depozit",
     stockHubIntro: "Secțiuni depozit",

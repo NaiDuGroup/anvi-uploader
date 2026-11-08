@@ -165,6 +165,7 @@ export const ru: TranslationDictionary = {
     mobileNavAria: "Мобильная навигация",
     orderMoreActions: "Ещё действия",
     appShellSubtitle: "Типография",
+    navLibrary: "Библиотека макетов",
     navClients: "Клиенты",
     navStock: "Склад",
     stockHubIntro: "Разделы склада",

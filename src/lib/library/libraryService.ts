@@ -31,6 +31,7 @@ export interface LibraryFileJson {
   pageCount: number | null;
   sourceOrderId: string | null;
   sourceOrderNumber: number | null;
+  sourceFileId: string | null;
   useCount: number;
   lastUsedAt: string | null;
   createdAt: string;
@@ -83,6 +84,7 @@ export function serializeLibraryFile(
     pageCount: row.pageCount,
     sourceOrderId: row.sourceOrderId,
     sourceOrderNumber,
+    sourceFileId: row.sourceFileId,
     useCount: row.useCount,
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
