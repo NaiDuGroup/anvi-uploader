@@ -3167,7 +3167,9 @@ export const ru: TranslationDictionary = {
     cancel: "Отмена",
     change: "Изменить набор",
     remove: "Убрать набор",
-    removeConfirm: "Убрать весь набор (все его строки и файлы)?",
+    removeConfirmTitle: (name) => (name ? `Убрать набор «${name}»?` : "Убрать набор?"),
+    removeConfirm: (rows) =>
+      `Из заказа уберутся все ${rows} ${rows % 10 === 1 && rows % 100 !== 11 ? "строка" : rows % 10 >= 2 && rows % 10 <= 4 && (rows % 100 < 10 || rows % 100 >= 20) ? "строки" : "строк"} набора вместе с прикреплёнными файлами. Набор можно добавить заново.`,
     fileFor: (label) => `Макет: ${label}`,
     zoneSize: (w, h) => `${w}×${h} см`,
     box: (size) => `+ коробка ${size}`,

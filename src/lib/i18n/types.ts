@@ -3266,7 +3266,10 @@ export interface TranslationDictionary {
     cancel: string;
     change: string;
     remove: string;
-    removeConfirm: string;
+    /** «Убрать набор «…»?» — title of the in-app confirm. */
+    removeConfirmTitle: (name: string) => string;
+    /** Body of the confirm: how many rows (with files) go away. */
+    removeConfirm: (rows: number) => string;
     fileFor: (label: string) => string;
     zoneSize: (w: string, h: string) => string;
     /** «+ коробка 30×23×8,5» (box size or SKU). */

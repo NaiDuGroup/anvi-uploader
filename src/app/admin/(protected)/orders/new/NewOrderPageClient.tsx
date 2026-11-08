@@ -35,6 +35,7 @@ import { procurementVariantIds } from "@/lib/giftSet/giftSetBoard";
 import { readySetRowLine } from "./giftSetLines";
 import { GiftSetDialog } from "@/app/admin/_components/GiftSetDialog";
 import { GiftSetBadge } from "@/components/orders/GiftSetBadge";
+import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
 import { PRODUCT_TYPE_ICONS } from "@/lib/productTypeIcons";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -2347,6 +2348,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
   /** Row whose stock item picker (photos, every category and print method) is open, and the tab it opens on. */
   const [stockPicker, setStockPicker] = useState<{ slotId: string; category: string | null } | null>(null);
+  /** «Убрать набор» waiting for the in-app confirm: the row clicked, all rows of its set, the set name. */
+  const [giftSetRemove, setGiftSetRemove] = useState<{ ids: string[]; name: string } | null>(null);
   /** Rows whose «подсказка типа» was answered «Нет, это печать» (for this editing session). */
   const [dismissedTypeHints, setDismissedTypeHints] = useState<ReadonlySet<string>>(() => new Set());
 
@@ -4341,7 +4344,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
    */
   function removeSlot(slotId: string): void {
     const ids: string[] = giftSetGroupSlotIds(slotId, giftSetRows());
-    if (ids.length > 1 && typeof window !== "undefined" && !window.confirm(t.giftSet.removeConfirm)) return;
+    if (ids.length > 1) {
+      const gs = assignBySlot[slotId]?.giftSet;
+      const template = gs ? giftSetTemplates.find((x) => x.id === gs.templateId) : null;
+      setGiftSetRemove({ ids, name: template?.name ?? gs?.templateId ?? "" });
+      return;
+    }
+    removeSlotIds(ids);
+  }
+
+  /** Drops these rows (a single row, or every row of a set). */
+  function removeSlotIds(ids: string[]): void {
     if (stockPicker && ids.includes(stockPicker.slotId)) {
       setStockPicker(null);
     }
@@ -5561,6 +5574,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
   return (
     <>
+      <AdminConfirmDialog
+        open={giftSetRemove !== null}
+        title={t.giftSet.removeConfirmTitle(giftSetRemove?.name ?? "")}
+        description={t.giftSet.removeConfirm(giftSetRemove?.ids.length ?? 0)}
+        confirmLabel={t.giftSet.remove}
+        cancelLabel={t.giftSet.cancel}
+        onConfirm={() => {
+          if (giftSetRemove) removeSlotIds(giftSetRemove.ids);
+          setGiftSetRemove(null);
+        }}
+        onClose={() => setGiftSetRemove(null)}
+      />
       <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:py-8 text-gray-900">
       <header className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
