@@ -105,7 +105,7 @@ import { deductUvLineStock } from "@/lib/uv/uvOrderStock";
 import { loadUvInkCosts, loadUvSettings, loadUvStockItem, resolveUvLine } from "@/lib/uv/resolveUvLine";
 import { buildUvLineData } from "@/lib/uv/buildUvLineData";
 import type { UvLineInput } from "@/lib/uv/uvLineInput";
-import type { OrderLineSetData } from "@/lib/giftSet/giftSet";
+import { giftSetExtraStockSkus, type OrderLineSetData } from "@/lib/giftSet/giftSet";
 import { takeGiftSetBoxStock } from "@/lib/giftSet/giftSetStock";
 import type { UvLineData } from "@/lib/uv/types";
 import { SublimationLineError } from "@/lib/sublimation/sublimationLineCalc";
@@ -227,12 +227,20 @@ export type ResolvedAdminOrderLine = {
     setGroupId: string;
     setData: OrderLineSetData;
   };
+  /** «Набор»: box line of an assembled set — the box's stock variant (null when the box SKU is not a stock item). */
+  setBoxExtras?: {
+    stockVariantId: string | null;
+  };
 };
 
 /** `OrderLine.stockVariantId` of a resolved line: the unified mug / pen / notebook variant, if any. */
 export function resolvedLineStockVariantId(r: ResolvedAdminOrderLine): string | null {
   return (
-    r.mugExtras?.stockVariantId ?? r.penExtras?.stockVariantId ?? r.notebookExtras?.stockVariantId ?? null
+    r.mugExtras?.stockVariantId ??
+    r.penExtras?.stockVariantId ??
+    r.notebookExtras?.stockVariantId ??
+    r.setBoxExtras?.stockVariantId ??
+    null
   );
 }
 
@@ -442,13 +450,13 @@ export async function resolveAdminOrderLineProducts(
     }
     try {
       uvExtras = {
-        // A ready gift set is billed at the set price later (`applyGiftSetsToResolved`):
-        // the set item needs no price of its own here.
+        // A gift set line is billed at the set price later (`applyGiftSetsToResolved`):
+        // it needs no price of its own here. (Legacy ready set: one UV line on the set item.)
         uvLineData:
-          line.set?.role === "ready"
+          line.set?.role === "ready" && line.uv.source === "stock"
             ? await resolveReadyGiftSetUvLine(line.uv, line.customerType ?? "retail")
             : await resolveUvLine(line.uv, line.customerType ?? "retail", {
-                allowUnpriced: opts?.allowUnpricedPrint,
+                allowUnpriced: opts?.allowUnpricedPrint || Boolean(line.set),
               }),
       };
     } catch (e) {
@@ -1078,8 +1086,9 @@ export class AdminOrderResolveError extends Error {
 export function computeOrderProductTypeForAdmin(
   resolved: ResolvedAdminOrderLine[],
 ): ProductType | "mixed" {
+  // A set's box line is packaging, not a product of its own.
   return computeOrderProductTypeFromLines(
-    resolved.map((r) => ({ productType: r.input.productType })),
+    resolved.flatMap((r) => (r.input.productType === "set_box" ? [] : [{ productType: r.input.productType }])),
   );
 }
 
@@ -1345,19 +1354,21 @@ export async function deductStockForAdminOrderLines(
     }
   }
 
-  // «Набор»: the box, once per set, on the group's first line.
+  // «Набор»: the box (A/B) through the set's box line (older orders: the group's first
+  // line) / the ready set item (C) on the group's first line, once per set.
   for (let i = 0; i < params.resolved.length; i++) {
     const set = params.resolved[i]!.giftSetExtras?.setData;
-    if (!set?.boxSku) continue;
-    const boxIssue = await takeGiftSetBoxStock(tx, {
-      boxSku: set.boxSku,
-      quantity: set.quantity,
-      orderId: params.orderId,
-      orderNumber: params.orderNumber,
-      orderLineId: dbLines[i]!.id,
-      createdById: params.createdById,
-    });
-    if (boxIssue) procurementIssues.push(boxIssue);
+    for (const sku of giftSetExtraStockSkus(set)) {
+      const boxIssue = await takeGiftSetBoxStock(tx, {
+        boxSku: sku,
+        quantity: set!.quantity,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        orderLineId: dbLines[i]!.id,
+        createdById: params.createdById,
+      });
+      if (boxIssue) procurementIssues.push(boxIssue);
+    }
   }
 
   const procurementMeta =

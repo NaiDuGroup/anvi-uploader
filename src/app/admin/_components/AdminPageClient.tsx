@@ -83,6 +83,7 @@ import { OrdersPaginationBar, SortableTh, type SortDir } from "@/components/orde
 import { formatPaperTypeLabel } from "@/lib/paperTypeLabel";
 import { ShopPrintLineSummary } from "./ShopPrintLineSummary";
 import { OrderLineTypeHeading } from "@/components/orders/OrderLineTypeHeading";
+import { GiftSetBoxLineSummary, giftSetLineFrameClass } from "@/components/orders/GiftSetBadge";
 import { cn } from "@/lib/utils";
 import {
   formatOrderLineItemRef,
@@ -1539,7 +1540,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 orderNumber={order.orderNumber}
                 lineIndex={lineIdx + 1}
                 totalLines={lineGroups.length}
-                className={layoutIssueFrameClass(line)}
+                className={cn(giftSetLineFrameClass(line.setData), layoutIssueFrameClass(line))}
                 badge={
                   <OrderLineStatusBadge
                     orderStatus={order.status ?? ""}
@@ -1558,6 +1559,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                   <OrderLineTypeHeading productType={line.productType} uvLineData={line.uvLineData} setData={line.setData} t={t} />
                   {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
                 </div>
+                {line.productType === "set_box" && <GiftSetBoxLineSummary setData={line.setData} t={t} className="mb-2" />}
                 {line.productType === "dtf_apparel" && (
                   <DtfLineSummary dataRaw={line.dtfLineData} t={t} className="mb-2" />
                 )}
@@ -2984,7 +2986,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               orderNumber={order.orderNumber}
               lineIndex={lineIdx + 1}
               totalLines={lineGroups.length}
-              className={cn("mb-2 last:mb-0", layoutIssueFrameClass(line))}
+              className={cn("mb-2 last:mb-0", giftSetLineFrameClass(line.setData), layoutIssueFrameClass(line))}
               badge={
                 <OrderLineStatusBadge
                   orderStatus={order.status}
@@ -3003,6 +3005,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 <OrderLineTypeHeading productType={line.productType} uvLineData={line.uvLineData} setData={line.setData} t={t} />
                 {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
               </div>
+              {line.productType === "set_box" && <GiftSetBoxLineSummary setData={line.setData} t={t} className="mb-2" />}
               {line.productType === "dtf_apparel" && (
                 <DtfLineSummary dataRaw={line.dtfLineData} t={t} className="mb-2" />
               )}

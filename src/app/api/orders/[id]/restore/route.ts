@@ -125,12 +125,12 @@ export async function POST(
 
       for (const line of order.orderLines) {
         // «Набор»: the set box (once per set, on the group's first line) was returned on delete.
-        const boxIssue = await takeGiftSetBoxStockForStoredLine(tx, line, {
+        const setIssues = await takeGiftSetBoxStockForStoredLine(tx, line, {
           orderId: order.id,
           orderNumber: order.orderNumber,
           createdById: user.id,
         });
-        if (boxIssue) procurementIssues.push(boxIssue);
+        procurementIssues.push(...setIssues);
         // Printed mugs take Epson paper / tape / ink by the current `mugs` norm.
         if (line.productType === "mug") {
           await consumeMugPrintStock(tx, {

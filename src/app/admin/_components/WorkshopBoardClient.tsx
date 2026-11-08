@@ -376,7 +376,15 @@ function BoardLineCard({
             {paperKind && (
               <>
                 <span className="text-gray-300" aria-hidden>·</span>
-                <span className="text-gray-500">{paperKind}</span>
+                <span className="text-gray-500">
+                  {paperKind === "squared"
+                    ? t.admin.notebookPaperKindSquared
+                    : paperKind === "dated"
+                      ? t.admin.notebookPaperKindDated
+                      : paperKind === "ruled"
+                        ? t.admin.notebookPaperKindRuled
+                        : paperKind}
+                </span>
               </>
             )}
             <span className="text-gray-300" aria-hidden>·</span>
@@ -461,7 +469,14 @@ function BoardLineCard({
               Срочно
             </span>
           )}
-          {line.giftSet ? <GiftSetBadge label={line.giftSet.label} role={line.giftSet.role} /> : null}
+          {line.giftSet ? (
+            <GiftSetBadge
+              label={line.giftSet.label}
+              role={line.giftSet.role}
+              note={line.giftSet.packNote ?? null}
+              procurement={line.giftSet.procurement ? t.giftSet.boardProcurement : null}
+            />
+          ) : null}
           {line.dealerEditedAt ? <DealerEditedBadge at={line.dealerEditedAt} t={t} /> : null}
           {line.dealerUrgency ? (
             <DealerUrgencyBadge orderId={line.orderId} urgency={line.dealerUrgency} t={t} allowWaive={false} />

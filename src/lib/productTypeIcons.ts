@@ -9,6 +9,7 @@ import {
   Maximize,
   Newspaper,
   Notebook,
+  Package,
   PenLine,
   Shirt,
   Sparkles,
@@ -17,15 +18,16 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { parseUvLineData } from "@/lib/uv/parseUvLineData";
-import { parseOrderLineSetData } from "@/lib/giftSet/giftSet";
+import { isLegacyReadySetLine, parseOrderLineSetData } from "@/lib/giftSet/giftSet";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { ProductType } from "@/lib/validations";
 
 /**
  * A product type, UV-DTF stickers (UV print with technique «transfer») shown
- * apart, or «Набор» (a gift set: the ready-set line, the wizard menu tile, the badge).
+ * apart, «Набор» (a gift set: the ready-set line, the wizard menu tile, the badge),
+ * or the box line of a set (no print: packaging written off with the set).
  */
-export type LineTypeKey = ProductType | "uv_dtf" | "gift_set";
+export type LineTypeKey = ProductType | "uv_dtf" | "gift_set" | "set_box";
 
 /**
  * The one icon per product type, used by order line headers, the workshop
@@ -46,6 +48,7 @@ export const PRODUCT_TYPE_ICONS: Record<LineTypeKey, LucideIcon> = {
   uv_dtf: StickyNote,
   sublimation_print: Flame,
   gift_set: Gift,
+  set_box: Package,
 };
 
 /** Orders made of several product types (cabinet order header). */
@@ -56,7 +59,8 @@ export const MIXED_PRODUCT_ICON: LucideIcon = Layers;
  * source); a ready gift set (one UV line on the set item) is «Набор».
  */
 export function lineTypeKey(productType: string, uvLineDataRaw?: unknown, setDataRaw?: unknown): LineTypeKey | null {
-  if (productType === "uv_print" && parseOrderLineSetData(setDataRaw)?.kind === "ready") return "gift_set";
+  // Legacy ready set (one UV line for the whole set C); new ones are one line per item.
+  if (productType === "uv_print" && isLegacyReadySetLine(parseOrderLineSetData(setDataRaw))) return "gift_set";
   if (productType === "uv_print") {
     const uv = parseUvLineData(uvLineDataRaw);
     if (uv && (uv.technique === "transfer" || uv.source === "stickers")) return "uv_dtf";
@@ -81,5 +85,6 @@ export function lineTypeLabel(key: LineTypeKey, t: TranslationDictionary): strin
     case "uv_dtf": return t.uv.workshop.sectionUvDtf;
     case "sublimation_print": return t.sublimation.productType;
     case "gift_set": return t.giftSet.typeLabel;
+    case "set_box": return t.giftSet.boxTypeLabel;
   }
 }

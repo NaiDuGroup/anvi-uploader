@@ -290,7 +290,7 @@ export default function GiftSetTemplatesSettingsSection() {
                   </div>
                   <p className="text-xs font-medium text-gray-700">{g.zones}</p>
                   {d.zones.map((z, zi) => (
-                    <div key={zi} className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1.5fr_0.7fr_0.7fr_auto]">
+                    <div key={zi} className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_1.5fr_0.7fr_0.7fr_0.7fr_auto]">
                       <Input
                         aria-label="id"
                         value={z.id}
@@ -319,6 +319,15 @@ export default function GiftSetTemplatesSettingsSection() {
                           patch(i, { zones: d.zones.map((x, k) => (k === zi ? { ...x, heightCm: Number(e.target.value.replace(",", ".")) || 0 } : x)) })
                         }
                       />
+                      <Input
+                        aria-label={g.weight}
+                        title={g.weightHint}
+                        inputMode="decimal"
+                        value={String(z.weight)}
+                        onChange={(e) =>
+                          patch(i, { zones: d.zones.map((x, k) => (k === zi ? { ...x, weight: Number(e.target.value.replace(",", ".")) || 0 } : x)) })
+                        }
+                      />
                       <button
                         type="button"
                         className="text-xs text-gray-500 hover:text-red-600"
@@ -331,7 +340,7 @@ export default function GiftSetTemplatesSettingsSection() {
                   <button
                     type="button"
                     className="inline-flex w-fit items-center gap-1 text-xs font-medium text-amber-700 hover:underline"
-                    onClick={() => patch(i, { zones: [...d.zones, { id: `zone_${d.zones.length + 1}`, label: "", widthCm: 5, heightCm: 5 }] })}
+                    onClick={() => patch(i, { zones: [...d.zones, { id: `zone_${d.zones.length + 1}`, label: "", widthCm: 5, heightCm: 5, weight: 100 }] })}
                   >
                     <Plus className="h-3 w-3" aria-hidden />
                     {g.addZone}

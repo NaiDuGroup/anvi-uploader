@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { OrderProcurementMetaItem } from "@/lib/orderProcurement";
 import { ORDER_HOLDING_KINDS } from "@/lib/stock/unified/kinds";
 import { consume, returnToStock } from "@/lib/stock/unified/ledger";
-import { parseOrderLineSetData } from "./giftSet";
+import { giftSetExtraStockSkus, parseOrderLineSetData } from "./giftSet";
 
 /**
  * Set boxes on the unified ledger, like the roll-up stands: taken by SKU when
@@ -57,7 +57,7 @@ export async function returnGiftSetBoxStockForOrder(
     where: { orderId: params.orderId, setGroupId: { not: null } },
     select: { setData: true },
   });
-  const skus = [...new Set(lines.map((l) => parseOrderLineSetData(l.setData)?.boxSku).filter((s): s is string => Boolean(s)))];
+  const skus = [...new Set(lines.flatMap((l) => giftSetExtraStockSkus(parseOrderLineSetData(l.setData))))];
   if (skus.length === 0) return;
   const rows = await tx.stockMovement.groupBy({
     by: ["variantId", "orderLineId"],
@@ -80,23 +80,28 @@ export async function returnGiftSetBoxStockForOrder(
 
 
 /**
- * Box of a stored set line (restore from trash: the lines are read back from
- * the database, not resolved). Only the group's first line carries `boxSku`.
+ * Box / ready set item of a stored set line (restore from trash: the lines are read back from
+ * the database, not resolved). `boxSku` sits on the set's box line (older orders: on the
+ * group's first line), so each set's box is taken once either way.
  */
 export async function takeGiftSetBoxStockForStoredLine(
   tx: Tx,
   line: { id: string; setGroupId: string | null; setData: unknown },
   params: { orderId: string; orderNumber: number | null; createdById: string | null },
-): Promise<OrderProcurementMetaItem | null> {
-  if (!line.setGroupId) return null;
+): Promise<OrderProcurementMetaItem[]> {
+  if (!line.setGroupId) return [];
   const set = parseOrderLineSetData(line.setData);
-  if (!set?.boxSku) return null;
-  return takeGiftSetBoxStock(tx, {
-    boxSku: set.boxSku,
-    quantity: set.quantity,
-    orderId: params.orderId,
-    orderNumber: params.orderNumber,
-    orderLineId: line.id,
-    createdById: params.createdById,
-  });
+  const issues: OrderProcurementMetaItem[] = [];
+  for (const sku of giftSetExtraStockSkus(set)) {
+    const res = await takeGiftSetBoxStock(tx, {
+      boxSku: sku,
+      quantity: set!.quantity,
+      orderId: params.orderId,
+      orderNumber: params.orderNumber,
+      orderLineId: line.id,
+      createdById: params.createdById,
+    });
+    if (res) issues.push(res);
+  }
+  return issues;
 }

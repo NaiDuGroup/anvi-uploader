@@ -117,6 +117,16 @@ export const PRODUCT_TYPES = [
 export type ProductType = (typeof PRODUCT_TYPES)[number];
 
 /**
+ * «Набор»: the box of an assembled gift set (A / B) — a stock line with no
+ * print and no file, written off once per set (`src/lib/giftSet/giftSet.ts`).
+ * Staff / dealer wizard lines only: never a guest or cabinet product.
+ */
+export const SET_BOX_PRODUCT_TYPE = "set_box" as const;
+/** Product types an admin / dealer-wizard order line may have: {@link PRODUCT_TYPES} + the set box. */
+export const ORDER_LINE_PRODUCT_TYPES = [...PRODUCT_TYPES, SET_BOX_PRODUCT_TYPE] as const;
+export type OrderLineProductType = (typeof ORDER_LINE_PRODUCT_TYPES)[number];
+
+/**
  * Shared `quantity` cap across product types. Large format keeps its tighter
  * pack limit via `refineLargeFormatLineAtPath`.
  */
@@ -209,7 +219,7 @@ function refineProductSelection(
 /** Path prefix for nested admin order lines, e.g. `["lines", 0]`. */
 function refineProductSelectionAtPath(
   data: {
-    productType: ProductType;
+    productType: OrderLineProductType;
     mugProductId?: string;
     mugOther?: boolean;
     notebookProductId?: string;
@@ -283,7 +293,7 @@ function refineProductSelectionAtPath(
 
 function refineLargeFormatLineAtPath(
   data: {
-    productType: ProductType;
+    productType: OrderLineProductType;
     largeFormatMaterialId?: string;
     materialFamilyKey?: string;
     printWidthCm?: number;
@@ -400,7 +410,7 @@ export type PostcardLineInput = z.infer<typeof postcardLineInputSchema>;
 /** Business cards and flyers: paper, run size, finished size and faces. */
 function refineSheetProductLineAtPath(
   data: {
-    productType: ProductType;
+    productType: OrderLineProductType;
     sticker?: unknown;
     postcard?: { wholeSheet?: boolean } | null;
     sheetPaperId?: string;
@@ -512,7 +522,7 @@ function refineSheetProductLineAtPath(
 
 /** DTF lines need their garment/zone block; the cabinet cannot order them yet. */
 function refineDtfLineAtPath(
-  data: { productType: ProductType; dtf?: unknown },
+  data: { productType: OrderLineProductType; dtf?: unknown },
   ctx: z.RefinementCtx,
   pathPrefix: (string | number)[],
   allowed: boolean,
@@ -529,7 +539,7 @@ function refineDtfLineAtPath(
 
 /** UV lines need their item/zone block; the cabinet cannot order them yet. */
 function refineUvLineAtPath(
-  data: { productType: ProductType; uv?: unknown },
+  data: { productType: OrderLineProductType; uv?: unknown },
   ctx: z.RefinementCtx,
   pathPrefix: (string | number)[],
   allowed: boolean,
@@ -546,7 +556,7 @@ function refineUvLineAtPath(
 
 /** Sublimation lines need their blank / quantity block; the cabinet cannot order them yet. */
 function refineSublimationLineAtPath(
-  data: { productType: ProductType; sublimation?: unknown },
+  data: { productType: OrderLineProductType; sublimation?: unknown },
   ctx: z.RefinementCtx,
   pathPrefix: (string | number)[],
   allowed: boolean,
@@ -721,6 +731,32 @@ export const createOrderSchema = z
     );
   });
 
+/**
+ * Files of a wizard line: at least one, except the box of a «Набор» (no
+ * print, no file), which must belong to a set as its box.
+ */
+function refineLineFilesAtPath(
+  data: { productType: string; files: readonly unknown[]; set?: { role: string } | undefined },
+  ctx: z.RefinementCtx,
+  pathPrefix: (string | number)[],
+) {
+  if (data.productType === SET_BOX_PRODUCT_TYPE) {
+    if (data.files.length > 0) {
+      ctx.addIssue({ code: "custom", message: "set_box_no_files", path: [...pathPrefix, "files"] });
+    }
+    if (data.set?.role !== "box") {
+      ctx.addIssue({ code: "custom", message: "set_box_requires_set", path: [...pathPrefix, "set"] });
+    }
+    return;
+  }
+  if (data.set?.role === "box") {
+    ctx.addIssue({ code: "custom", message: "set_box_role_requires_box_line", path: [...pathPrefix, "set"] });
+  }
+  if (data.files.length < 1) {
+    ctx.addIssue({ code: "too_small", minimum: 1, inclusive: true, origin: "array", message: "At least one file is required", path: [...pathPrefix, "files"] });
+  }
+}
+
 /** Staff manual line total / price per piece (rounded to bani on the server). */
 const manualLineTotalMdlSchema = z.number().nonnegative().max(99_999_999.99).nullable().optional();
 
@@ -733,12 +769,16 @@ export const giftSetLineInputSchema = z.object({
   groupId: z.string().min(1).max(64),
   templateId: z.string().min(1).max(60),
   quantity: z.number().int().min(1).max(GIFT_SET_MAX_QUANTITY),
-  role: z.enum(["pen", "notebook", "mug", "ready"]),
+  role: z.enum(["pen", "notebook", "mug", "ready", "box"]),
   manualUnitPriceMdl: z.number().positive().max(999_999).nullable().optional(),
+  /** Ready set: the zone this line prints. */
+  zoneId: z.string().regex(/^[a-z0-9_]{1,30}$/i).nullable().optional(),
+  /** Ready set: the set item's colour variant. */
+  readyVariantId: z.string().uuid().nullable().optional(),
 });
 
-const adminOrderLineSchema = z.object({
-  productType: z.enum(PRODUCT_TYPES),
+export const adminOrderLineSchema = z.object({
+  productType: z.enum(ORDER_LINE_PRODUCT_TYPES),
   mugLayoutData: mugLayoutDataSchema.optional(),
   mugProductId: z.string().uuid().optional(),
   mugOther: z.boolean().optional(),
@@ -786,7 +826,8 @@ const adminOrderLineSchema = z.object({
   designId: z.string().uuid().optional(),
   /** «Набор»: the set this line belongs to. */
   set: giftSetLineInputSchema.optional(),
-  files: z.array(fileSchema).min(1, "At least one file is required"),
+  /** At least one file, except a set box line (none; `refineLineFilesAtPath`). */
+  files: z.array(fileSchema),
 });
 
 export const createAdminOrderSchema = z
@@ -884,6 +925,7 @@ export const createAdminOrderSchema = z
         ctx,
         ["lines", i],
       );
+      refineLineFilesAtPath(line, ctx, ["lines", i]);
       refineLargeFormatLineAtPath(line, ctx, ["lines", i]);
       refineSheetProductLineAtPath(line, ctx, ["lines", i]);
       refineDtfLineAtPath(line, ctx, ["lines", i], true);
@@ -915,6 +957,7 @@ export const dealerWizardOrderSchema = z
     data.lines.forEach((line, i) => {
       const withTier = { ...line, customerType: "dealer" as const };
       refineProductSelectionAtPath(withTier, ctx, ["lines", i]);
+      refineLineFilesAtPath(withTier, ctx, ["lines", i]);
       refineLargeFormatLineAtPath(withTier, ctx, ["lines", i]);
       refineSheetProductLineAtPath(withTier, ctx, ["lines", i]);
       refineDtfLineAtPath(withTier, ctx, ["lines", i], true);
@@ -938,7 +981,7 @@ export const existingAdminOrderFilePatchSchema = z.object({
 export const adminOrderUpdateLineSchema = z.object({
   /** When omitted or unknown, server creates a new order line row. */
   orderLineId: z.string().uuid().optional(),
-  productType: z.enum(PRODUCT_TYPES),
+  productType: z.enum(ORDER_LINE_PRODUCT_TYPES),
   mugLayoutData: mugLayoutDataSchema.optional(),
   mugProductId: z.string().uuid().optional(),
   mugOther: z.boolean().optional(),
@@ -981,9 +1024,8 @@ export const adminOrderUpdateLineSchema = z.object({
   designId: z.string().uuid().optional(),
   /** «Набор»: the set this line belongs to (absent = not in a set). */
   set: giftSetLineInputSchema.optional(),
-  files: z
-    .array(z.union([existingAdminOrderFilePatchSchema, fileSchema]))
-    .min(1, "At least one file is required"),
+  /** At least one file, except a set box line (none; `refineLineFilesAtPath`). */
+  files: z.array(z.union([existingAdminOrderFilePatchSchema, fileSchema])),
 });
 
 export const updateAdminOrderSchema = z
@@ -1010,6 +1052,7 @@ export const updateAdminOrderSchema = z
         ctx,
         ["lines", i],
       );
+      refineLineFilesAtPath(line, ctx, ["lines", i]);
       refineSheetProductLineAtPath(line, ctx, ["lines", i]);
       refineDtfLineAtPath(line, ctx, ["lines", i], true);
       refineUvLineAtPath(line, ctx, ["lines", i], true);
@@ -1042,6 +1085,7 @@ export const dealerOrderUpdateSchema = z
     data.lines.forEach((line, i) => {
       const withTier = { ...line, customerType: "dealer" as const };
       refineProductSelectionAtPath(withTier, ctx, ["lines", i]);
+      refineLineFilesAtPath(withTier, ctx, ["lines", i]);
       refineSheetProductLineAtPath(withTier, ctx, ["lines", i]);
       refineDtfLineAtPath(withTier, ctx, ["lines", i], true);
       refineUvLineAtPath(withTier, ctx, ["lines", i], true);

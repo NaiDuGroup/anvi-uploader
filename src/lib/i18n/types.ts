@@ -495,6 +495,8 @@ export interface TranslationDictionary {
       createSuccess: string;
       confirmTitle: string;
       confirmHint: string;
+      /** Edit mode: the button says «Сохранить». */
+      confirmHintEdit: string;
       /** Heading of the per-file upload checklist shown while submitting */
       uploadProgressTitle: string;
       /** Upload checklist counter, e.g. "Uploaded 2 of 4" */
@@ -3240,7 +3242,22 @@ export interface TranslationDictionary {
     removeConfirm: string;
     fileFor: (label: string) => string;
     zoneSize: (w: string, h: string) => string;
-    box: (sku: string) => string;
+    /** «+ коробка 30×23×8,5» (box size or SKU). */
+    box: (size: string) => string;
+    boxLine: (size: string) => string;
+    /** Line type of a set's box line («Коробка набора»). */
+    boxTypeLabel: string;
+    /** Price cell of the box row: «входит в набор». */
+    boxIncluded: string;
+    /** File cell of the box row: no file needed. */
+    boxNoFile: string;
+    /** Box row note: written off from stock, N per set. */
+    boxStockNote: string;
+    /** Dialog: section title of the box. */
+    boxSection: string;
+    shortWarning: string;
+    replaceFile: string;
+    boardProcurement: string;
     noBox: string;
     lineShare: (amount: string) => string;
     readyLine: string;

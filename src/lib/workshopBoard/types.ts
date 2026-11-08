@@ -157,6 +157,8 @@ export interface UvLineFacts {
   /** Client item: what the client brought. */
   clientItemDescription: string | null;
   clientItemNotes: string | null;
+  /** «Набор» C: the item is the set's own (thermos), not a client item; its card is grouped by it. */
+  giftSetItem?: boolean;
   quantity: number;
   zones: UvZoneFacts[];
   /** UV-DTF: printed on film (A + B), laminated and stuck on / handed over as stickers. */
@@ -247,7 +249,15 @@ export interface WorkshopBoardLine {
   createdAt: string;
   productType: ProductType;
   /** «Набор»: badge «Набор: … ×N» and the component of this line (null outside a set). */
-  giftSet?: { label: string; role: string | null; quantity: number } | null;
+  giftSet?: {
+    label: string;
+    role: string | null;
+    quantity: number;
+    /** «+ коробка 30×23×8,5» (A/B) / «в коробке набора» (C). */
+    packNote?: string | null;
+    /** Something the set takes was short when the order was saved. */
+    procurement?: boolean;
+  } | null;
   facts: LineFacts;
   files: WorkshopBoardFile[];
   notes: string | null;

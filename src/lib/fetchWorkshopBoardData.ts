@@ -1,3 +1,4 @@
+import { giftSetBoardFlags, giftSetBoardSkus, procurementVariantIds, type GiftSetBoardFlags } from "@/lib/giftSet/giftSetBoard";
 import { Prisma } from "@prisma/client";
 import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
 import { prisma } from "./prisma";
@@ -54,6 +55,7 @@ const ORDER_LINE_SELECT = {
   uvLineData: true,
   sublimationLineData: true,
   shopLineData: true,
+  setGroupId: true,
   setData: true,
   productionStatus: true,
   layoutIssueReason: true,
@@ -236,6 +238,8 @@ export async function fetchWorkshopBoardData(
         createdAt: true,
         createdBy: true,
         sentToWorkshopBy: true,
+        needsProcurement: true,
+        procurementMeta: true,
         files: { select: ORDER_FILE_SELECT },
         orderLines: {
           orderBy: { sortOrder: "asc" },
@@ -267,6 +271,19 @@ export async function fetchWorkshopBoardData(
   const idIndex = new Map(orderIds.map((id, i) => [id, i]));
   orders.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
   await fillDtfGarmentNames(orders.flatMap((o) => o.orderLines));
+
+  // «Набор»: pack note + «Закупка» per set line (boxes / ready set items by SKU).
+  const setSkus = giftSetBoardSkus(orders.flatMap((o) => o.orderLines));
+  const setSkuVariants = setSkus.length
+    ? await prisma.stockVariant.findMany({ where: { sku: { in: setSkus } }, select: { id: true, sku: true } })
+    : [];
+  const variantIdBySku = new Map(setSkuVariants.map((v) => [v.sku, v.id]));
+  const setFlagsByLine = new Map<string, GiftSetBoardFlags>();
+  for (const o of orders) {
+    if (!o.orderLines.some((l) => l.setGroupId)) continue;
+    const flags = giftSetBoardFlags(o.orderLines, procurementVariantIds(o.needsProcurement, o.procurementMeta), variantIdBySku);
+    for (const [id, f] of flags) setFlagsByLine.set(id, f);
+  }
 
   const rawOrders = orders.map((o) => ({
     id: o.id,
@@ -312,6 +329,7 @@ export async function fetchWorkshopBoardData(
       sublimationLineData: line.sublimationLineData,
       shopLineData: line.shopLineData,
       setData: line.setData,
+      giftSetFlags: setFlagsByLine.get(line.id) ?? null,
       productionStatus: line.productionStatus,
       layoutIssueReason: line.layoutIssueReason,
       layoutIssueNote: line.layoutIssueNote,

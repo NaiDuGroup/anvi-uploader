@@ -5,12 +5,13 @@ import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { UvLineFacts, UvZoneFacts } from "@/lib/workshopBoard/types";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
-function zoneText(z: UvZoneFacts, t: TranslationDictionary): string {
+function zoneText(z: UvZoneFacts, t: TranslationDictionary, giftSetItem: boolean): string {
   const place: string = z.placementLabel ?? t.uv.placements[z.placement];
   const size: string = `${z.widthCm}×${z.heightCm}`;
   return [
     `${place} · ${size}`,
-    z.whiteLayers > 0 ? t.uv.workshop.white(z.whiteLayers) : null,
+    // «Набор»: the set's print is fixed by its template (white underbase included) — no «подложка ×1» noise.
+    z.whiteLayers > 0 && !giftSetItem ? t.uv.workshop.white(z.whiteLayers) : null,
     z.varnish ? t.uv.workshop.varnish : null,
     z.primer ? t.uv.workshop.primer : null,
   ]
@@ -23,6 +24,7 @@ export function UvBoardLineSummary({ facts }: { facts: UvLineFacts }) {
   const { t } = useLanguageStore();
   const item: string =
     facts.itemName ??
+    (facts.giftSetItem ? (facts.clientItemDescription ?? "—") : null) ??
     (facts.source === "stickers"
       ? t.uv.workshop.stickers
       : `${t.uv.workshop.clientItem}: ${facts.clientItemDescription ?? "—"}`);
@@ -69,7 +71,7 @@ export function UvBoardLineSummary({ facts }: { facts: UvLineFacts }) {
                 : "rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-amber-800"
             }
           >
-            {zoneText(z, t)}
+            {zoneText(z, t, facts.giftSetItem === true)}
           </li>
         ))}
       </ul>

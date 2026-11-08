@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { deflateSync } from "node:zlib";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { pdfMeta, rasterMeta } from "./fileMeta";
@@ -6,6 +7,39 @@ import { formatFileMeta, type FileMetaText } from "./fileMetaFormat";
 import { ru } from "@/lib/i18n/ru";
 
 const RU: FileMetaText = ru.fileMeta;
+
+function crc32(buf: Buffer): number {
+  let c = ~0;
+  for (const byte of buf) {
+    c ^= byte;
+    for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
+  }
+  return ~c;
+}
+
+function pngChunk(type: string, data: Buffer): Buffer {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length);
+  const td = Buffer.concat([Buffer.from(type, "ascii"), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(td) >>> 0);
+  return Buffer.concat([len, td, crc]);
+}
+
+function canvasLikePng(width: number, height: number): Buffer {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6; // RGBA, like canvas.toBlob
+  const raw = Buffer.alloc((width * 4 + 1) * height);
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk("IHDR", ihdr),
+    pngChunk("IDAT", deflateSync(raw)),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
 
 describe("rasterMeta", () => {
   it("reads pixels and dpi and converts them to a print size", async () => {
@@ -23,6 +57,20 @@ describe("rasterMeta", () => {
       .toBuffer();
     const m = await rasterMeta(jpg.subarray(0, 2048));
     expect(m).toMatchObject({ pixelWidth: 1200, pixelHeight: 800, dpi: 150, widthMm: 203.2 });
+  });
+
+  it("a PNG with no density has no dpi (sharp would say 72) — the same as the order form reads it", async () => {
+    // A browser canvas export (IHDR, IDAT, IEND — no pHYs): libvips reports 72 dpi for such files.
+    const png = canvasLikePng(1713, 2480);
+    expect(await rasterMeta(png)).toEqual({ pixelWidth: 1713, pixelHeight: 2480, dpi: null, widthMm: null, heightMm: null });
+  });
+
+  it("other formats keep sharp's density (TIFF with dpi; WebP without)", async () => {
+    const img = sharp({ create: { width: 600, height: 300, channels: 3, background: "#fff" } });
+    const tif = await img.clone().withMetadata({ density: 300 }).tiff().toBuffer();
+    expect(await rasterMeta(tif)).toMatchObject({ dpi: 300, widthMm: 50.8 });
+    const webp = await img.clone().webp().toBuffer();
+    expect(await rasterMeta(webp)).toMatchObject({ pixelWidth: 600, dpi: null, widthMm: null });
   });
 });
 

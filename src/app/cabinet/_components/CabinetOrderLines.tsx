@@ -77,6 +77,8 @@ export function cabinetProductLabel(kind: string, t: TranslationDictionary): str
     flyer: t.cabinet.orderProductFlyer,
     sticker_sheet: t.admin.productTypeStickerSheet,
     postcard: t.admin.productTypePostcard,
+    // «Набор»: the set's box (no print, inside the set price).
+    set_box: t.giftSet.boxTypeLabel,
     mixed: t.cabinet.orderProductMixed,
   };
   return byKind[kind] ?? t.cabinet.orderProductPaper;

@@ -2,7 +2,8 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import type { OrderLogEntry } from "@/lib/orderLog";
 import { isWorkshopPhaseStatus } from "@/lib/orderStatusFromLines";
-import { applyDerivedStatus, lockOrders } from "@/lib/orderLineStatusUpdate";
+import { applyDerivedStatus, followGiftSetBoxLines, lockOrders } from "@/lib/orderLineStatusUpdate";
+import { isGiftSetBoxLineType } from "@/lib/giftSet/giftSet";
 import {
   canFlagLayoutIssue,
   CLEARED_LAYOUT_ISSUE_FIELDS,
@@ -147,7 +148,8 @@ export async function flagLineLayoutIssue(
     const { order, line } = await lockOrderLine(tx, params.orderId, params.lineId);
     await params.hooks?.afterLock?.();
     if (!isWorkshopPhaseStatus(order.status)) throw new LayoutIssueError("wrong_phase");
-    if (!canFlagLayoutIssue(order.status, line.productionStatus)) {
+    // A set's box line has no file / layout: it only follows its set.
+    if (!canFlagLayoutIssue(order.status, line.productionStatus) || isGiftSetBoxLineType(line.productType)) {
       throw new LayoutIssueError("line_not_flaggable");
     }
     await tx.orderLine.update({
@@ -184,8 +186,12 @@ export async function flagLineLayoutIssue(
         metadata: { orderLineId: line.id, lineCode, reason: params.reason, note },
       },
     ];
-    const nextLines = order.orderLines.map((l) =>
-      l.id === line.id ? { productionStatus: "NEEDS_LAYOUT" } : { productionStatus: l.productionStatus },
+    // A set's box line follows its set (a PRINTING line flagged may send the set back to WAITING).
+    const nextLines = await followGiftSetBoxLines(
+      tx,
+      order.id,
+      order.orderLines.map((l) => (l.id === line.id ? { ...l, productionStatus: "NEEDS_LAYOUT" } : l)),
+      at,
     );
     const newOrderStatus = await applyDerivedStatus(tx, order, nextLines, params.userId, logs);
     await tx.orderLog.createMany({ data: logs });

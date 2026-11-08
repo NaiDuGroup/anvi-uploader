@@ -155,7 +155,7 @@ export const AdminNotebookProductSnapshotRow = memo(function AdminNotebookProduc
 
   const name = notebookProductDisplayNameFromSnapshot(snap, locale);
   const imgUrl = publicAssetUrlFromStorageKey(snap.imageUrl);
-  const showSku = !hideSku && Boolean(snap.sku && snap.sku !== "OTHER");
+  const showSku = !hideSku && Boolean(snap.sku && snap.sku !== "OTHER" && !isGiftSetSku(snap.sku));
 
   return (
     <div
@@ -272,7 +272,7 @@ export const AdminPenProductSnapshotRow = memo(function AdminPenProductSnapshotR
 
   const name = penProductDisplayNameFromSnapshot(snap, locale);
   const imgUrl = publicAssetUrlFromStorageKey(snap.imageUrl);
-  const showSku = !hideSku && Boolean(snap.sku && snap.sku !== "OTHER" && snap.sku !== "—");
+  const showSku = !hideSku && Boolean(snap.sku && snap.sku !== "OTHER" && snap.sku !== "—" && !isGiftSetSku(snap.sku));
 
   return (
     <div
@@ -672,4 +672,8 @@ export function OrderFileSpecs({
       ))}
     </div>
   );
+}
+/** Notebook / pen of a ready gift set carry the set's SKU (for board grouping); it means nothing to the workshop. */
+function isGiftSetSku(sku: string): boolean {
+  return sku.startsWith("GIFT-SET-");
 }

@@ -123,7 +123,7 @@ export function dealerEditBusinessCardLineData(raw: unknown): Json | null {
 export function dealerEditSetData(raw: unknown): Json | null {
   const d = obj(raw);
   if (!d) return null;
-  return pick(d, ["version", "templateId", "name", "kind", "role", "roleLabel", "quantity", "customerType", "zoneIds"]);
+  return pick(d, ["version", "templateId", "name", "kind", "role", "roleLabel", "quantity", "customerType", "zoneIds", "zoneId", "readyVariantId", "readyColourLabel"]);
 }
 
 export interface DealerEditLineSource {

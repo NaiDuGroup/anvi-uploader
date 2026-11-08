@@ -40,7 +40,7 @@ import {
 import { findArtworkLargerThanOrdered } from "@/lib/files/serverArtworkCheck";
 import { createOrderWithResolvedLines, resolveOrderLines } from "@/lib/orderCreate/orderLines";
 import { cabinetLinesDoneSummary } from "@/lib/ownerLineFileReplace";
-import { dealerLineTotalsMdl, dealerOrderTotalMdl } from "@/lib/orderCreate/dealerLinePrices";
+import { dealerFreeLines, dealerLineTotalsMdl, dealerOrderTotalMdl } from "@/lib/orderCreate/dealerLinePrices";
 import { loadDealerUrgencyOffer } from "@/lib/dealerUrgencyServer";
 import {
   chargedUrgencyFeeMdl,
@@ -343,7 +343,7 @@ export async function POST(request: NextRequest) {
     // A print without a rate goes in unpriced: the studio prices it (order total null).
     const { resolved, lfLineTotalsMdl } = await resolveOrderLines(lineInputs, { allowUnpricedPrint: true });
     const lineTotals = await dealerLineTotalsMdl(resolved, lfLineTotalsMdl);
-    const goodsTotal = dealerOrderTotalMdl(lineTotals);
+    const goodsTotal = dealerOrderTotalMdl(lineTotals, dealerFreeLines(resolved));
 
     // «Срочно»: offer and fee come from the dealer's card / the global setting only.
     const urgencyOffer = await loadDealerUrgencyOffer(prisma, user.studioCustomer.id);
