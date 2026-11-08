@@ -1,6 +1,7 @@
 import { getImageDimensions } from "@/lib/imageDimensions";
 import { DEFAULT_DPI, pxToCm } from "@/lib/printDimensions";
 import type { BusinessCardSizeCm } from "@/lib/businessCard/businessCardArtworkCheck";
+import { storedFileDownloadUrl } from "@/lib/files/storedFileDownloadUrl";
 
 const PT_PER_CM = 72 / 2.54;
 
@@ -43,9 +44,11 @@ export async function readBusinessCardArtworkSizeCm(
 /** Same as {@link readBusinessCardArtworkSizeCm} for a file already on the order. */
 export async function readStoredBusinessCardArtworkSizeCm(
   fileId: string,
+  /** Dealer edit: the dealer's own order files come from the cabinet endpoint. */
+  dealerMode = false,
 ): Promise<BusinessCardSizeCm | null> {
   try {
-    const res = await fetch(`/api/download/${fileId}`, {
+    const res = await fetch(storedFileDownloadUrl(fileId, dealerMode), {
       credentials: "same-origin",
     });
     if (!res.ok) return null;

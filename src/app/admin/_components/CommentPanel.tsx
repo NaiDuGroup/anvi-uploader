@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, X, Send, Pencil, Trash2, Check } from "lucide-react";
@@ -73,6 +74,9 @@ export default function CommentPanel({
   const [messages, setMessages] = useState<CommentMessage[]>(initialComments ?? []);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const locale = useLanguageStore((s) => s.locale);
+  /** Why the last send / edit / delete failed (typed text and edit mode are kept). */
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Inline edit/delete state. Only one message can be in either mode at a
   // time, so a single id pair plus per-action busy flag is enough.
@@ -131,6 +135,7 @@ export default function CommentPanel({
     const trimmed = text.trim();
     if (!trimmed || sending) return;
     setSending(true);
+    setActionError(null);
     try {
       const res = await fetch(`/api/orders/${orderId}/comments`, {
         method: "POST",
@@ -141,9 +146,11 @@ export default function CommentPanel({
         const msg: CommentMessage = await res.json();
         setMessages((prev) => [...prev, msg]);
         setText("");
+      } else {
+        setActionError(await friendlyErrorText(res, locale));
       }
     } catch {
-      /* ignore */
+      setActionError(await friendlyErrorText(null, locale));
     } finally {
       setSending(false);
     }
@@ -151,6 +158,7 @@ export default function CommentPanel({
 
   const beginEdit = (msg: CommentMessage) => {
     setConfirmDeleteId(null);
+    setActionError(null);
     setEditingId(msg.id);
     setEditText(msg.text);
   };
@@ -158,6 +166,7 @@ export default function CommentPanel({
   const cancelEdit = () => {
     setEditingId(null);
     setEditText("");
+    setActionError(null);
   };
 
   const handleSaveEdit = async () => {
@@ -170,6 +179,7 @@ export default function CommentPanel({
       return;
     }
     setSavingEdit(true);
+    setActionError(null);
     try {
       const res = await fetch(`/api/orders/${orderId}/comments/${editingId}`, {
         method: "PATCH",
@@ -180,9 +190,11 @@ export default function CommentPanel({
         const updated: CommentMessage = await res.json();
         setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
         cancelEdit();
+      } else {
+        setActionError(await friendlyErrorText(res, locale));
       }
     } catch {
-      /* ignore */
+      setActionError(await friendlyErrorText(null, locale));
     } finally {
       setSavingEdit(false);
     }
@@ -191,6 +203,7 @@ export default function CommentPanel({
   const handleDelete = async () => {
     if (!confirmDeleteId || deleting) return;
     setDeleting(true);
+    setActionError(null);
     try {
       const res = await fetch(
         `/api/orders/${orderId}/comments/${confirmDeleteId}`,
@@ -199,9 +212,11 @@ export default function CommentPanel({
       if (res.ok) {
         setMessages((prev) => prev.filter((m) => m.id !== confirmDeleteId));
         setConfirmDeleteId(null);
+      } else {
+        setActionError(await friendlyErrorText(res, locale));
       }
     } catch {
-      /* ignore */
+      setActionError(await friendlyErrorText(null, locale));
     } finally {
       setDeleting(false);
     }
@@ -301,6 +316,7 @@ export default function CommentPanel({
                         onEdit={() => beginEdit(msg)}
                         onDelete={() => {
                           setEditingId(null);
+                          setActionError(null);
                           setConfirmDeleteId(msg.id);
                         }}
                       />
@@ -321,6 +337,7 @@ export default function CommentPanel({
                         onEdit={() => beginEdit(msg)}
                         onDelete={() => {
                           setEditingId(null);
+                          setActionError(null);
                           setConfirmDeleteId(msg.id);
                         }}
                       />
@@ -336,7 +353,10 @@ export default function CommentPanel({
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setConfirmDeleteId(null)}
+                      onClick={() => {
+                        setConfirmDeleteId(null);
+                        setActionError(null);
+                      }}
                       disabled={deleting}
                       className="h-6 text-[11px] px-2"
                     >
@@ -372,6 +392,11 @@ export default function CommentPanel({
           })}
         </div>
 
+        {actionError ? (
+          <p role="alert" className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+            {actionError}
+          </p>
+        ) : null}
         <div className="border-t px-4 py-3 flex gap-2">
           <input
             value={text}

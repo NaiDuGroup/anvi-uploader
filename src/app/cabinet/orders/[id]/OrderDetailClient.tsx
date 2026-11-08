@@ -29,6 +29,7 @@ import type { CabinetStatusStep } from "@/lib/cabinetOrderTimeline";
 import type { ClientMessageDTO } from "@/lib/clientMessages";
 import type { TranslationDictionary } from "@/lib/i18n";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 import {
   getCabinetVisibleStatus,
   type OrderStatus,
@@ -1101,6 +1102,9 @@ function OrderMessagesSection({
   const [messages, setMessages] = useState<ClientMessageDTO[] | null>(null);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  /** Why the last send failed; the typed text stays in the box. */
+  const [sendError, setSendError] = useState<string | null>(null);
+  const errorLocale = useLanguageStore((s) => s.locale);
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   const timeFormatter = useMemo(
@@ -1138,6 +1142,7 @@ function OrderMessagesSection({
     const trimmed = text.trim();
     if (!trimmed || sending) return;
     setSending(true);
+    setSendError(null);
     try {
       const res = await fetch(`/api/cabinet/orders/${orderId}/messages`, {
         method: "POST",
@@ -1148,9 +1153,11 @@ function OrderMessagesSection({
         const msg = (await res.json()) as ClientMessageDTO;
         setMessages((prev) => [...(prev ?? []), msg]);
         setText("");
+      } else {
+        setSendError(await friendlyErrorText(res, errorLocale, "customer"));
       }
     } catch {
-      /* ignore */
+      setSendError(await friendlyErrorText(null, errorLocale, "customer"));
     } finally {
       setSending(false);
     }
@@ -1219,6 +1226,11 @@ function OrderMessagesSection({
           </span>
         </button>
       </form>
+      {sendError ? (
+        <p role="alert" className="mt-2 text-sm text-red-600">
+          {sendError}
+        </p>
+      ) : null}
     </section>
   );
 }

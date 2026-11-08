@@ -5,6 +5,7 @@ import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
+import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 import { DatePicker } from "@/app/admin/_components/DatePicker";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
@@ -93,6 +94,7 @@ export default function ShopPromoPageClient() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<PromoAdminRow | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [productQuery, setProductQuery] = useState("");
 
   const load = useCallback(async () => {
@@ -199,8 +201,14 @@ export default function ShopPromoPageClient() {
   const confirmDelete = async () => {
     if (!deleting) return;
     setDeleteBusy(true);
-    await fetch(`/api/admin/shop/promo-codes/${deleting.id}`, { method: "DELETE" }).catch(() => null);
+    setDeleteError(null);
+    const res = await fetch(`/api/admin/shop/promo-codes/${deleting.id}`, { method: "DELETE" }).catch(() => null);
     setDeleteBusy(false);
+    if (!res?.ok) {
+      // Keep the dialog open and say why — the code is still there.
+      setDeleteError(await friendlyErrorText(res, locale));
+      return;
+    }
     setDeleting(null);
     await load();
   };
@@ -498,8 +506,12 @@ export default function ShopPromoPageClient() {
         cancelLabel={p.cancel}
         confirmVariant={deleting && deleting.ordersCount > 0 ? "default" : "destructive"}
         busy={deleteBusy}
+        error={deleteError}
         onConfirm={() => (deleting && deleting.ordersCount > 0 ? setDeleting(null) : void confirmDelete())}
-        onClose={() => setDeleting(null)}
+        onClose={() => {
+          setDeleting(null);
+          setDeleteError(null);
+        }}
       />
     </main>
   );

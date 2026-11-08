@@ -570,6 +570,7 @@ export const ru: TranslationDictionary = {
       lfLfPreviewEnterCopies:
         "Укажите целое число копий (не менее 1) для расчёта раскладки и сумм.",
       layoutCheckOkShort: "Макет OK",
+      layoutCheckUnreadable: "Не удалось прочитать файл для проверки размера — проверьте его сами",
       replaceLayoutImage: "Заменить файл макета",
       replaceLayoutImageAriaLabel:
         "Заменить файл изображения макета для этой позиции заказа",
@@ -1144,6 +1145,7 @@ export const ru: TranslationDictionary = {
       toOrder: "В заказ",
       deleteDesignTitle: "Удалить макет?",
       deleteDesignDescription: "Макет исчезнет из студии. Файлы, уже отправленные в заказы, останутся.",
+      deletePartialFailed: (failed, total) => `Не удалось удалить ${failed} из ${total}`,
       sizeCm: (w, h) => `${w}×${h} см`,
       createTitle: "Новый дизайн",
       nameLabel: "Название",

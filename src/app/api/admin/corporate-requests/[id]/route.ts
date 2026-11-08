@@ -8,7 +8,8 @@ const NO_STORE = { "Cache-Control": "no-store" };
 /** One «Pentru companii» request (staff). */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
-  if (!user || !isSuperAdmin(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isSuperAdmin(user.role)) return NextResponse.json({ error: "Forbidden: superadmin only" }, { status: 403 });
   const { id } = await params;
   try {
     const r = await getCorporateRequest(id);
@@ -23,7 +24,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 /** Staff update: `{ status?, assigneeId?, notes? }`. */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
-  if (!user || !isSuperAdmin(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isSuperAdmin(user.role)) return NextResponse.json({ error: "Forbidden: superadmin only" }, { status: 403 });
   const { id } = await params;
   let raw: unknown;
   try {

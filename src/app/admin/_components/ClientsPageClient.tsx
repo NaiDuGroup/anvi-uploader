@@ -27,6 +27,7 @@ export default function ClientsPageClient({
   currentUserRole: string;
 }) {
   const { t } = useLanguageStore();
+  const locale = useLanguageStore((s) => s.locale);
   const canMutate = isSuperAdmin(currentUserRole);
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
@@ -34,6 +35,7 @@ export default function ClientsPageClient({
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
   const [inviteTarget, setInviteTarget] = useState<Row | null>(null);
   const [pendingDealerToggle, setPendingDealerToggle] = useState<string | null>(null);
+  const [dealerToggleError, setDealerToggleError] = useState<{ id: string; text: string } | null>(null);
   const [debtorsOnly, setDebtorsOnly] = useState(false);
 
   const debouncedSearch = useDebounce(search.trim(), 300);
@@ -58,6 +60,7 @@ export default function ClientsPageClient({
     async (row: Row, next: boolean) => {
       if (!canMutate) return;
       setPendingDealerToggle(row.id);
+      setDealerToggleError(null);
       try {
         const res = await fetch(`/api/admin/clients/${row.id}`, {
           method: "PATCH",
@@ -67,12 +70,17 @@ export default function ClientsPageClient({
         });
         if (res.ok) {
           mutate();
+        } else {
+          // The switch shows the server value, so it stays as it was; say why.
+          setDealerToggleError({ id: row.id, text: await friendlyErrorText(res, locale) });
         }
+      } catch {
+        setDealerToggleError({ id: row.id, text: await friendlyErrorText(null, locale) });
       } finally {
         setPendingDealerToggle(null);
       }
     },
-    [canMutate, mutate],
+    [canMutate, mutate, locale],
   );
 
   return (
@@ -230,6 +238,11 @@ export default function ClientsPageClient({
                             ? t.admin.clientsDealerYes
                             : t.admin.clientsDealerNo}
                         </span>
+                        {dealerToggleError?.id === r.id ? (
+                          <p role="alert" className="mt-1 max-w-[14rem] text-xs text-red-600">
+                            {dealerToggleError.text}
+                          </p>
+                        ) : null}
                       </>
                     ) : (
                       <span

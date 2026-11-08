@@ -20,6 +20,12 @@ export interface SizeValidationResult {
   actual: PixelSize;
   /** Tolerance used for the comparison, expressed as a fraction (0.02 = 2 %). */
   tolerance: number;
+  /**
+   * The stored file could not be downloaded/decoded, so nothing was measured.
+   * Such a result is `ok: true` (it must not block the order) and the UI says
+   * honestly that the size was not checked.
+   */
+  unreadable?: true;
 }
 
 /**

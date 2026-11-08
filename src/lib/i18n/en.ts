@@ -564,6 +564,7 @@ export const en: TranslationDictionary = {
       lfLfPreviewEnterCopies:
         "Enter copies (whole number ≥ 1) to calculate layout and totals.",
       layoutCheckOkShort: "Layout OK",
+      layoutCheckUnreadable: "Could not read the file to check its size — please check it yourself",
       replaceLayoutImage: "Replace layout image",
       replaceLayoutImageAriaLabel:
         "Replace layout image file for this product line",
@@ -1137,6 +1138,7 @@ export const en: TranslationDictionary = {
       toOrder: "To order",
       deleteDesignTitle: "Delete layout?",
       deleteDesignDescription: "The layout will disappear from the studio. Files already sent to orders stay.",
+      deletePartialFailed: (failed, total) => `Could not delete ${failed} of ${total}`,
       sizeCm: (w, h) => `${w}×${h} cm`,
       createTitle: "New design",
       nameLabel: "Title",

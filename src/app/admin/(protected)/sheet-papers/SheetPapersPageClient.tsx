@@ -27,6 +27,7 @@ import {
   adminTableOutlineLabeledButtonClass,
 } from "@/app/admin/_components/AdminTableIconActions";
 import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
+import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 import { DatePicker } from "@/app/admin/_components/DatePicker";
 import { StockMovementKind, StockUnit } from "@/lib/stock/unified/kinds";
 import type { StockVariantJson } from "@/lib/stock/unified/adminTypes";
@@ -70,6 +71,7 @@ type ReceiptRow = {
 /** Sheet paper warehouse: catalog, prices per printed sheet and stock history. */
 export default function SheetPapersPageClient() {
   const { t } = useLanguageStore();
+  const locale = useLanguageStore((s) => s.locale);
   const lf = t.admin;
   const { items, error: loadError, isLoading: loading, mutate } = useSheetPapers();
 
@@ -82,6 +84,7 @@ export default function SheetPapersPageClient() {
   const [stockOp, setStockOp] = useState<null | { op: "inventory" | "history"; row: Row }>(null);
   const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -296,21 +299,32 @@ export default function SheetPapersPageClient() {
         confirmLabel={lf.sheetPaperCatalogDelete}
         cancelLabel={lf.sheetPaperCatalogCancel}
         busy={deleteBusy}
+        error={deleteError}
         onClose={() => {
-          if (!deleteBusy) setPendingDelete(null);
+          if (!deleteBusy) {
+            setPendingDelete(null);
+            setDeleteError(null);
+          }
         }}
         onConfirm={() => {
           void (async () => {
             if (!pendingDelete) return;
             setDeleteBusy(true);
+            setDeleteError(null);
             try {
               const res = await fetch(`/api/admin/sheet-papers/${pendingDelete.id}`, {
                 method: "DELETE",
               });
-              if (res.ok) await load();
+              if (!res.ok) {
+                setDeleteError(await friendlyErrorText(res, locale));
+                return;
+              }
+              setPendingDelete(null);
+              await load();
+            } catch {
+              setDeleteError(await friendlyErrorText(null, locale));
             } finally {
               setDeleteBusy(false);
-              setPendingDelete(null);
             }
           })();
         }}

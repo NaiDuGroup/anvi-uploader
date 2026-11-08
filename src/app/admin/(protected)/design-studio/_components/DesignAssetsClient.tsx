@@ -13,6 +13,7 @@ import { resolveDesignFileUrl } from "@/lib/design/fileUrls";
 import { getImageDimensions } from "@/lib/imageDimensions";
 import type { AdminDesignAssetJson } from "@/app/api/admin/design-assets/route";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 
 async function uploadDesignAssetFile(file: File): Promise<string> {
   const res = await fetch("/api/upload-url", {
@@ -41,6 +42,7 @@ async function uploadDesignAssetFile(file: File): Promise<string> {
 
 export default function DesignAssetsClient() {
   const { t } = useLanguageStore();
+  const locale = useLanguageStore((s) => s.locale);
   const ds = t.admin.designStudio;
   const [items, setItems] = useState<AdminDesignAssetJson[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -54,6 +56,7 @@ export default function DesignAssetsClient() {
   const [newTags, setNewTags] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -108,10 +111,17 @@ export default function DesignAssetsClient() {
 
   const remove = async (id: string) => {
     setDeleteBusy(true);
+    setDeleteError(null);
     try {
-      await fetch(`/api/admin/design-assets/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/design-assets/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        setDeleteError(await friendlyErrorText(res, locale));
+        return;
+      }
       setDeleteId(null);
       reload();
+    } catch {
+      setDeleteError(await friendlyErrorText(null, locale));
     } finally {
       setDeleteBusy(false);
     }
@@ -249,11 +259,15 @@ export default function DesignAssetsClient() {
         cancelLabel={ds.cancel}
         confirmVariant="destructive"
         busy={deleteBusy}
+        error={deleteError}
         onConfirm={() => {
           if (deleteId) void remove(deleteId);
         }}
         onClose={() => {
-          if (!deleteBusy) setDeleteId(null);
+          if (!deleteBusy) {
+            setDeleteId(null);
+            setDeleteError(null);
+          }
         }}
       />
     </main>

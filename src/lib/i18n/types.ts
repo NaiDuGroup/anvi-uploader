@@ -657,6 +657,8 @@ export interface TranslationDictionary {
       lfLfPreviewEnterCopies: string;
       /** Short label for successful layout check in the table */
       layoutCheckOkShort: string;
+      /** The stored file could not be read, the size was not checked (does not block). */
+      layoutCheckUnreadable: string;
       /** Edit order: replace mug/notebook layout PNG from disk */
       replaceLayoutImage: string;
       replaceLayoutImageAriaLabel: string;
@@ -1265,6 +1267,7 @@ export interface TranslationDictionary {
       toOrder: string;
       deleteDesignTitle: string;
       deleteDesignDescription: string;
+      deletePartialFailed: (failed: number, total: number) => string;
       sizeCm: (w: number, h: number) => string;
       createTitle: string;
       nameLabel: string;

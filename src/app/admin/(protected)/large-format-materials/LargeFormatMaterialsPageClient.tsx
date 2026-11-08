@@ -30,6 +30,7 @@ import {
   adminTableOutlineLabeledButtonClass,
 } from "@/app/admin/_components/AdminTableIconActions";
 import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
+import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 import { DatePicker } from "@/app/admin/_components/DatePicker";
 import { cn } from "@/lib/utils";
 import { stockConsumptionKindLabel } from "@/lib/stockConsumptionUi";
@@ -74,6 +75,7 @@ function rowMatchesSearch(r: Row, q: string): boolean {
 
 export default function LargeFormatMaterialsPageClient() {
   const { t } = useLanguageStore();
+  const locale = useLanguageStore((s) => s.locale);
   const lf = t.admin;
   const { items: rawItems, error: loadError, isLoading: loading, mutate } = useLargeFormatMaterials();
   const items = rawItems as Row[];
@@ -88,6 +90,7 @@ export default function LargeFormatMaterialsPageClient() {
   const [presetsFor, setPresetsFor] = useState<Row | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const filtered = useMemo(
@@ -344,22 +347,33 @@ export default function LargeFormatMaterialsPageClient() {
         confirmLabel={lf.lfMaterialCatalogDelete}
         cancelLabel={lf.lfMaterialCatalogCancel}
         busy={deleteBusy}
+        error={deleteError}
         onClose={() => {
-          if (!deleteBusy) setPendingDelete(null);
+          if (!deleteBusy) {
+            setPendingDelete(null);
+            setDeleteError(null);
+          }
         }}
         onConfirm={() => {
           void (async () => {
             if (!pendingDelete) return;
             setDeleteBusy(true);
+            setDeleteError(null);
             try {
               const res = await fetch(
                 `/api/admin/large-format-materials/${pendingDelete.id}`,
                 { method: "DELETE" },
               );
-              if (res.ok) void load();
+              if (!res.ok) {
+                setDeleteError(await friendlyErrorText(res, locale));
+                return;
+              }
+              setPendingDelete(null);
+              void load();
+            } catch {
+              setDeleteError(await friendlyErrorText(null, locale));
             } finally {
               setDeleteBusy(false);
-              setPendingDelete(null);
             }
           })();
         }}

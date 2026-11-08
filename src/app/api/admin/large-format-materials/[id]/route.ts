@@ -192,6 +192,13 @@ export async function DELETE(
   } catch (e) {
     console.error("DELETE /api/admin/large-format-materials/[id]:", e);
     const code = prismaErrorCode(e);
+    if (code === "P2003") {
+      // Still referenced by other rows (FK restrict): a clear refusal, not a 500.
+      return NextResponse.json(
+        { error: "Материал используется в заказах или на складе — удалить нельзя" },
+        { status: 409 },
+      );
+    }
     if (code === "P2022" || code === "P2021") {
       const debug =
         process.env.NODE_ENV === "development" ? prismaKnownErrorDebugPayload(e) : {};

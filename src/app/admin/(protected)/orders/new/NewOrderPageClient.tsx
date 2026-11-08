@@ -344,6 +344,8 @@ import {
   readBusinessCardArtworkSizeCm,
   readStoredBusinessCardArtworkSizeCm,
 } from "@/app/admin/_lib/businessCardArtworkSize";
+import { storedFileDownloadUrl } from "@/lib/files/storedFileDownloadUrl";
+import { CABINET_FILE_META_ENDPOINT } from "@/lib/files/useFileMeta";
 
 function lfAdminSkuResolvedMaterialId(
   lfMaterialId: string | null,
@@ -1857,15 +1859,20 @@ async function validateLayoutFromExistingServerFile(
   /** A stored file id, or a same-origin URL (`/api/admin/file-by-key?key=…` for reused keys). */
   fileId: string,
   expected: { width: number; height: number },
+  /** Dealer edit: files on the dealer's own order come from the cabinet endpoint. */
+  dealerMode = false,
 ): Promise<SizeValidationResult> {
+  // Could not download / decode the stored file: nothing was measured, so it
+  // must not turn into a fake «expected W×H, got 0×0» that blocks the order.
   const fallback: SizeValidationResult = {
-    ok: false,
+    ok: true,
+    unreadable: true,
     expected,
     actual: { width: 0, height: 0 },
     tolerance: 0.02,
   };
   try {
-    const res = await fetch(fileId.startsWith("/") ? fileId : `/api/download/${fileId}`, {
+    const res = await fetch(fileId.startsWith("/") ? fileId : storedFileDownloadUrl(fileId, dealerMode), {
       credentials: "same-origin",
     });
     if (!res.ok) return fallback;
@@ -1909,6 +1916,7 @@ function expectedLayoutPx(
 async function measureSlotLayout(
   slot: AdminWizardSlot,
   expected: { width: number; height: number },
+  dealerMode = false,
 ): Promise<SizeValidationResult | null> {
   if (slot.file) {
     try {
@@ -1923,10 +1931,10 @@ async function measureSlotLayout(
     }
   }
   if (slot.existingFile) {
-    return validateLayoutFromExistingServerFile(slot.existingFile.id, expected);
+    return validateLayoutFromExistingServerFile(slot.existingFile.id, expected, dealerMode);
   }
   if (slot.reuse) {
-    return validateLayoutFromExistingServerFile(resolveR2Key(slot.reuse.fileUrl), expected);
+    return validateLayoutFromExistingServerFile(resolveR2Key(slot.reuse.fileUrl), expected, dealerMode);
   }
   return null;
 }
@@ -4132,6 +4140,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             <span className="text-amber-700">{ready ? g.readyItemMissing : g.noVariants}</span>
           )}
           {zone ? <p className="mt-0.5 text-gray-500">{g.zoneSize(String(zone.widthCm).replace(".", ","), String(zone.heightCm).replace(".", ","))}</p> : null}
+          {layoutCheck?.unreadable ? (
+            <p className="mt-0.5 text-amber-700">{t.admin.newOrderPage.layoutCheckUnreadable}</p>
+          ) : null}
           {layoutCheck && !layoutCheck.ok ? (
             <p className="mt-0.5 text-red-600">
               {t.admin.newOrderPage.blockLayoutSize(
@@ -4610,7 +4621,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 ? expectedLayoutPx(a, kind, mugById, nbById, penById)
                 : null;
           results[kind][s.id] = expected
-            ? await measureSlotLayout(s, expected)
+            ? await measureSlotLayout(s, expected, dealerMode)
             : null;
           if (cancelled) return;
         }
@@ -4624,7 +4635,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- readySetZone only reads giftSetTemplates
-  }, [step, slots, assignBySlot, mugById, nbById, penById, giftSetTemplates]);
+  }, [step, slots, assignBySlot, mugById, nbById, penById, giftSetTemplates, dealerMode]);
 
   useEffect(() => {
     if (step === "confirm") return;
@@ -4653,7 +4664,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           [
             key,
             typeof key === "string"
-              ? await readStoredBusinessCardArtworkSizeCm(key)
+              ? await readStoredBusinessCardArtworkSizeCm(key, dealerMode)
               : await readBusinessCardArtworkSizeCm(key),
           ] as const,
       ),
@@ -4665,7 +4676,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         return next;
       });
     });
-  }, [step, slots, assignBySlot, bcArtworkSizes]);
+  }, [step, slots, assignBySlot, bcArtworkSizes, dealerMode]);
 
   /**
    * Size prefill from the picked file's physical size (the «100×50 см · 60 dpi»
@@ -5974,6 +5985,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     className="ml-7"
                                     file={s.file ?? null}
                                     fileId={s.existingFile?.id ?? null}
+                                    metaEndpoint={dealerMode ? CABINET_FILE_META_ENDPOINT : undefined}
                                     declared={
                                       a.giftSet
                                         ? giftSetDeclaredSize(a)
@@ -6193,6 +6205,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                           <span className="text-gray-500">
                                             {t.admin.newOrderPage.layoutCheckPending}
                                           </span>
+                                        ) : mugV.unreadable ? (
+                                          <span className="text-amber-700">
+                                            {t.admin.newOrderPage.layoutCheckUnreadable}
+                                          </span>
                                         ) : !mugV.ok ? (
                                           <span className="text-red-600">
                                             {t.admin.layoutValidation.sizeMismatch(
@@ -6221,6 +6237,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                           <span className="text-gray-500">
                                             {t.admin.newOrderPage.layoutCheckPending}
                                           </span>
+                                        ) : nbV.unreadable ? (
+                                          <span className="text-amber-700">
+                                            {t.admin.newOrderPage.layoutCheckUnreadable}
+                                          </span>
                                         ) : !nbV.ok ? (
                                           <span className="text-red-600">
                                             {t.admin.layoutValidation.sizeMismatch(
@@ -6248,6 +6268,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                         {penV == null ? (
                                           <span className="text-gray-500">
                                             {t.admin.newOrderPage.layoutCheckPending}
+                                          </span>
+                                        ) : penV.unreadable ? (
+                                          <span className="text-amber-700">
+                                            {t.admin.newOrderPage.layoutCheckUnreadable}
                                           </span>
                                         ) : !penV.ok ? (
                                           <span className="text-red-600">

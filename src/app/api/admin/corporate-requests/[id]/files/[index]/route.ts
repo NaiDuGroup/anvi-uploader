@@ -8,7 +8,8 @@ import { getPresignedDownloadUrl, isLocalObjectStorage } from "@/lib/r2";
 /** Download a logo / brief file of a «Pentru companii» request (staff). */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string; index: string }> }) {
   const user = await getSessionUser();
-  if (!user || !isSuperAdmin(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isSuperAdmin(user.role)) return NextResponse.json({ error: "Forbidden: superadmin only" }, { status: 403 });
   const { id, index } = await params;
   const i = Number(index);
   if (!Number.isInteger(i) || i < 0) return NextResponse.json({ error: "not_found" }, { status: 404 });

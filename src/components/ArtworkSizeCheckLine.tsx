@@ -19,15 +19,18 @@ export function ArtworkSizeCheckLine({
   fileId,
   declared,
   className,
+  metaEndpoint,
 }: {
   file?: File | null;
   fileId?: string | null;
   declared?: PrintSizeCm | null;
   className?: string;
+  /** Where stored-file facts come from; the dealer wizard passes the cabinet endpoint. */
+  metaEndpoint?: string;
 }) {
   const { t, locale } = useLanguageStore();
   const local = useLocalFileMeta(file ?? null);
-  const stored = useFileMeta(file ? null : (fileId ?? null));
+  const stored = useFileMeta(file ? null : (fileId ?? null), metaEndpoint);
   const meta: FileMetaJson | null | undefined = file ? local : stored;
   const text = t.fileMeta;
 

@@ -19,6 +19,7 @@ import { CatalogOptionThumb } from "@/components/ui/CatalogOptionThumb";
 import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
+import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 import { adminTableOutlineIconButtonClass } from "@/app/admin/_components/AdminTableIconActions";
 import { resolveDesignFileUrl } from "@/lib/design/fileUrls";
 import type { DesignListItemJson } from "@/lib/design/designJson";
@@ -51,6 +52,7 @@ const ACTIVE_CHIP =
 export default function DesignLibraryClient() {
   const router = useRouter();
   const { t } = useLanguageStore();
+  const locale = useLanguageStore((s) => s.locale);
   const ds = t.admin.designStudio;
   const [items, setItems] = useState<DesignListItemJson[]>([]);
   const [tags, setTags] = useState<string[]>([]);
@@ -64,6 +66,7 @@ export default function DesignLibraryClient() {
   /** Ids queued for deletion; non-empty opens the confirm dialog. */
   const [deleteIds, setDeleteIds] = useState<string[]>([]);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -123,17 +126,36 @@ export default function DesignLibraryClient() {
 
   const deleteQueued = async () => {
     setDeleteBusy(true);
+    setDeleteError(null);
     try {
-      await Promise.all(
-        deleteIds.map((id) => fetch(`/api/admin/designs/${id}`, { method: "DELETE" })),
+      const results = await Promise.all(
+        deleteIds.map(async (id) => {
+          try {
+            const res = await fetch(`/api/admin/designs/${id}`, { method: "DELETE" });
+            return { id, res };
+          } catch {
+            return { id, res: null };
+          }
+        }),
       );
+      const deleted = results.filter((r) => r.res?.ok).map((r) => r.id);
+      const failed = results.filter((r) => !r.res?.ok);
+      // Only the deleted ones leave the selection; failed ones stay selected and queued.
       setSelected((prev) => {
         const next = new Set(prev);
-        for (const id of deleteIds) next.delete(id);
+        for (const id of deleted) next.delete(id);
         return next;
       });
-      setDeleteIds([]);
-      reload();
+      if (deleted.length > 0) reload();
+      if (failed.length === 0) {
+        setDeleteIds([]);
+        return;
+      }
+      const reason = await friendlyErrorText(failed[0].res, locale);
+      setDeleteIds(failed.map((r) => r.id));
+      setDeleteError(
+        results.length === 1 ? reason : `${ds.deletePartialFailed(failed.length, results.length)}. ${reason}`,
+      );
     } finally {
       setDeleteBusy(false);
     }
@@ -309,9 +331,13 @@ export default function DesignLibraryClient() {
         cancelLabel={ds.cancel}
         confirmVariant="destructive"
         busy={deleteBusy}
+        error={deleteError}
         onConfirm={() => void deleteQueued()}
         onClose={() => {
-          if (!deleteBusy) setDeleteIds([]);
+          if (!deleteBusy) {
+            setDeleteIds([]);
+            setDeleteError(null);
+          }
         }}
       />
     </main>

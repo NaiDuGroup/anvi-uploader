@@ -241,10 +241,12 @@ describe("admin access control (super admin only)", () => {
     () => getFile(adminReq(`/api/admin/corporate-requests/${ROW.id}/files/0`), params({ id: ROW.id, index: "0" })),
   ];
 
-  it("401 for anonymous visitors, dealers and staff below super admin", async () => {
-    for (const user of [null, ...["dealer", "customer", "admin", "workshop"].map((role) => ({ ...STAFF, role }))]) {
+  it("401 for anonymous visitors, 403 for logged-in users below super admin", async () => {
+    auth.getSessionUser.mockResolvedValue(null);
+    for (const call of cases()) expect((await call()).status).toBe(401);
+    for (const user of ["dealer", "customer", "admin", "workshop"].map((role) => ({ ...STAFF, role }))) {
       auth.getSessionUser.mockResolvedValue(user);
-      for (const call of cases()) expect((await call()).status).toBe(401);
+      for (const call of cases()) expect((await call()).status).toBe(403);
     }
     expect(db.corporateRequest.findMany).not.toHaveBeenCalled();
     expect(db.corporateRequest.update).not.toHaveBeenCalled();

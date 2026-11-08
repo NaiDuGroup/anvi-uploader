@@ -4,6 +4,7 @@ import { startTransition } from "react";
 import { create } from "zustand";
 import type { BoardSectionKey, WorkshopBoardData } from "@/lib/workshopBoard/types";
 import { parseSavedBoardSections } from "@/lib/workshopBoard/savedSectionFilter";
+import { showRefetchFailedToast } from "@/stores/refetchFailedToast";
 
 export class WorkshopBoardFetchError extends Error {
   constructor(
@@ -84,6 +85,15 @@ export const useWorkshopBoardStore = create<WorkshopBoardState>((set, get) => {
     return `/api/orders/workshop-board?${params}`;
   };
 
+  /** `fetch` keeps failures in `error` (the board does not render it), so say it once. */
+  const refetchAfterFilterChange = (): void => {
+    void get()
+      .fetch()
+      .then(() => {
+        if (get().error) showRefetchFailedToast();
+      });
+  };
+
   return {
     data: null,
     loading: true,
@@ -149,7 +159,7 @@ export const useWorkshopBoardStore = create<WorkshopBoardState>((set, get) => {
     setSearch: (search: string) => {
       if (get().filters.search === search) return;
       set((s) => ({ filters: { ...s.filters, search } }));
-      get().fetch().catch(() => {});
+      refetchAfterFilterChange();
     },
 
     setDateFilter: (dateFrom: string, dateTo: string) => {
@@ -158,14 +168,14 @@ export const useWorkshopBoardStore = create<WorkshopBoardState>((set, get) => {
       else localStorage.removeItem(LS_BOARD_DATE_FROM);
       if (dateTo) localStorage.setItem(LS_BOARD_DATE_TO, dateTo);
       else localStorage.removeItem(LS_BOARD_DATE_TO);
-      get().fetch().catch(() => {});
+      refetchAfterFilterChange();
     },
 
     setIncludeDelivered: (value: boolean) => {
       if (get().filters.includeDelivered === value) return;
       set((s) => ({ filters: { ...s.filters, includeDelivered: value } }));
       localStorage.setItem(LS_BOARD_INCLUDE_DELIVERED, String(value));
-      get().fetch().catch(() => {});
+      refetchAfterFilterChange();
     },
 
     setActiveTypes: (types: BoardSectionKey[]) => {

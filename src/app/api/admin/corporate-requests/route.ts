@@ -9,7 +9,8 @@ const NO_STORE = { "Cache-Control": "no-store" };
 /** Staff list of «Pentru companii» requests: `?status=new|…|open&q=&assignee=&page=`. */
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
-  if (!user || !isSuperAdmin(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isSuperAdmin(user.role)) return NextResponse.json({ error: "Forbidden: superadmin only" }, { status: 403 });
   const sp = request.nextUrl.searchParams;
   const status = sp.get("status");
   try {

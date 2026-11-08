@@ -3,6 +3,7 @@
 import { startTransition } from "react";
 import { create } from "zustand";
 import { orderPollFingerprint } from "@/lib/orderPollFingerprint";
+import { showRefetchFailedToast } from "@/stores/refetchFailedToast";
 import { readOrderStatusWriteResponse, type OrderStatusWriteOutcome } from "@/lib/orderStatusWriteClient";
 import {
   ORDER_STATUSES,
@@ -214,7 +215,8 @@ interface OrdersState {
     isPolling?: boolean,
     options?: { replaceList?: boolean },
   ) => Promise<{ id: string; name: string; role: string } | null>;
-  fetchWorkshopSidebar: () => Promise<void>;
+  /** Resolves `false` when the sidebar could not be loaded (callers may ignore it). */
+  fetchWorkshopSidebar: () => Promise<boolean>;
   setPage: (page: number) => void;
   setPageSize: (size: OrderPageSize) => void;
   setSearch: (search: string) => void;
@@ -510,7 +512,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         dateTo,
         includeWorkshopOrders,
       } = get();
-      if (!includeWorkshopOrders) return;
+      if (!includeWorkshopOrders) return true;
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (onlyMine) params.set("onlyMine", "true");
@@ -520,9 +522,9 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       if (dateTo) params.set("dateTo", dateTo);
       try {
         const res = await fetch(`/api/orders/workshop-sidebar?${params}`);
-        if (!res.ok) return;
+        if (!res.ok) return false;
         const data = (await res.json()) as { workshopOrders: Order[] };
-        if (!Array.isArray(data.workshopOrders)) return;
+        if (!Array.isArray(data.workshopOrders)) return false;
 
         const prev = get();
         if (
@@ -531,8 +533,10 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         ) {
           startTransition(() => set({ workshopOrders: data.workshopOrders }));
         }
+        return true;
       } catch {
-        // ignore — sidebar is best-effort
+        // sidebar is best-effort; polling callers ignore the result
+        return false;
       }
     },
 
@@ -586,7 +590,12 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         ...(value ? {} : { workshopOrders: [] }),
       });
       if (value) {
-        get().fetchWorkshopSidebar().catch(() => {});
+        // Turned on by hand: an empty sidebar must not look like "no workshop orders".
+        void get()
+          .fetchWorkshopSidebar()
+          .then((ok) => {
+            if (!ok) showRefetchFailedToast();
+          });
       }
     },
 

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, X, Send } from "lucide-react";
@@ -27,6 +28,9 @@ export default function ClientMessagePanel({
   const [messages, setMessages] = useState<ClientMessage[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const locale = useLanguageStore((s) => s.locale);
+  /** Why the last send failed; the typed text stays in the input. */
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(0);
@@ -62,6 +66,7 @@ export default function ClientMessagePanel({
     const trimmed = text.trim();
     if (!trimmed || sending) return;
     setSending(true);
+    setSendError(null);
     try {
       const res = await fetch(`/api/orders/${orderId}/messages`, {
         method: "POST",
@@ -72,9 +77,11 @@ export default function ClientMessagePanel({
         const msg = (await res.json()) as ClientMessage;
         setMessages((prev) => [...prev, msg]);
         setText("");
+      } else {
+        setSendError(await friendlyErrorText(res, locale));
       }
     } catch {
-      /* ignore */
+      setSendError(await friendlyErrorText(null, locale));
     } finally {
       setSending(false);
     }
@@ -139,6 +146,11 @@ export default function ClientMessagePanel({
           ))}
         </div>
 
+        {sendError ? (
+          <p role="alert" className="border-t border-red-100 bg-red-50 px-4 py-2 text-xs text-red-700">
+            {sendError}
+          </p>
+        ) : null}
         <div className="flex gap-2 border-t px-4 py-3">
           <input
             value={text}

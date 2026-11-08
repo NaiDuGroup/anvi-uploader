@@ -565,6 +565,7 @@ export const ro: TranslationDictionary = {
       lfLfPreviewEnterCopies:
         "Introduceți număr întreg de copii (≥ 1) pentru aranjament și totaluri.",
       layoutCheckOkShort: "Machetă OK",
+      layoutCheckUnreadable: "Nu am putut citi fișierul pentru a verifica dimensiunea — verificați-l manual",
       replaceLayoutImage: "Înlocuiește imaginea machetei",
       replaceLayoutImageAriaLabel:
         "Înlocuiește fișierul imaginii machetei pentru această poziție",
@@ -1138,6 +1139,7 @@ export const ro: TranslationDictionary = {
       toOrder: "În comandă",
       deleteDesignTitle: "Ștergeți macheta?",
       deleteDesignDescription: "Macheta dispare din studio. Fișierele deja trimise în comenzi rămân.",
+      deletePartialFailed: (failed, total) => `Nu s-au putut șterge ${failed} din ${total}`,
       sizeCm: (w, h) => `${w}×${h} cm`,
       createTitle: "Design nou",
       nameLabel: "Titlu",

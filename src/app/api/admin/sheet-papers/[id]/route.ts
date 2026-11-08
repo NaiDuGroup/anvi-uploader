@@ -129,6 +129,16 @@ export async function DELETE(
     ) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
+    if (
+      e instanceof Prisma.PrismaClientKnownRequestError &&
+      e.code === "P2003"
+    ) {
+      // Still referenced by other rows (FK restrict): a clear refusal, not a 500.
+      return NextResponse.json(
+        { error: "Бумага используется в заказах или на складе — удалить нельзя" },
+        { status: 409 },
+      );
+    }
     console.error("DELETE /api/admin/sheet-papers/[id]:", e);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
