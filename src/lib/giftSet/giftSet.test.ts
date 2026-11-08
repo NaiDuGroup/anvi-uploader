@@ -188,7 +188,7 @@ describe("planGiftSets", () => {
       readyItemSku: "GIFT-SET-THERMOS",
       readyVariantSku: "GIFT-SET-THERMOS-BLACK",
       readyColourLabel: "чёрный",
-      otherItem: productType !== "uv_print",
+      otherItem: true,
       ...extra,
     });
     const ok = planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook"), c("pen", "pen")], templates, {
@@ -218,6 +218,12 @@ describe("planGiftSets", () => {
     expect(
       planGiftSets([c("uv_print", "thermos"), c("uv_print", "notebook"), c("pen", "pen")], templates, { allowManualPrice: false }),
     ).toMatchObject({ ok: false, code: "gift_set_line_type_mismatch" });
+    // A stock UV item as the thermos line: written off on top of the set item, billed at the set price.
+    expect(
+      planGiftSets([c("uv_print", "thermos", { otherItem: false }), c("notebook", "notebook"), c("pen", "pen")], templates, {
+        allowManualPrice: false,
+      }),
+    ).toMatchObject({ ok: false, code: "gift_set_item_mismatch" });
     // Our stock notebook in a ready set would be written off twice.
     expect(
       planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook", { otherItem: false }), c("pen", "pen")], templates, {

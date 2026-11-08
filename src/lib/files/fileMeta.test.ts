@@ -64,6 +64,14 @@ describe("rasterMeta", () => {
     const png = canvasLikePng(1713, 2480);
     expect(await rasterMeta(png)).toEqual({ pixelWidth: 1713, pixelHeight: 2480, dpi: null, widthMm: null, heightMm: null });
   });
+
+  it("other formats keep sharp's density (TIFF with dpi; WebP without)", async () => {
+    const img = sharp({ create: { width: 600, height: 300, channels: 3, background: "#fff" } });
+    const tif = await img.clone().withMetadata({ density: 300 }).tiff().toBuffer();
+    expect(await rasterMeta(tif)).toMatchObject({ dpi: 300, widthMm: 50.8 });
+    const webp = await img.clone().webp().toBuffer();
+    expect(await rasterMeta(webp)).toMatchObject({ pixelWidth: 600, dpi: null, widthMm: null });
+  });
 });
 
 describe("pdfMeta", () => {

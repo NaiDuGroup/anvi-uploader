@@ -87,10 +87,10 @@ export async function takeGiftSetBoxStockForStoredLine(
   tx: Tx,
   line: { id: string; setGroupId: string | null; setData: unknown },
   params: { orderId: string; orderNumber: number | null; createdById: string | null },
-): Promise<OrderProcurementMetaItem | null> {
-  if (!line.setGroupId) return null;
+): Promise<OrderProcurementMetaItem[]> {
+  if (!line.setGroupId) return [];
   const set = parseOrderLineSetData(line.setData);
-  let issue: OrderProcurementMetaItem | null = null;
+  const issues: OrderProcurementMetaItem[] = [];
   for (const sku of giftSetExtraStockSkus(set)) {
     const res = await takeGiftSetBoxStock(tx, {
       boxSku: sku,
@@ -100,7 +100,7 @@ export async function takeGiftSetBoxStockForStoredLine(
       orderLineId: line.id,
       createdById: params.createdById,
     });
-    issue ??= res;
+    if (res) issues.push(res);
   }
-  return issue;
+  return issues;
 }

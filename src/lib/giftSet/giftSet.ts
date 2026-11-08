@@ -412,7 +412,7 @@ export interface GiftSetPlanLine {
   /** Ready set: SKU + colour label of the set's colour variant. */
   readyVariantSku?: string | null;
   readyColourLabel?: string | null;
-  /** Mug / notebook / pen picked as «другой …» (not a stock item). */
+  /** Mug / notebook / pen picked as «другой …», or a UV client item (not a stock item). */
   otherItem?: boolean;
 }
 
@@ -487,8 +487,10 @@ export function planGiftSets(
       for (const i of idx) {
         const l = lines[i]!;
         if (l.productType !== readyZoneLineType(l.set!.zoneId!)) return { ok: false, code: "gift_set_line_type_mismatch", groupId };
-        // The set's notebook / pen come with the set: never one of our stock items.
-        if (l.productType !== "uv_print" && !l.otherItem) return { ok: false, code: "gift_set_item_mismatch", groupId };
+        // The set's components come with the set: never one of our stock items (the
+        // thermos UV line is a client item — a stock UV item would be written off on
+        // top of the set item and billed at the set price).
+        if (!l.otherItem) return { ok: false, code: "gift_set_item_mismatch", groupId };
       }
       const variantId = first.set!.readyVariantId ?? null;
       if (

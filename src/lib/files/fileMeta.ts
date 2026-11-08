@@ -52,6 +52,22 @@ function round(n: number, step: number): number {
   return Number((Math.round(n / step) * step).toFixed(4));
 }
 
+/**
+ * Density written in a PNG / JPEG header: a number, null when the header has
+ * none, undefined when it cannot be read (not PNG / JPEG, header cut short —
+ * then sharp's value stands). Never throws.
+ */
+function headerDensity(bytes: Buffer, format: string | undefined): number | null | undefined {
+  if (format !== "png" && format !== "jpeg") return undefined;
+  try {
+    const u8 = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const head = format === "png" ? parsePngHead(u8) : parseJpegHead(u8);
+    return head ? head.dpi : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Pixels, dpi and print size of a PNG / JPEG / TIFF / WebP… (throws if sharp cannot read the header). */
 export async function rasterMeta(bytes: Buffer): Promise<Pick<FileMeta, "pixelWidth" | "pixelHeight" | "dpi" | "widthMm" | "heightMm">> {
   const meta = await sharp(bytes, { failOn: "none", limitInputPixels: false }).metadata();
@@ -61,9 +77,8 @@ export async function rasterMeta(bytes: Buffer): Promise<Pick<FileMeta, "pixelWi
   const pixelHeight = swap ? meta.width : meta.height;
   // sharp reports 72 dpi for a PNG / JPEG that has no density at all (libvips default):
   // read those two from the header, as the browser does, so «no dpi» stays «no dpi».
-  const u8 = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const head = meta.format === "png" ? parsePngHead(u8) : meta.format === "jpeg" ? parseJpegHead(u8) : null;
-  const density = head ? head.dpi : (meta.density ?? null);
+  const fromHeader = headerDensity(bytes, meta.format);
+  const density = fromHeader !== undefined ? fromHeader : (meta.density ?? null);
   const dpi = density && density > 1 ? round(density, 0.01) : null;
   return {
     pixelWidth,

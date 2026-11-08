@@ -100,7 +100,9 @@ export async function applyGiftSetsToResolved(
       otherItem: Boolean(
         (li.productType === "mug" && (li.mugOther || !r.mugExtras?.stockVariantId)) ||
           (li.productType === "notebook" && (li.notebookOther || !r.notebookExtras?.stockVariantId)) ||
-          (li.productType === "pen" && (li.penOther || !r.penExtras?.stockVariantId)),
+          (li.productType === "pen" && (li.penOther || !r.penExtras?.stockVariantId)) ||
+          // UV: a client item (a ready set's thermos is the set item, written off by the set).
+          (li.productType === "uv_print" && li.uv?.source === "client"),
       ),
     };
   });

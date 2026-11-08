@@ -33,7 +33,7 @@ describe("takeGiftSetBoxStockForStoredLine (restore from trash)", () => {
 
   it("takes N boxes on the set's box line", async () => {
     const issue = await takeGiftSetBoxStockForStoredLine(tx, { id: "l-1", setGroupId: "g", setData: setData("EW-BOX") }, ref);
-    expect(issue).toBeNull();
+    expect(issue).toEqual([]);
     expect(consume).toHaveBeenCalledTimes(1);
     expect(consume.mock.calls[0]![1]).toMatchObject({ variantId: "v-box", quantity: 4, orderId: "o-1", orderLineId: "l-1" });
   });
@@ -47,6 +47,17 @@ describe("takeGiftSetBoxStockForStoredLine (restore from trash)", () => {
   it("short box → procurement entry", async () => {
     consume.mockResolvedValue({ consumed: false, variantId: "v-box", requested: 4, available: 1 });
     const issue = await takeGiftSetBoxStockForStoredLine(tx, { id: "l-1", setGroupId: "g", setData: setData("EW-BOX") }, ref);
-    expect(issue).toMatchObject({ kind: "stock_variant", variantId: "v-box", requestedQty: 4, stockAtOrder: 1 });
+    expect(issue).toMatchObject([{ kind: "stock_variant", variantId: "v-box", requestedQty: 4, stockAtOrder: 1 }]);
+  });
+
+  it("ready set with a box: box and set item both short → two procurement entries", async () => {
+    consume.mockResolvedValue({ consumed: false, variantId: "v-box", requested: 4, available: 0 });
+    const issues = await takeGiftSetBoxStockForStoredLine(
+      tx,
+      { id: "l-1", setGroupId: "g", setData: { ...setData("EW-BOX"), kind: "ready", role: "ready", setItemSku: "GIFT-SET-THERMOS-BLACK", zoneId: "thermos" } },
+      ref,
+    );
+    expect(consume).toHaveBeenCalledTimes(2);
+    expect(issues).toHaveLength(2);
   });
 });
