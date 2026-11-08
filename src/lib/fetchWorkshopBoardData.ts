@@ -5,6 +5,7 @@ import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
 import { prisma } from "./prisma";
 import { fillDtfGarmentNames } from "./dtf/dtfGarmentNames";
 import { getStaffUsersMap } from "./staffUsersCache";
+import { buildActorNameResolver } from "./resolveActorNames";
 import { ORDER_STATUSES } from "./validations";
 import type { OrderStatus } from "./validations";
 import { groupLines } from "./workshopBoard/groupLines";
@@ -289,6 +290,11 @@ export async function fetchWorkshopBoardData(
     for (const [id, f] of flags) setFlagsByLine.set(id, f);
   }
 
+  const actorName = await buildActorNameResolver(
+    usersMap,
+    orders.flatMap((o) => [o.createdBy, o.sentToWorkshopBy]),
+  );
+
   const rawOrders = orders.map((o) => ({
     id: o.id,
     orderNumber: o.orderNumber,
@@ -306,8 +312,8 @@ export async function fetchWorkshopBoardData(
     mugProductSnapshot: o.mugProductSnapshot,
     notebookProductSnapshot: o.notebookProductSnapshot,
     penProductSnapshot: o.penProductSnapshot,
-    createdByName: o.createdBy ? (usersMap.get(o.createdBy) ?? null) : null,
-    sentToWorkshopByName: o.sentToWorkshopBy ? (usersMap.get(o.sentToWorkshopBy) ?? null) : null,
+    createdByName: actorName(o.createdBy),
+    sentToWorkshopByName: actorName(o.sentToWorkshopBy),
     files: o.files.map((f) => ({
       id: f.id,
       fileName: f.fileName,

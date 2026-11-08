@@ -5,6 +5,7 @@ import { uniqueByInvoice } from "@/lib/invoice/invoiceLinks";
 import { prisma } from "./prisma";
 import { getStaffUsersMap } from "./staffUsersCache";
 import { LAYOUT_ISSUE_LINE_SELECT } from "./layoutIssue";
+import { buildActorNameResolver } from "./resolveActorNames";
 import { ORDER_STATUSES } from "./validations";
 import type { OrderStatus } from "./validations";
 
@@ -243,6 +244,11 @@ export async function fetchWorkshopSidebarData(
   const idIndex = new Map(wsIds.map((id, i) => [id, i]));
   orders.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
 
+  const actorName = await buildActorNameResolver(
+    usersMap,
+    orders.flatMap((o) => [o.createdBy, o.sentToWorkshopBy, o.assignedTo]),
+  );
+
   const enriched = orders.map((o) => {
     // Same `invoiceLinks` reshape as in `fetchOrdersData` so the public
     // payload contract is identical for the main list and the sidebar.
@@ -253,11 +259,9 @@ export async function fetchWorkshopSidebarData(
       // Mirror `fetchOrdersData`: serialise `Order.price` (Prisma.Decimal)
       // as a plain number for the client list payload.
       price: price == null ? null : Number(price.toString()),
-      assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
-      createdByName: o.createdBy ? usersMap.get(o.createdBy) ?? null : null,
-      sentToWorkshopByName: o.sentToWorkshopBy
-        ? usersMap.get(o.sentToWorkshopBy) ?? null
-        : null,
+      assignedToName: actorName(o.assignedTo),
+      createdByName: actorName(o.createdBy),
+      sentToWorkshopByName: actorName(o.sentToWorkshopBy),
       commentCount: totalMap.get(o.id) ?? 0,
       unreadCommentCount: unreadCounts.get(o.id) ?? 0,
       comments: [],
