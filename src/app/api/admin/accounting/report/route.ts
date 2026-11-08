@@ -17,6 +17,7 @@ import {
   type ProfitOrderLineInput,
 } from "@/lib/accounting/orderProfit";
 import { effectiveUnitCost } from "@/lib/stock/effectiveUnitCost";
+import { giftSetExtraStockSkus, parseOrderLineSetData } from "@/lib/giftSet/giftSet";
 import type { ExpenseForAccrual } from "@/lib/accounting/expenseAccrual";
 import { expenseTotalInPeriod } from "@/lib/accounting/expenseAccrual";
 
@@ -127,6 +128,21 @@ export async function GET(request: NextRequest) {
       })
     : [];
 
+  /** «Набор»: boxes / ready set items the sets write off (by SKU). */
+  const setSkus = new Set<string>();
+  for (const o of orders) {
+    for (const line of o.orderLines) {
+      if (!line.setGroupId) continue;
+      for (const sku of giftSetExtraStockSkus(parseOrderLineSetData(line.setData))) setSkus.add(sku);
+    }
+  }
+  const setUnitRows = setSkus.size
+    ? await prisma.stockVariant.findMany({
+        where: { sku: { in: [...setSkus] } },
+        select: { sku: true, purchaseCost: true, avgCost: true },
+      })
+    : [];
+
   const decimalToNumber = (
     d: { toString(): string } | null | undefined,
   ): number | null => (d == null ? null : Number(d.toString()));
@@ -141,6 +157,7 @@ export async function GET(request: NextRequest) {
     notebook: variantCosts,
     pen: variantCosts,
     uvPrintPerPiece: uvPrintCostPerPieceByVariant(uvCatalog.items, uvCatalog.settings, uvCatalog.inkCosts),
+    giftSetUnitBySku: new Map(setUnitRows.map((r) => [r.sku, effectiveUnitCost(r.avgCost, r.purchaseCost)])),
   };
 
   const production = parseProductionCostsJson(settingsRow.productionCosts);
@@ -157,6 +174,7 @@ export async function GET(request: NextRequest) {
       dtfLineData: l.dtfLineData,
       uvLineData: l.uvLineData,
       sublimationLineData: l.sublimationLineData,
+      setData: l.setGroupId ? l.setData : null,
       files: l.files,
     }));
     return {

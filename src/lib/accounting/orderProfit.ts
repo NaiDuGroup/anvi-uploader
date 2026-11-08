@@ -11,6 +11,7 @@ import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLine
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import { parseUvLineData } from "@/lib/uv/parseUvLineData";
 import { parseSublimationLineData } from "@/lib/sublimation/parseSublimationLineData";
+import { giftSetExtraStockSkus, parseOrderLineSetData } from "@/lib/giftSet/giftSet";
 import { sumExpensePoolForDay, type ExpenseForAccrual } from "./expenseAccrual";
 import {
   LEGACY_VAT_BASIS,
@@ -37,6 +38,12 @@ export type ProfitOrderLineInput = {
   uvLineData?: unknown;
   /** Sublimation snapshot (blank + Epson consumables); costs are frozen when the line is priced. */
   sublimationLineData?: unknown;
+  /**
+   * «Набор»: the line's set data. The set's stock unit (A/B box, C set item) is
+   * written off by SKU (`setData.boxSku`; older orders: the group's first line,
+   * C v2 `setItemSku`), N per set — its cost is counted on that line.
+   */
+  setData?: unknown;
   files: readonly { copies: number }[];
 };
 
@@ -54,6 +61,12 @@ export type LiveUnitCosts = {
    * prices. Missing = no print cost counted.
    */
   uvPrintPerPiece?: ReadonlyMap<string, number>;
+  /**
+   * «Набор»: unit cost of a set's stock unit (box / ready set item) by SKU.
+   * Missing key = not a stock item (nothing written off, no cost); null = in
+   * stock but no purchase cost yet.
+   */
+  giftSetUnitBySku?: ReadonlyMap<string, number | null>;
 };
 
 export const EMPTY_LIVE_UNIT_COSTS: LiveUnitCosts = {
@@ -61,6 +74,7 @@ export const EMPTY_LIVE_UNIT_COSTS: LiveUnitCosts = {
   notebook: new Map(),
   pen: new Map(),
   uvPrintPerPiece: new Map(),
+  giftSetUnitBySku: new Map(),
 };
 
 function orderCreatedUtcDayKey(createdAt: Date): string {
@@ -117,6 +131,38 @@ export function computeLineProductPurchaseTotal(
   line: ProfitOrderLineInput,
   liveCosts: LiveUnitCosts,
   snapshotDivisor = 1,
+): LineCost {
+  const own = lineOwnPurchaseTotal(line, liveCosts, snapshotDivisor);
+  const set = giftSetUnitsCost(line, liveCosts);
+  return {
+    lineTotal: own.lineTotal + set.lineTotal,
+    missingUnitCost: own.missingUnitCost || set.missingUnitCost,
+  };
+}
+
+/**
+ * «Набор»: boxes / ready set items this line writes off (by SKU, N per set) at
+ * the variant's current unit cost, like a mug line without a cost snapshot.
+ */
+function giftSetUnitsCost(line: ProfitOrderLineInput, liveCosts: LiveUnitCosts): LineCost {
+  const set = line.setData == null ? null : parseOrderLineSetData(line.setData);
+  if (!set || !(set.quantity > 0)) return { lineTotal: 0, missingUnitCost: false };
+  let lineTotal = 0;
+  let missingUnitCost = false;
+  for (const sku of giftSetExtraStockSkus(set)) {
+    const costs = liveCosts.giftSetUnitBySku;
+    if (!costs?.has(sku)) continue;
+    const unit = costs.get(sku) ?? null;
+    if (unit == null) missingUnitCost = true;
+    else lineTotal += unit * set.quantity;
+  }
+  return { lineTotal, missingUnitCost };
+}
+
+function lineOwnPurchaseTotal(
+  line: ProfitOrderLineInput,
+  liveCosts: LiveUnitCosts,
+  snapshotDivisor: number,
 ): LineCost {
   if (line.productType === "mug") {
     return catalogUnitLineCost(

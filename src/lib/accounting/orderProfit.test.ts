@@ -369,3 +369,87 @@ describe("computeOrderProductPurchaseTotal (sublimation)", () => {
     expect(r.missingUnitCost).toBe(true);
   });
 });
+
+describe("«Набор»: set stock units in purchase costs", () => {
+  const setData = (extra: Record<string, unknown>) => ({
+    templateId: "tpl",
+    name: "Набор",
+    role: "box",
+    quantity: 3,
+    ...extra,
+  });
+  const line = (productType: string, data: unknown, extra: Partial<ProfitOrderLineInput> = {}): ProfitOrderLineInput => ({
+    productType,
+    mugProductSnapshot: null,
+    notebookProductSnapshot: null,
+    largeFormatLineData: null,
+    setData: data,
+    files: [],
+    ...extra,
+  });
+  const live = {
+    ...EMPTY_LIVE_UNIT_COSTS,
+    giftSetUnitBySku: new Map<string, number | null>([
+      ["BOX-30", 18],
+      ["GIFT-SET-THERMOS-BLACK", 250],
+      ["BOX-NOCOST", null],
+    ]),
+  };
+
+  it("A/B box line: box cost × sets", () => {
+    expect(computeLineProductPurchaseTotal(line("set_box", setData({ boxSku: "BOX-30" })), live)).toEqual({
+      lineTotal: 54,
+      missingUnitCost: false,
+    });
+  });
+
+  it("C stock line: set item variant cost × sets", () => {
+    const r = computeLineProductPurchaseTotal(
+      line("set_box", setData({ kind: "ready", boxSku: "GIFT-SET-THERMOS-BLACK" })),
+      live,
+    );
+    expect(r).toEqual({ lineTotal: 750, missingUnitCost: false });
+  });
+
+  it("old A/B order: box on the group's first (notebook) line, on top of the notebook", () => {
+    const r = computeLineProductPurchaseTotal(
+      line("notebook", setData({ role: "notebook", boxSku: "BOX-30" }), {
+        notebookProductSnapshot: null,
+        stockVariantId: "nb1",
+        files: [{ copies: 3 }],
+      }),
+      { ...live, notebook: new Map([["nb1", 40]]) },
+    );
+    expect(r).toEqual({ lineTotal: 3 * 40 + 54, missingUnitCost: false });
+  });
+
+  it("C v2 order: set item on the first print line (setItemSku)", () => {
+    const r = computeLineProductPurchaseTotal(
+      line("other", setData({ role: "ready", kind: "ready", zoneId: "thermos", boxSku: null, setItemSku: "GIFT-SET-THERMOS-BLACK" })),
+      live,
+    );
+    expect(r).toEqual({ lineTotal: 750, missingUnitCost: false });
+  });
+
+  it("box not a stock item: no cost, not missing; stock item without cost: missing", () => {
+    expect(computeLineProductPurchaseTotal(line("set_box", setData({ boxSku: "UNKNOWN" })), live)).toEqual({
+      lineTotal: 0,
+      missingUnitCost: false,
+    });
+    expect(computeLineProductPurchaseTotal(line("set_box", setData({ boxSku: "BOX-NOCOST" })), live)).toEqual({
+      lineTotal: 0,
+      missingUnitCost: true,
+    });
+  });
+
+  it("order total counts each set unit once", () => {
+    const lines = [
+      line("other", setData({ role: "ready", kind: "ready", zoneId: "thermos" })),
+      line("other", setData({ role: "ready", kind: "ready", zoneId: "pen" })),
+      line("set_box", setData({ kind: "ready", boxSku: "GIFT-SET-THERMOS-BLACK" })),
+    ];
+    expect(computeOrderProductPurchaseTotal(lines, live).total).toBe(750);
+    // Lines without set data are untouched.
+    expect(computeOrderProductPurchaseTotal([line("set_box", null)], live).total).toBe(0);
+  });
+});
