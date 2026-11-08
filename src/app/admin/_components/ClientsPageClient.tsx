@@ -12,6 +12,7 @@ import { Plus, Pencil, Trash2, X, Search, KeyRound, BadgeCheck, Copy, FileText }
 import { cn } from "@/lib/utils";
 import { ClientFormModal } from "./ClientFormModal";
 import { isSuperAdmin } from "@/lib/roles";
+import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 import { useClients, type ClientRow } from "@/lib/swr";
 import { useDebounce } from "@/hooks/useDebounce";
 import { OrdersPaginationBar } from "@/components/orders/OrdersListControls";
@@ -531,6 +532,9 @@ function DeleteClientModal({
   onDeleted: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  // Shown in the dialog (it stays open) — e.g. 403 «only the main administrator».
+  const [error, setError] = useState<string | null>(null);
+  const locale = useLanguageStore((s) => s.locale);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
@@ -538,6 +542,11 @@ function DeleteClientModal({
         <h2 className="text-lg font-bold">{t.admin.clientsConfirmDeleteTitle}</h2>
         <p className="mt-2 text-sm text-gray-600">{t.admin.clientsConfirmDeleteBody}</p>
         <p className="mt-2 text-sm font-medium text-gray-900">{clientPickerLabel(row)}</p>
+        {error ? (
+          <p role="alert" className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-100">
+            {error}
+          </p>
+        ) : null}
         <div className="mt-6 flex gap-2">
           <Button variant="outline" className="flex-1" onClick={onClose}>
             {t.admin.cancel}
@@ -547,9 +556,13 @@ function DeleteClientModal({
             disabled={busy}
             onClick={async () => {
               setBusy(true);
+              setError(null);
               try {
                 const res = await fetch(`/api/admin/clients/${row.id}`, { method: "DELETE" });
                 if (res.ok) onDeleted();
+                else setError(await friendlyErrorText(res, locale));
+              } catch {
+                setError(await friendlyErrorText(null, locale));
               } finally {
                 setBusy(false);
               }

@@ -18,6 +18,11 @@ export type AdminConfirmDialogProps = {
   onClose: () => void;
   /** `dialog` keeps focus in dialog; `alertdialog` for critical confirmations. */
   role?: "dialog" | "alertdialog";
+  /**
+   * Why the last confirm failed (keep the dialog open and pass it, e.g. from
+   * `friendlyErrorText(res, locale)`), so a failed delete never closes silently.
+   */
+  error?: string | null;
 };
 
 /**
@@ -34,6 +39,7 @@ export function AdminConfirmDialog({
   onConfirm,
   onClose,
   role = "alertdialog",
+  error = null,
 }: AdminConfirmDialogProps) {
   const handleEscape = useCallback(
     (e: KeyboardEvent) => {
@@ -83,6 +89,11 @@ export function AdminConfirmDialog({
             </p>
           </div>
         </div>
+        {error ? (
+          <p role="alert" className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-100">
+            {error}
+          </p>
+        ) : null}
         <div className="mt-6 flex flex-wrap justify-end gap-2 border-t border-gray-100 pt-5">
           <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={busy}>
             {cancelLabel}

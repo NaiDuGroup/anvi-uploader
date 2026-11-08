@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ApiErrorToasts } from "@/components/ApiErrorToasts";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
@@ -11,6 +12,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       <div id="app-content">
         {children}
       </div>
+      <ApiErrorToasts loginHref="/admin/login" />
     </>
   );
 }

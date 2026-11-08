@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import { ShopAnalytics } from "@/components/shop/ShopAnalytics";
 import { ShopBottomNav } from "@/components/shop/ShopBottomNav";
 import { CartFullToast } from "@/components/shop/CartFullToast";
+import { ApiErrorToasts } from "@/components/ApiErrorToasts";
 import { ShopFooter } from "@/components/shop/ShopFooter";
 import { ShopHeader } from "@/components/shop/ShopHeader";
 import { ShopNavProvider } from "@/components/shop/ShopCatalogNav";
@@ -73,6 +74,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
           <ShopBottomNav />
         </ShopNavProvider>
         <CartFullToast />
+        <ApiErrorToasts shopLang={lang} audience="customer" />
         <ShopAnalytics />
       </ShopLangProvider>
     </div>
