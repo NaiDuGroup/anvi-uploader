@@ -525,6 +525,8 @@ export interface TranslationDictionary {
         also: string;
         set: string;
         setHint: string;
+        /** Button of the gift set hint: opens the «Набор» dialog. */
+        makeSet: string;
       };
       /** A pasted link cannot be imposed on a sheet / DTF film: the file itself is needed. */
       linkNeedsFile: string;
@@ -3209,5 +3211,77 @@ export interface TranslationDictionary {
     historyAction: string;
     /** History: suffix when the order status changed because its lines did. */
     historyDerived: string;
+  };
+  /** «Набор» (gift set): wizard, settings «Шаблоны наборов», badges. */
+  giftSet: {
+    typeLabel: string;
+    typeHint: string;
+    badge: (name: string, quantity: number) => string;
+    dialogTitle: string;
+    template: string;
+    quantity: string;
+    colour: string;
+    variantOutOfStock: string;
+    stockLeft: (n: number) => string;
+    noVariants: string;
+    readyItemMissing: string;
+    pricePerSet: string;
+    total: string;
+    dealerPriceMissing: string;
+    manualPrice: string;
+    manualPriceHint: string;
+    apply: string;
+    cancel: string;
+    change: string;
+    remove: string;
+    removeConfirm: string;
+    fileFor: (label: string) => string;
+    zoneSize: (w: string, h: string) => string;
+    box: (sku: string) => string;
+    noBox: string;
+    lineShare: (amount: string) => string;
+    readyLine: string;
+    pickProblem: { quantity: string; variant: string; ready_item_missing: string };
+    errors: Record<string, string>;
+    settingsTitle: string;
+    settingsHint: string;
+    add: string;
+    name: string;
+    kind: string;
+    kindAssembled: string;
+    kindReady: string;
+    active: string;
+    retailPrice: string;
+    dealerPrice: string;
+    dealerPricePlaceholder: string;
+    boxSku: string;
+    boxSkuHint: string;
+    components: string;
+    componentRole: string;
+    componentLabel: string;
+    skuMatch: string;
+    skuMatchHint: string;
+    weight: string;
+    weightHint: string;
+    addComponent: string;
+    readyItemSku: string;
+    readyItemFound: (n: number) => string;
+    readyItemNotFound: string;
+    createReadyItem: string;
+    readyItemCreated: string;
+    zones: string;
+    zoneLabel: string;
+    zoneWidth: string;
+    zoneHeight: string;
+    addZone: string;
+    removeRow: string;
+    removeTemplate: string;
+    save: string;
+    saving: string;
+    saved: string;
+    saveFailed: string;
+    warnNoDealer: (names: string) => string;
+    boxNotInStock: (sku: string) => string;
+    roleNames: { pen: string; notebook: string; mug: string };
   };
 }

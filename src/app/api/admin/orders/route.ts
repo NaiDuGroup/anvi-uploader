@@ -1,3 +1,4 @@
+import { applyGiftSetsToResolved } from "@/lib/giftSet/giftSetServer";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAdminOrderSchema } from "@/lib/validations";
@@ -92,6 +93,8 @@ export async function POST(request: NextRequest) {
     for (const r of resolved) {
       if (!isSheetProductType(r.input.productType)) applyManualLinePriceToResolved(r, r.input, null);
     }
+    // «Набор»: the set price wins over a line's manual price; staff may set the price of one set.
+    await applyGiftSetsToResolved(resolved, { allowManualPrice: true });
 
     const orderProductType = computeOrderProductTypeForAdmin(resolved);
     const denorm = buildOrderDenormalizedScalars(orderProductType, resolved);

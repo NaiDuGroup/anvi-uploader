@@ -32,6 +32,7 @@ import { sheetLinePaperSheets, sheetLineTonerClicks } from "@/lib/stickerSheet/s
 import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import { takeLfStandStock } from "@/lib/largeFormat/lfStandStock";
+import { takeGiftSetBoxStockForStoredLine } from "@/lib/giftSet/giftSetStock";
 import { deductUvLineStock, returnUvStockForOrder } from "@/lib/uv/uvOrderStock";
 import { parseUvLineData } from "@/lib/uv/parseUvLineData";
 import {
@@ -123,6 +124,13 @@ export async function POST(
       });
 
       for (const line of order.orderLines) {
+        // «Набор»: the set box (once per set, on the group's first line) was returned on delete.
+        const boxIssue = await takeGiftSetBoxStockForStoredLine(tx, line, {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          createdById: user.id,
+        });
+        if (boxIssue) procurementIssues.push(boxIssue);
         // Printed mugs take Epson paper / tape / ink by the current `mugs` norm.
         if (line.productType === "mug") {
           await consumeMugPrintStock(tx, {

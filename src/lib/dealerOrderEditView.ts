@@ -116,6 +116,16 @@ export function dealerEditBusinessCardLineData(raw: unknown): Json | null {
   };
 }
 
+/**
+ * «Набор»: what the wizard needs to rebuild a set row (template, component,
+ * N sets, zones) — no prices (the server re-prices the set at the dealer price).
+ */
+export function dealerEditSetData(raw: unknown): Json | null {
+  const d = obj(raw);
+  if (!d) return null;
+  return pick(d, ["version", "templateId", "name", "kind", "role", "roleLabel", "quantity", "customerType", "zoneIds"]);
+}
+
 export interface DealerEditLineSource {
   id: string;
   sortOrder: number;
@@ -134,6 +144,9 @@ export interface DealerEditLineSource {
   dtfLineData: unknown;
   uvLineData: unknown;
   sublimationLineData: unknown;
+  /** «Набор»: set group id + set data (optional: older callers do not select them). */
+  setGroupId?: string | null;
+  setData?: unknown;
   files: {
     id: string;
     fileName: string;
@@ -165,6 +178,8 @@ export function toDealerEditLine(line: DealerEditLineSource) {
     dtfLineData: dealerEditDtfLineData(line.dtfLineData),
     uvLineData: dealerEditUvLineData(line.uvLineData),
     sublimationLineData: dealerEditSublimationLineData(line.sublimationLineData),
+    setGroupId: line.setGroupId ?? null,
+    setData: line.setGroupId ? dealerEditSetData(line.setData) : null,
     files: line.files.map((f) => ({
       id: f.id,
       fileName: f.fileName,

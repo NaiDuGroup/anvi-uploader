@@ -12,6 +12,7 @@ import type { DtfCatalogJson } from "@/lib/dtf/dtfDto";
 import { DTF_LINE_DATA_VERSION } from "@/lib/dtf/types";
 import { UV_LINE_DATA_VERSION } from "@/lib/uv/types";
 import { SUBLIMATION_LINE_DATA_VERSION } from "@/lib/sublimation/types";
+import { parseOrderLineSetData } from "@/lib/giftSet/giftSet";
 
 /** Money / production figures that must never reach the dealer. */
 const SECRET_KEY = /cost|purchase|margin|profit|consumption|ink|sellPrice|dealerPrice|unitPrice|totalSell|price/i;
@@ -205,5 +206,43 @@ describe("toDealerEditLine: cost-free prefill", () => {
     expect(mug.stockVariantId).toBe("v-mug");
     expect(mug.mugProductSnapshot).toMatchObject({ nameRu: "Кружка" });
     expect(mug.files).toEqual([{ id: "f-1", fileName: "a.png", copies: 1, color: "color", paperType: null, pageCount: null }]);
+  });
+});
+
+describe("toDealerEditLine: «Набор» set lines", () => {
+  const setData = {
+    version: 1,
+    templateId: "pen_notebook_mug",
+    name: "Ручка + блокнот + кружка",
+    kind: "assembled",
+    role: "mug",
+    roleLabel: "Кружка",
+    quantity: 5,
+    customerType: "dealer",
+    unitPriceMdl: 449,
+    priceSource: "manual",
+    lineUnitPriceMdl: 160,
+    lineTotalMdl: 800,
+    boxSku: "EW-BOX-300X230X85",
+  };
+  const line = toDealerEditLine(source({ productType: "mug", stockVariantId: "v-mug", setGroupId: "g-1", setData }));
+
+  it("keeps the set so the wizard reopens the set (not loose lines)", () => {
+    expect(line.setGroupId).toBe("g-1");
+    const parsed = parseOrderLineSetData(line.setData)!;
+    expect(parsed).toMatchObject({ templateId: "pen_notebook_mug", role: "mug", quantity: 5, kind: "assembled" });
+    // No staff manual price is carried into the dealer's edit.
+    expect(parsed.priceSource).toBe("retail");
+  });
+
+  it("sends no set prices", () => {
+    expect(leakedPaths(line)).toEqual([]);
+    expect(JSON.stringify(line).includes("449")).toBe(false);
+  });
+
+  it("lines outside a set stay without set data", () => {
+    const plain = toDealerEditLine(source({ productType: "mug" }));
+    expect(plain.setGroupId).toBeNull();
+    expect(plain.setData).toBeNull();
   });
 });

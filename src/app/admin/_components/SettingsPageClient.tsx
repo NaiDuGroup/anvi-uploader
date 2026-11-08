@@ -17,6 +17,7 @@ import { PageSkeleton } from "./PageSkeleton";
 import { useCompanyProfile } from "@/lib/swr";
 import StudioInfoSettingsSection from "./StudioInfoSettingsSection";
 import NotificationsSettingsSection from "./NotificationsSettingsSection";
+import GiftSetTemplatesSettingsSection from "./GiftSetTemplatesSettingsSection";
 
 type Status = "idle" | "saving" | "saved" | "error";
 
@@ -274,6 +275,8 @@ function SettingsForm({
           />
 
           <NotificationsSettingsSection />
+
+          <GiftSetTemplatesSettingsSection />
 
           <div
             className="border-t border-gray-200 pt-10"

@@ -1,4 +1,5 @@
 import "server-only";
+import { parseGiftSetTemplates, type GiftSetTemplate } from "@/lib/giftSet/giftSet";
 import { prisma } from "./prisma";
 import { toAdminMugProductJson } from "./mug/toAdminMugProductJson";
 import { toAdminNotebookProductJson } from "./notebook/toAdminNotebookProductJson";
@@ -80,6 +81,8 @@ export interface WizardBootstrapData {
   stickerSheetSettings: StickerSheetSettings;
   /** «Открытки и карточки»: tiers, finishing rates, minimums (`productionCosts.postcard`, defaults in code). */
   postcardSettings: PostcardSettings;
+  /** «Набор»: gift set templates (`AccountingSettings.giftSetTemplates`, defaults in code). */
+  giftSetTemplates: GiftSetTemplate[];
 }
 
 export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
@@ -172,5 +175,6 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
     postcardSettings: parsePostcardSettings(
       (acct.productionCosts as Record<string, unknown> | null)?.postcard,
     ),
+    giftSetTemplates: parseGiftSetTemplates(acct.giftSetTemplates),
   };
 }

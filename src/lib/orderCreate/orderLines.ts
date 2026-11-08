@@ -15,6 +15,7 @@ import {
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 import { newLineProductionFields } from "@/lib/orderLineStatusSync";
 import type { AdminOrderLineInput } from "@/lib/validations";
+import { applyGiftSetsToResolved } from "@/lib/giftSet/giftSetServer";
 
 export interface ResolvedOrderLines {
   resolved: ResolvedAdminOrderLine[];
@@ -59,6 +60,8 @@ export async function resolveOrderLines(
     if (resolved[i]) continue;
     resolved[i] = await resolveAdminOrderLineProducts(lineInputs[i]!, dtfRuns[i], opts);
   }
+  // «Набор»: template check + set price (staff manual set price: applied again by the admin route).
+  await applyGiftSetsToResolved(resolved, { allowManualPrice: false });
 
   return { resolved, lfLineTotalsMdl };
 }
@@ -157,6 +160,8 @@ export async function createOrderWithResolvedLines(params: {
               : undefined,
           designId: li.designId ?? undefined,
           manualUnitPriceMdl: r.manualUnitPriceMdl ?? undefined,
+          setGroupId: r.giftSetExtras?.setGroupId ?? undefined,
+          setData: r.giftSetExtras ? (r.giftSetExtras.setData as unknown as Prisma.InputJsonValue) : undefined,
           shopLineData: params.shopLineData?.[i] ?? undefined,
           files: {
             create: li.files.map((file) => ({

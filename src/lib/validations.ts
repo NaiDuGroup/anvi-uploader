@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { GIFT_SET_MAX_QUANTITY } from "@/lib/giftSet/giftSet";
 import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
 import { DEALER_CANCEL_REASON_MAX, DEALER_CANCEL_REASON_MIN } from "@/lib/dealerOrderModify";
 import { LF_ROLL_PACK_MAX_QUANTITY } from "@/lib/largeFormat/largeFormatRollConstants";
@@ -723,6 +724,19 @@ export const createOrderSchema = z
 /** Staff manual line total / price per piece (rounded to bani on the server). */
 const manualLineTotalMdlSchema = z.number().nonnegative().max(99_999_999.99).nullable().optional();
 
+/**
+ * «Набор» (gift set): the line belongs to a set (`src/lib/giftSet/giftSet.ts`).
+ * Lines with the same `groupId` are one set; the server checks them against
+ * the template and prices the group (staff `manualUnitPriceMdl` = price of one set).
+ */
+export const giftSetLineInputSchema = z.object({
+  groupId: z.string().min(1).max(64),
+  templateId: z.string().min(1).max(60),
+  quantity: z.number().int().min(1).max(GIFT_SET_MAX_QUANTITY),
+  role: z.enum(["pen", "notebook", "mug", "ready"]),
+  manualUnitPriceMdl: z.number().positive().max(999_999).nullable().optional(),
+});
+
 const adminOrderLineSchema = z.object({
   productType: z.enum(PRODUCT_TYPES),
   mugLayoutData: mugLayoutDataSchema.optional(),
@@ -770,6 +784,8 @@ const adminOrderLineSchema = z.object({
   sublimation: sublimationLineInputSchema.optional(),
   /** Present when the line's layout came from Design Studio. */
   designId: z.string().uuid().optional(),
+  /** «Набор»: the set this line belongs to. */
+  set: giftSetLineInputSchema.optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
 });
 
@@ -963,6 +979,8 @@ export const adminOrderUpdateLineSchema = z.object({
   uv: uvLineInputSchema.optional(),
   sublimation: sublimationLineInputSchema.optional(),
   designId: z.string().uuid().optional(),
+  /** «Набор»: the set this line belongs to (absent = not in a set). */
+  set: giftSetLineInputSchema.optional(),
   files: z
     .array(z.union([existingAdminOrderFilePatchSchema, fileSchema]))
     .min(1, "At least one file is required"),

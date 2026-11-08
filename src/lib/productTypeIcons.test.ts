@@ -18,4 +18,10 @@ describe("PRODUCT_TYPE_ICONS", () => {
     expect(lineTypeKey("postcard")).toBe("postcard");
     expect(lineTypeKey("unknown")).toBeNull();
   });
+
+  it("shows a ready gift set line as «Набор»", () => {
+    const set = { templateId: "pen_notebook_thermos", name: "Ручка + блокнот + термос", kind: "ready", role: "ready", quantity: 1 };
+    expect(lineTypeKey("uv_print", { source: "stock" }, set)).toBe("gift_set");
+    expect(lineTypeKey("pen", null, { ...set, kind: "assembled", role: "pen" })).toBe("pen");
+  });
 });
