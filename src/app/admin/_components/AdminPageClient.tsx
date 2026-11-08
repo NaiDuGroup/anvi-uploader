@@ -34,7 +34,6 @@ import {
 import { LibraryCompletionHint, type LibraryHintOrder } from "@/app/admin/_components/library/LibraryCompletionHint";
 import { LIBRARY_HINT_STATUSES, libraryHintCandidateIds } from "@/lib/library/libraryHint";
 import { ShopOrderBadge, ShopOrderRow } from "@/app/admin/_components/ShopOrderPanel";
-import { ShopTesterButton } from "@/app/admin/_components/ShopTesterButton";
 import { playNotificationSound } from "@/lib/notificationSound";
 import {
   RefreshCw,
@@ -805,7 +804,6 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                 {t.admin.newOrder}
               </NavLinkButton>
             )}
-            {!isWorkshop && <ShopTesterButton />}
             <Button
               variant="outline"
               size="sm"

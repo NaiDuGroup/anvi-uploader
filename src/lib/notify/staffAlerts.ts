@@ -112,7 +112,7 @@ export async function alertCorporateRequest(id: string): Promise<void> {
         hasLogo: r.hasLogo,
         fileCount: readCorporateFiles(r.files).length,
         message: r.message,
-        adminUrl: `${adminPublicOrigin()}/admin/corporate-requests/${r.id}`,
+        adminUrl: `${adminPublicOrigin()}/admin/shop/corporate-requests/${r.id}`,
       }),
     );
   } catch (e) {

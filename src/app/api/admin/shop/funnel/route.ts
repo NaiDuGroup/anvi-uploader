@@ -10,7 +10,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
 /**
  * Admin «Сайт: заказы и воронка» — funnel section. `GET ?from=YYYY-MM-DD&to=YYYY-MM-DD`
  * (Chișinău days; default the last 30 days) → JSON (`ShopFunnelReport`), or
- * a CSV file with `format=csv`. Studio admin + superadmin only.
+ * a CSV file with `format=csv`. Super admin only.
  */
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();

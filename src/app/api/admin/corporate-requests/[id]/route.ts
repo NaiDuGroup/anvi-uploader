@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
-import { isAdmin } from "@/lib/roles";
+import { isSuperAdmin } from "@/lib/roles";
 import { getCorporateRequest, updateCorporateRequest } from "@/lib/corporate/requests";
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -8,7 +8,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
 /** One «Pentru companii» request (staff). */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
-  if (!user || !isAdmin(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user || !isSuperAdmin(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   try {
     const r = await getCorporateRequest(id);
@@ -23,7 +23,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 /** Staff update: `{ status?, assigneeId?, notes? }`. */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser();
-  if (!user || !isAdmin(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user || !isSuperAdmin(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
   let raw: unknown;
   try {

@@ -3,7 +3,7 @@ import type { ShopReportDictionary } from "./types";
 export const shopReportRo: ShopReportDictionary = {
   navShop: "Site",
   sectionTitle: "Site-ul anvi.md",
-  sectionSubtitle: "Comenzi de pe site, pâlnie și coduri promoționale",
+  sectionSubtitle: "Comenzi de pe site, pâlnie, coduri promoționale și cereri de la companii",
   subTabReport: "Comenzi și pâlnie",
   subTabPromo: "Coduri promo",
   title: "Site: comenzi și pâlnie",

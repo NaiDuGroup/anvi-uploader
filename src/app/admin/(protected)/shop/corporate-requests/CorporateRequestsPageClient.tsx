@@ -53,7 +53,7 @@ export default function CorporateRequestsPageClient({
 
   const changeStatus = async (id: string, status: string) => {
     setRowError(null);
-    const res = await fetch(`/api/admin/corporate-requests/${id}`, {
+    const res = await fetch(`/api/admin/shop/corporate-requests/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
@@ -158,13 +158,13 @@ export default function CorporateRequestsPageClient({
                 {data.rows.map((r) => (
                   <tr key={r.id} className="hover:bg-gray-50/80">
                     <td className="px-4 py-3 font-semibold">
-                      <Link href={`/admin/corporate-requests/${r.id}`} className="text-amber-800 hover:underline">
+                      <Link href={`/admin/shop/corporate-requests/${r.id}`} className="text-amber-800 hover:underline">
                         {r.number}
                       </Link>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-gray-600">{dateTime(r.createdAt)}</td>
                     <td className="px-4 py-3">
-                      <Link href={`/admin/corporate-requests/${r.id}`} className="font-medium text-gray-900 hover:underline">
+                      <Link href={`/admin/shop/corporate-requests/${r.id}`} className="font-medium text-gray-900 hover:underline">
                         {r.companyName}
                       </Link>
                       {r.fileCount ? (
@@ -207,7 +207,7 @@ export default function CorporateRequestsPageClient({
             {data.rows.map((r) => (
               <li key={r.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
-                  <Link href={`/admin/corporate-requests/${r.id}`} className="min-w-0">
+                  <Link href={`/admin/shop/corporate-requests/${r.id}`} className="min-w-0">
                     <div className="text-xs text-gray-500">
                       № {r.number} · {dateTime(r.createdAt)}
                     </div>

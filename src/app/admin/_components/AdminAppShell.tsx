@@ -4,7 +4,6 @@ import { type ReactNode, useEffect, useRef, useState, useTransition } from "reac
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Building2,
   Calculator,
   ClipboardList,
   FileText,
@@ -26,13 +25,13 @@ import { Badge } from "@/components/ui/badge";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
-import { canManageMugCatalog, isAdmin, isSuperAdmin } from "@/lib/roles";
+import { canManageMugCatalog, isSuperAdmin } from "@/lib/roles";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { getInitials } from "@/lib/initials";
 import AdminFooter, { hasFixedBottomBar, isFullScreenPage } from "./AdminFooter";
 import { AdminMobileNav, type AdminMobileNavEntry } from "./AdminMobileNav";
-import { CORPORATE_COUNT_CHANGED_EVENT } from "../(protected)/corporate-requests/corporateUi";
+import { CORPORATE_COUNT_CHANGED_EVENT } from "../(protected)/shop/corporate-requests/corporateUi";
 
 export type AdminShellUser = {
   name: string;
@@ -52,7 +51,6 @@ type NavLabelKey =
   | "navDesignStudio"
   | "navUsers"
   | "navAccounting"
-  | "navCorporate"
   | "navShop"
   | "navSettings";
 
@@ -75,11 +73,11 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/bookkeeping", labelKey: "navBookkeeping", Icon: Landmark, roles: ["superadmin"] },
   { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/library", labelKey: "navLibrary", Icon: BookMarked, roles: ["admin", "superadmin", "workshop"] },
-  { href: "/admin/corporate-requests", labelKey: "navCorporate", Icon: Building2, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/users", labelKey: "navUsers", Icon: UserCog, roles: ["superadmin"] },
   { href: "/admin/accounting", labelKey: "navAccounting", Icon: Calculator, roles: ["superadmin"] },
-  { href: "/admin/shop", labelKey: "navShop", Icon: Store, roles: ["admin", "superadmin"] },
+  // «Сайт» also holds «Заявки компаний» (/admin/shop/corporate-requests).
+  { href: "/admin/shop", labelKey: "navShop", Icon: Store, roles: ["superadmin"] },
   { href: "/admin/settings", labelKey: "navSettings", Icon: SettingsIcon, roles: ["superadmin"] },
 ];
 
@@ -140,7 +138,6 @@ export default function AdminAppShell({
     navAccounting: t.admin.navAccounting,
     navShop: t.shopReport.navShop,
     navSettings: t.admin.navSettings,
-    navCorporate: t.corporate.navTitle,
   };
 
   const showStockNav = canManageMugCatalog(user.role);
@@ -156,9 +153,9 @@ export default function AdminAppShell({
     pathname === "/admin/sheet-papers" ||
     pathname.startsWith("/admin/sheet-papers/");
 
-  // «Заявки компаний» badge: new storefront requests, refreshed on navigation, after a status
+  // «Заявки компаний» badge (on the «Сайт» tab): new storefront requests, refreshed on navigation, after a status
   // change (window event from the requests pages), on window focus and every minute while visible.
-  const canSeeCorporate = isAdmin(user.role);
+  const canSeeCorporate = isSuperAdmin(user.role);
   const [corporateNew, setCorporateNew] = useState(0);
   useEffect(() => {
     if (!canSeeCorporate) return;
@@ -188,7 +185,7 @@ export default function AdminAppShell({
       document.removeEventListener("visibilitychange", onVisible);
     };
   }, [canSeeCorporate, pathname]);
-  const navBadge = (href: string) => (href === "/admin/corporate-requests" ? corporateNew : 0);
+  const navBadge = (href: string) => (href === "/admin/shop" ? corporateNew : 0);
 
   const visibleNav = NAV_ITEMS.filter((item) => {
     if (item.labelKey === "navDesignStudio" && !SHOW_DESIGN_STUDIO_NAV) return false;

@@ -3,7 +3,7 @@ import type { ShopReportDictionary } from "./types";
 export const shopReportRu: ShopReportDictionary = {
   navShop: "Сайт",
   sectionTitle: "Сайт anvi.md",
-  sectionSubtitle: "Заказы с сайта, воронка и промокоды",
+  sectionSubtitle: "Заказы с сайта, воронка, промокоды и заявки компаний",
   subTabReport: "Заказы и воронка",
   subTabPromo: "Промокоды",
   title: "Сайт: заказы и воронка",

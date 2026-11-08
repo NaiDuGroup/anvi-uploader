@@ -89,7 +89,7 @@ function post(body: unknown, ip = "10.0.0.1") {
   });
 }
 
-const STAFF = { id: "u1", name: "anvi", displayName: "Anvi", role: "admin" };
+const STAFF = { id: "u1", name: "anvi", displayName: "Anvi", role: "superadmin" };
 const ROW = {
   id: "11111111-1111-4111-8111-111111111111",
   number: 12,
@@ -228,7 +228,7 @@ describe("POST /api/shop/corporate-request", () => {
   });
 });
 
-describe("admin access control (staff only)", () => {
+describe("admin access control (super admin only)", () => {
   const cases = () => [
     () => list(adminReq("/api/admin/corporate-requests")),
     () => count(),
@@ -241,8 +241,8 @@ describe("admin access control (staff only)", () => {
     () => getFile(adminReq(`/api/admin/corporate-requests/${ROW.id}/files/0`), params({ id: ROW.id, index: "0" })),
   ];
 
-  it("401 for anonymous visitors and non-staff roles (dealer)", async () => {
-    for (const user of [null, { ...STAFF, role: "dealer" }]) {
+  it("401 for anonymous visitors, dealers and staff below super admin", async () => {
+    for (const user of [null, ...["dealer", "customer", "admin", "workshop"].map((role) => ({ ...STAFF, role }))]) {
       auth.getSessionUser.mockResolvedValue(user);
       for (const call of cases()) expect((await call()).status).toBe(401);
     }
@@ -250,9 +250,9 @@ describe("admin access control (staff only)", () => {
     expect(db.corporateRequest.update).not.toHaveBeenCalled();
   });
 
-  it("staff roles get the list with filters", async () => {
-    for (const role of ["admin", "workshop", "superadmin"]) {
-      auth.getSessionUser.mockResolvedValue({ ...STAFF, role });
+  it("super admin gets the list with filters", async () => {
+    {
+      auth.getSessionUser.mockResolvedValue(STAFF);
       db.corporateRequest.findMany.mockResolvedValue([ROW]);
       db.corporateRequest.count.mockResolvedValue(1);
       db.corporateRequest.groupBy.mockResolvedValue([{ status: "new", _count: { _all: 1 } }]);

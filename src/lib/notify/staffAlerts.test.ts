@@ -118,6 +118,6 @@ describe("corporate request alert", () => {
     expect(text).toContain("Срок: 01.12.2026");
     expect(text).toContain("Бюджет: 10 000 лей");
     expect(text).toContain("Логотип: нет");
-    expect(text).toContain("/admin/corporate-requests/r1");
+    expect(text).toContain("/admin/shop/corporate-requests/r1");
   });
 });

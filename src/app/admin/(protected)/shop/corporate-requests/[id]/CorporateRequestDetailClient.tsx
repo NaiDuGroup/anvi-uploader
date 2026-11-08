@@ -34,7 +34,7 @@ export default function CorporateRequestDetailClient({
 
   const patch = async (body: Record<string, unknown>) => {
     setFlash(null);
-    const res = await fetch(`/api/admin/corporate-requests/${r.id}`, {
+    const res = await fetch(`/api/admin/shop/corporate-requests/${r.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -74,7 +74,7 @@ export default function CorporateRequestDetailClient({
 
   return (
     <main className={cn("mx-auto max-w-[1600px] px-4 py-6", pending && "opacity-70")}>
-      <Link href="/admin/corporate-requests" className="mb-4 inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900">
+      <Link href="/admin/shop/corporate-requests" className="mb-4 inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900">
         <ArrowLeft className="h-4 w-4" />
         {c.back}
       </Link>
@@ -156,7 +156,7 @@ export default function CorporateRequestDetailClient({
                 {r.files.map((f, i) => (
                   <li key={`${f.name}-${i}`}>
                     <a
-                      href={`/api/admin/corporate-requests/${r.id}/files/${i}`}
+                      href={`/api/admin/shop/corporate-requests/${r.id}/files/${i}`}
                       className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50"
                     >
                       <Download className="h-4 w-4 text-gray-500" />

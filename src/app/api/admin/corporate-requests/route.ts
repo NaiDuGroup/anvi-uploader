@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
-import { isAdmin } from "@/lib/roles";
+import { isSuperAdmin } from "@/lib/roles";
 import { listCorporateRequests } from "@/lib/corporate/requests";
 import { isCorporateStatus } from "@/lib/corporate/requestRules";
 
@@ -9,7 +9,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
 /** Staff list of «Pentru companii» requests: `?status=new|…|open&q=&assignee=&page=`. */
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
-  if (!user || !isAdmin(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user || !isSuperAdmin(user.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const sp = request.nextUrl.searchParams;
   const status = sp.get("status");
   try {

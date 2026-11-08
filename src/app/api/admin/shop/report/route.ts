@@ -12,7 +12,7 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * `GET ?from=YYYY-MM-DD&to=YYYY-MM-DD&includeTest=1&lang=ru|ro|en` (Chișinău days; default
  * the last 30 days; test orders left out unless `includeTest=1`) → JSON
  * (`ShopOrdersReport`, product names in `lang`, default ru), or with `format=csv` one CSV row per order.
- * Studio admin + superadmin only.
+ * Super admin only.
  */
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();

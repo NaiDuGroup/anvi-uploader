@@ -3,7 +3,7 @@ import type { ShopReportDictionary } from "./types";
 export const shopReportEn: ShopReportDictionary = {
   navShop: "Website",
   sectionTitle: "anvi.md website",
-  sectionSubtitle: "Website orders, funnel and promo codes",
+  sectionSubtitle: "Website orders, funnel, promo codes and company requests",
   subTabReport: "Orders & funnel",
   subTabPromo: "Promo codes",
   title: "Website: orders and funnel",
