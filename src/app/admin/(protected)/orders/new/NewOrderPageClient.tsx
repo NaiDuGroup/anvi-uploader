@@ -2845,7 +2845,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               nbs,
               pens,
               lfMaterialItemsRef.current[0]?.id ?? null,
-              "retail",
+              // Dealers: every row is priced at the dealer tier from the start.
+              dealerMode ? "dealer" : "retail",
               bcDefaultSheetPaperIdRef.current,
             );
             const pt = line.productType as ProductType;
@@ -3173,6 +3174,22 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       return changed ? next : prev;
     });
   }, [customer.customerType]);
+
+  // Dealer cabinet: the tier is fixed to «dealer», so the mirror above never
+  // re-runs after rows are (re)hydrated (edit prefill, repeat, new rows). Keep
+  // every row on the dealer tier so step 1 shows the same prices the server
+  // quotes on the confirm step — never retail prices.
+  useEffect(() => {
+    if (!dealerMode) return;
+    if (Object.values(assignBySlot).every((a) => a.lfCustomerType === "dealer")) return;
+    setAssignBySlot((prev) => {
+      const next: Record<string, SlotAssign> = {};
+      for (const [id, a] of Object.entries(prev)) {
+        next[id] = a.lfCustomerType === "dealer" ? a : { ...a, lfCustomerType: "dealer" };
+      }
+      return next;
+    });
+  }, [dealerMode, assignBySlot]);
 
   // Design Studio prefill is a staff feature (admin designs API).
   const designsParam = dealerMode ? null : (searchParams.get("designs") ?? initialDesigns);

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart3, Building2, TicketPercent } from "lucide-react";
@@ -16,6 +16,19 @@ const TABS = [
 export default function ShopAdminLayoutClient({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { t } = useLanguageStore();
+  const navRef = useRef<HTMLElement>(null);
+  // Phones: the strip scrolls sideways — bring the active tab fully into view
+  // (only the strip scrolls, never the page). Re-run when the labels change
+  // language: the saved language loads after mount and widens the tabs.
+  useEffect(() => {
+    const nav = navRef.current;
+    const el = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!nav || !el || nav.scrollWidth <= nav.clientWidth) return;
+    const left = el.offsetLeft; // nav is `relative`, so this is relative to the strip
+    const right = left + el.offsetWidth;
+    if (left < nav.scrollLeft) nav.scrollLeft = Math.max(0, left - 8);
+    else if (right > nav.scrollLeft + nav.clientWidth) nav.scrollLeft = right - nav.clientWidth + 8;
+  }, [pathname, t]);
   return (
     <div>
       <div
@@ -27,7 +40,7 @@ export default function ShopAdminLayoutClient({ children }: { children: ReactNod
             <h1 className="text-lg font-bold tracking-tight text-gray-900 sm:text-xl">{t.shopReport.sectionTitle}</h1>
             <p className="mt-0.5 hidden text-sm text-gray-500 sm:block">{t.shopReport.sectionSubtitle}</p>
           </div>
-          <nav className="inline-flex w-full overflow-x-auto rounded-xl border border-gray-200 bg-gray-50 p-1 sm:w-auto" aria-label={t.shopReport.navShop}>
+          <nav ref={navRef} className="relative inline-flex w-full overflow-x-auto rounded-xl border border-gray-200 bg-gray-50 p-1 sm:w-auto" aria-label={t.shopReport.navShop}>
             {TABS.map((tab) => {
               const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
               const Icon = tab.Icon;

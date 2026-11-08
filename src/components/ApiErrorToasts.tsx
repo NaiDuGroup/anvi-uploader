@@ -34,7 +34,36 @@ type Config = {
   locale: Locale;
   audience: "staff" | "customer";
   loginHref?: string;
+  /**
+   * GET endpoint that answers 200 while this area's own session is alive
+   * (cabinet: `/api/cabinet/me`). A 401 from some other endpoint (staff-only
+   * `/api/admin/*`, `/api/download/*`…) then means «no rights», not «session
+   * expired»: staff routes answer 401 to anyone without a staff session.
+   */
+  sessionProbe?: string;
 };
+
+/** Cached probe result so a burst of 401s costs one request. */
+let probeCache: { url: string; at: number; alive: Promise<boolean> } | null = null;
+const PROBE_TTL_MS = 10_000;
+
+function ownSessionAlive(probeUrl: string, original: typeof fetch): Promise<boolean> {
+  const now = Date.now();
+  if (probeCache && probeCache.url === probeUrl && now - probeCache.at < PROBE_TTL_MS) return probeCache.alive;
+  const alive = original(probeUrl, { cache: "no-store", credentials: "same-origin" })
+    .then((r) => r.ok)
+    .catch(() => false);
+  probeCache = { url: probeUrl, at: now, alive };
+  return alive;
+}
+
+function isSameEndpoint(url: string, probeUrl: string): boolean {
+  try {
+    return new URL(url, window.location.origin).pathname === new URL(probeUrl, window.location.origin).pathname;
+  } catch {
+    return false;
+  }
+}
 
 /** How long a component gets to show its own error before the toast appears. */
 const OWN_ERROR_GRACE_MS = 700;
@@ -142,10 +171,16 @@ async function report(
   res: Response | null,
   mutation: boolean,
   watcher: ReturnType<typeof watchForOwnError> | null,
+  url: string,
 ): Promise<void> {
   const state = window.__apiErrorToasts;
   const cfg = state?.config;
-  const status = res ? res.status : null;
+  let status = res ? res.status : null;
+  // Signed-in customer hitting a staff-only endpoint: the route says 401
+  // (no staff session), but their own session is fine — it is a 403.
+  if (status === 401 && state && cfg?.sessionProbe && !isSameEndpoint(url, cfg.sessionProbe)) {
+    if (await ownSessionAlive(cfg.sessionProbe, state.original)) status = 403;
+  }
   const skip =
     !state ||
     !cfg ||
@@ -216,7 +251,7 @@ function install(config: Config) {
       const aborted = err instanceof DOMException && err.name === "AbortError";
       // GET failing while the browser is online is usually a page navigation — stay quiet.
       if (!aborted && (mutation || navigator.onLine === false)) {
-        void report(method, null, mutation, mutation ? watchForOwnError() : null);
+        void report(method, null, mutation, mutation ? watchForOwnError() : null, url);
       }
       throw err;
     }
@@ -229,8 +264,10 @@ function install(config: Config) {
       } catch {
         copy = null;
       }
-      const watcher = mutation && res.status !== 401 ? watchForOwnError() : null;
-      void report(method, copy ?? new Response(null, { status: res.status }), mutation, watcher);
+      // 401 normally ignores the page's own error; keep watching when it may turn into a 403.
+      const watcher =
+        mutation && (res.status !== 401 || !!state.config.sessionProbe) ? watchForOwnError() : null;
+      void report(method, copy ?? new Response(null, { status: res.status }), mutation, watcher, url);
     }
     return res;
   };
@@ -254,24 +291,26 @@ export function ApiErrorToasts({
   shopLang,
   loginHref,
   audience = "staff",
+  sessionProbe,
 }: {
   shopLang?: Locale;
   loginHref?: string;
   audience?: "staff" | "customer";
+  sessionProbe?: string;
 }) {
   const storeLocale = useLanguageStore((s) => s.locale);
   const locale = shopLang ?? storeLocale;
   const installed = useRef(false);
 
   useEffect(() => {
-    const config: Config = { locale, audience, loginHref };
+    const config: Config = { locale, audience, loginHref, sessionProbe };
     if (!installed.current) {
       install(config);
       installed.current = true;
     } else if (window.__apiErrorToasts) {
       window.__apiErrorToasts.config = config;
     }
-  }, [locale, audience, loginHref]);
+  }, [locale, audience, loginHref, sessionProbe]);
 
   useEffect(
     () => () => {

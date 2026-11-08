@@ -12,7 +12,7 @@ export default function CabinetLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-gray-50 text-gray-900">
       {children}
-      <ApiErrorToasts loginHref="/cabinet/login" />
+      <ApiErrorToasts loginHref="/cabinet/login" sessionProbe="/api/cabinet/me" />
     </div>
   );
 }
