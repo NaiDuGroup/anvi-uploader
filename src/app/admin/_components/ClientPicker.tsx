@@ -25,6 +25,7 @@ export default function ClientPicker({
   t,
   disabled,
   inlineDropdown = false,
+  compact = false,
 }: {
   value: ClientPickerValue | null;
   onChange: (next: ClientPickerValue | null) => void;
@@ -32,6 +33,8 @@ export default function ClientPicker({
   disabled?: boolean;
   /** Dropdown in the normal flow (inside scrolling dialogs it is not clipped). */
   inlineDropdown?: boolean;
+  /** For filter rows: no label above (aria-label instead), reset as a small × inside the field. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -77,16 +80,20 @@ export default function ClientPicker({
   const display = value ? clientPickerLabel(value) : t.clientPickerNone;
 
   return (
-    <div ref={wrapRef} className="relative">
-      <label className="mb-1.5 block text-sm font-medium">{t.clientPickerLabel}</label>
+    <div ref={wrapRef} className="relative min-w-0">
+      {compact ? null : <label className="mb-1.5 block text-sm font-medium">{t.clientPickerLabel}</label>}
       <button
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setOpen((o) => !o)}
         className={cn(
-          "flex w-full items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm shadow-sm transition-colors",
+          "flex w-full min-w-0 items-center justify-between gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm shadow-sm transition-colors",
+          compact && "h-9 py-0",
+          compact && value && !disabled && "pr-10",
           disabled ? "cursor-not-allowed opacity-50" : "hover:bg-gray-50",
         )}
+        title={value ? display : undefined}
+        aria-label={compact ? `${t.clientPickerLabel}: ${display}` : undefined}
         aria-expanded={open}
         aria-haspopup="listbox"
       >
@@ -98,7 +105,17 @@ export default function ClientPicker({
           className={cn("h-4 w-4 shrink-0 text-gray-400 transition-transform", open && "rotate-180")}
         />
       </button>
-      {value && !disabled && (
+      {value && !disabled && compact ? (
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className="absolute right-2 top-[18px] inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          aria-label={t.clientPickerClear}
+          title={t.clientPickerClear}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      ) : value && !disabled ? (
         <button
           type="button"
           onClick={() => onChange(null)}
@@ -106,7 +123,7 @@ export default function ClientPicker({
         >
           {t.clientPickerClear}
         </button>
-      )}
+      ) : null}
 
       {open && !disabled && (
         <div

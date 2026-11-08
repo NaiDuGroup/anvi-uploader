@@ -250,8 +250,8 @@ export default function LibraryPageClient({
           {filterBtn("common", d.filterCommon)}
           {filterBtn("client", d.filterClient)}
           {owner === "client" ? (
-            <div className="w-full sm:w-80">
-              <ClientPicker value={client} onChange={setClient} t={t.admin} />
+            <div className="w-full min-w-0 sm:w-80">
+              <ClientPicker value={client} onChange={setClient} t={t.admin} compact />
             </div>
           ) : null}
         </div>

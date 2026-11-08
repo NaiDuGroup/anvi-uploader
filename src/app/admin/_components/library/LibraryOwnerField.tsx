@@ -35,13 +35,13 @@ export function LibraryOwnerField({
   const radio = (checked: boolean, label: string, onSelect: () => void, hint?: string | null) => (
     <label
       className={cn(
-        "flex min-h-10 cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm",
+        "flex min-h-10 min-w-0 cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm",
         checked ? "border-amber-400 bg-amber-50" : "border-gray-200 hover:bg-gray-50",
         disabled && "pointer-events-none opacity-60",
       )}
     >
       <input type="radio" className="mt-0.5 accent-amber-600" checked={checked} onChange={onSelect} disabled={disabled} />
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="block font-medium text-gray-900">{label}</span>
         {hint ? <span className="block truncate text-xs text-gray-500">{hint}</span> : null}
       </span>
@@ -49,7 +49,7 @@ export function LibraryOwnerField({
   );
 
   return (
-    <fieldset className="space-y-1.5">
+    <fieldset className="min-w-0 space-y-1.5">
       <legend className="mb-1 text-sm font-medium text-gray-700">{d.ownerLegend}</legend>
       {orderClient?.clientId
         ? radio(isOrderClient, orderClientLabel ?? d.orderClient, () => onChange(orderClient), orderClient.clientName)
@@ -65,7 +65,7 @@ export function LibraryOwnerField({
         isOther && value.clientId ? value.clientName : null,
       )}
       {isOther ? (
-        <div className="pl-1 pt-1">
+        <div className="min-w-0 pt-1">
           <ClientPicker
             value={picked}
             t={t.admin}
