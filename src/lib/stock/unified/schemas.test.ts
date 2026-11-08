@@ -7,6 +7,7 @@ import {
   stockMovementsQuerySchema,
   stockReceiveSchema,
   stockVariantInputSchema,
+  stockVariantUpdateSchema,
   stockWriteOffSchema,
 } from "./schemas";
 
@@ -48,6 +49,32 @@ describe("item / variant schemas", () => {
     expect(stockVariantInputSchema.safeParse({ ...variant, sellPrice: 1.234 }).success).toBe(false);
     expect(stockVariantInputSchema.safeParse({ ...variant, options: { colorHex: "red" } }).success).toBe(false);
     expect(stockVariantInputSchema.safeParse({ ...variant, reorderLevel: -1 }).success).toBe(false);
+  });
+
+  it("accepts only stock photo storage keys as the variant photo", () => {
+    const parse = (imageUrl: unknown) => stockVariantInputSchema.safeParse({ ...variant, imageUrl });
+    expect(parse("catalog/stock/1793225973778-BD72013701.jpg").success).toBe(true);
+    expect(parse("catalog/stock/1794162396735-xE9JilvO-набор чёрный (1).JPG").success).toBe(true);
+    expect(parse(null).success).toBe(true);
+    expect(parse(undefined).success).toBe(true);
+    expect(stockVariantUpdateSchema.parse({ imageUrl: null })).toEqual({ imageUrl: null });
+    for (const bad of [
+      "https://evil.example/x.jpg",
+      "//evil.example/x.jpg",
+      "uploads/2026/x.jpg",
+      "catalog/mugs/x.jpg",
+      "catalog/stock/../uploads/x.jpg",
+      "catalog/stock/..",
+      "catalog/stock/a\\b.jpg",
+      "catalog/stock/x.jpg#frag",
+      "catalog/stock/",
+      "/catalog/stock/x.jpg",
+      "catalog/stock/x.jpg?y=1",
+      "",
+      42,
+    ]) {
+      expect(parse(bad).success, String(bad)).toBe(false);
+    }
   });
 });
 

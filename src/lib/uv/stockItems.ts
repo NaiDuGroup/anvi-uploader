@@ -31,6 +31,8 @@ export interface UvStockVariantRow {
   priceTiers: unknown;
   /** Dealer price per piece (print included); null = dealers pay the retail tier. */
   dealerPrice?: DecimalLike;
+  /** Storage key of the variant's own photo (colour shot); null = the item photo. */
+  imageUrl?: string | null;
 }
 
 export interface UvStockItemRow {
@@ -108,6 +110,14 @@ export function uvVariantLabel(v: Pick<UvStockVariantRow, "label" | "options">):
   return v.label?.trim() || null;
 }
 
+/** Photo storage key of a variant: its own photo, else the item photo; null without either. */
+export function stockVariantImageKey(
+  variant: { imageUrl?: string | null },
+  item: { imageUrl?: string | null },
+): string | null {
+  return variant.imageUrl?.trim() || item.imageUrl?.trim() || null;
+}
+
 /** Active variants of one stock item; empty when the item or its category is not printable. */
 export function uvStockItemsFromStockItem(item: UvStockItemRow): UvStockItemJson[] {
   return printableStockItemsFromStockItem(item, UV_PRINT_METHOD);
@@ -121,7 +131,6 @@ export function printableStockItemsFromStockItem(item: UvStockItemRow, method: s
   const printArea: UvPrintArea | null = stockItemPrintArea(item.attributes);
   const fallback = printArea ? null : shopFallbackPrintAreaCm(item.sku);
   const printNorms: UvPrintNorms = parseUvPrintNorms(item.attributes);
-  const imageUrl: string | null = publicAssetUrlFromStorageKey(item.imageUrl);
   return item.variants
     .filter((v) => v.isActive)
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -138,7 +147,7 @@ export function printableStockItemsFromStockItem(item: UvStockItemRow, method: s
         sku: v.sku,
         variantLabel: uvVariantLabel(v),
         colorHex: optionString(v.options, "colorHex") || null,
-        imageUrl,
+        imageUrl: publicAssetUrlFromStorageKey(stockVariantImageKey(v, item)),
         stockQuantity: toNumber(v.stockQuantity) ?? 0,
         unitCostMdl: unit == null ? null : Math.round(unit * 100) / 100,
         priceTiers: dtfVariantPriceTiers(v.priceTiers, v.sellPrice),

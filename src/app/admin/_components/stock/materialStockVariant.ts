@@ -28,6 +28,8 @@ export function materialStockVariantJson(row: {
     dealerPrice: null,
     reorderLevel: null,
     priceTiers: null,
+    imageUrl: null,
+    imagePublicUrl: null,
     sortOrder: 0,
     isActive: row.isActive,
     updatedAt: "",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { uvItemDisplayName, uvStockItemsFromStockItems, uvVariantLabel, type UvStockItemRow } from "./stockItems";
+import { stockVariantImageKey, uvItemDisplayName, uvStockItemsFromStockItems, uvVariantLabel, type UvStockItemRow } from "./stockItems";
 
 const category = (code: string, printMethods: string[], sortOrder = 0) => ({
   code,
@@ -72,5 +72,40 @@ describe("uvStockItemsFromStockItems", () => {
     const names = { ro: "Pix", ru: "Ручка", en: "" };
     expect(uvItemDisplayName({ name: "Pix", names, variantLabel: "Красный" }, "ru")).toBe("Ручка · Красный");
     expect(uvItemDisplayName({ name: "Pix", names, variantLabel: null }, "en")).toBe("Pix");
+  });
+});
+
+describe("variant photos", () => {
+  it("uses the variant's own photo first, the item photo as fallback", () => {
+    const rows = [
+      item(
+        "set",
+        category("pens", ["uv"]),
+        [
+          variant("black", { imageUrl: "catalog/stock/set-black.jpg", sortOrder: 0 }),
+          variant("red", { imageUrl: null, sortOrder: 1 }),
+          variant("blue", { imageUrl: "  ", sortOrder: 2 }),
+        ],
+        { imageUrl: "catalog/stock/set.jpg" },
+      ),
+    ];
+    const out = uvStockItemsFromStockItems(rows);
+    expect(out.map((i) => i.imageUrl)).toEqual([
+      expect.stringContaining("set-black.jpg"),
+      expect.stringContaining("set.jpg"),
+      expect.stringContaining("set.jpg"),
+    ]);
+    expect(out[1].imageUrl).not.toContain("set-black");
+  });
+
+  it("stays null when neither the variant nor the item has a photo", () => {
+    const out = uvStockItemsFromStockItems([item("p", category("pens", ["uv"]), [variant("p1")])]);
+    expect(out[0].imageUrl).toBeNull();
+  });
+
+  it("stockVariantImageKey picks the variant key, then the item key", () => {
+    expect(stockVariantImageKey({ imageUrl: "catalog/stock/v.jpg" }, { imageUrl: "catalog/stock/i.jpg" })).toBe("catalog/stock/v.jpg");
+    expect(stockVariantImageKey({ imageUrl: null }, { imageUrl: "catalog/stock/i.jpg" })).toBe("catalog/stock/i.jpg");
+    expect(stockVariantImageKey({}, {})).toBeNull();
   });
 });

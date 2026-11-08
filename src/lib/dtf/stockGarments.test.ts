@@ -151,6 +151,20 @@ describe("dtfVariantPriceTiers", () => {
 });
 
 describe("dtfGarmentsFromStockItems", () => {
+  it("shows a colour's own variant photo, else the item photo", () => {
+    const withPhotos: DtfStockItemRow = {
+      ...socks,
+      imageUrl: "catalog/stock/socks.jpg",
+      variants: socks.variants.map((v, i) => (i === 1 ? { ...v, imageUrl: "catalog/stock/socks-black.jpg" } : v)),
+    };
+    const garments = dtfGarmentsFromStockItems([withPhotos]);
+    const black = garments.find((g) => g.colorName === "Negru")!;
+    const white = garments.find((g) => g.colorName === "Alb")!;
+    expect(black.imageUrl).toContain("socks-black.jpg");
+    expect(white.imageUrl).toContain("socks.jpg");
+    expect(white.imageUrl).not.toContain("socks-black");
+  });
+
   it("groups active variants of an item by colour (case-insensitive)", () => {
     const garments = dtfGarmentsFromStockItems([socks]);
     expect(garments.map((g) => [g.id, g.colorName, g.colorHex, g.variants.map((v) => v.size)])).toEqual([

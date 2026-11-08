@@ -53,6 +53,8 @@ import { StockRequestError, stockErrorMessage, stockFetch, uploadStockPhoto } fr
 import { EMPTY_DESCRIPTION, StockItemMediaSection } from "./StockItemMediaSection";
 import type { StockItemDescription } from "@/lib/stock/unified/itemDescription";
 import { StockTierEditor } from "./StockTierEditor";
+import { isStockPhotoKey } from "@/lib/stock/unified/photoKey";
+import { VariantPhotoCell } from "./VariantPhotoCell";
 
 type Mode = "single" | "grid";
 
@@ -80,6 +82,7 @@ function draftFromVariant(v: StockVariantJson): VariantDraft {
     isActive: v.isActive,
     sortOrder: v.sortOrder,
     skuEdited: true,
+    imageUrl: v.imageUrl,
   };
 }
 
@@ -98,6 +101,8 @@ type VariantPayload = {
   reorderLevel: number | null;
   /** Sent only for printed categories (DTF / UV / sublimation); null clears. */
   priceTiers?: GarmentPriceTier[] | null;
+  /** The variant's own photo (storage key); null = the item photo. */
+  imageUrl: string | null;
   isActive: boolean;
   sortOrder: number;
 };
@@ -111,6 +116,7 @@ function toPayload(d: VariantDraft, unit: StockUnit, index: number): VariantPayl
     dealerPrice: parseAmountMdl(d.dealerPrice),
     purchaseCost: parseAmountMdl(d.purchaseCost),
     reorderLevel: parseQuantityInput(d.reorderLevel, unit, { allowZero: true }),
+    imageUrl: d.imageUrl ?? null,
     isActive: d.isActive,
     sortOrder: index,
   };
@@ -126,6 +132,7 @@ function samePayload(a: VariantPayload, v: StockVariantJson): boolean {
     a.purchaseCost === v.purchaseCost &&
     a.reorderLevel === v.reorderLevel &&
     (a.priceTiers === undefined || sameTiers(a.priceTiers, v.priceTiers)) &&
+    a.imageUrl === v.imageUrl &&
     a.isActive === v.isActive &&
     a.sortOrder === v.sortOrder
   );
@@ -438,6 +445,11 @@ export function StockItemModal({
   }
 
   const qtyInputMode = unitAllowsFractions(unit) ? "decimal" : "numeric";
+  // «Взять из фото позиции»: the saved main photo and the extra photos (colour shots usually live there).
+  // Only stock storage keys (what the variant API accepts); older external URLs are left out.
+  const variantPhotoChoices: string[] = [...new Set([...(imageKey && !pendingFile ? [imageKey] : []), ...gallery])].filter(
+    isStockPhotoKey,
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
@@ -906,9 +918,10 @@ export function StockItemModal({
               </p>
             ) : (
               <div className="mt-4 overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                <table className="w-full min-w-[860px] border-collapse text-xs">
+                <table className="w-full min-w-[960px] border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-gray-200 bg-gray-50 text-left font-semibold uppercase tracking-wide text-gray-500">
+                      <th className="p-2">{s.colPhoto}</th>
                       <th className="p-2">{s.colVariant}</th>
                       <th className="p-2">{s.colSku}</th>
                       <th className="p-2">{s.colSellPrice}</th>
@@ -922,6 +935,17 @@ export function StockItemModal({
                   <tbody>
                     {drafts.map((d) => (
                       <tr key={d.key} className="border-b border-gray-100 last:border-0">
+                        <td className="p-2">
+                          <VariantPhotoCell
+                            imageKey={d.imageUrl ?? null}
+                            fallbackUrl={preview}
+                            choices={variantPhotoChoices}
+                            disabled={saving}
+                            onChange={(key) => patchDraft(d.key, { imageUrl: key })}
+                            onUploadError={() => setError(s.errorUpload)}
+                            s={s}
+                          />
+                        </td>
                         <td className="p-2">
                           {mode === "grid" ? (
                             <span className="inline-flex items-center gap-1.5 whitespace-nowrap">

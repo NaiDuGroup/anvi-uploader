@@ -79,6 +79,7 @@ export async function withDesignProducts<T extends DesignProductRow>(
         where: { id: { in: ids } },
         select: {
           id: true,
+          imageUrl: true,
           item: {
             select: {
               sku: true,
@@ -96,7 +97,7 @@ export async function withDesignProducts<T extends DesignProductRow>(
   return rows.map((r, i) => {
     const variantId: string | null = variantIds[i] ?? null;
     const v = variantId ? byId.get(variantId) : undefined;
-    const base = { sku: v?.item.sku ?? "", nameRu: v?.item.nameRu ?? "", imageUrl: v?.item.imageUrl ?? null };
+    const base = { sku: v?.item.sku ?? "", nameRu: v?.item.nameRu ?? "", imageUrl: v?.imageUrl || v?.item.imageUrl || null };
     const code: string | undefined = v?.item.category.code;
     const isMug: boolean = r.targetType === "mug" && code === MUGS_CATEGORY_CODE;
     const isNotebook: boolean = r.targetType === "notebook" && code === NOTEBOOKS_CATEGORY_CODE;

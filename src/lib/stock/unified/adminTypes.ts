@@ -37,6 +37,10 @@ export type StockVariantJson = {
   reorderLevel: number | null;
   /** Run-size retail prices of printed apparel (sorted, «от 1» first); null when unset. */
   priceTiers: GarmentPriceTier[] | null;
+  /** The variant's own photo (storage key); null = the item photo is shown. */
+  imageUrl: string | null;
+  /** Public URL of {@link imageUrl} (not of the item photo). */
+  imagePublicUrl: string | null;
   sortOrder: number;
   isActive: boolean;
   updatedAt: string;

@@ -2932,6 +2932,11 @@ export interface TranslationDictionary {
     reorderLevel: string;
     variantLabelPlaceholder: string;
     addVariantRow: string;
+    variantPhotoUpload: string;
+    variantPhotoFromGallery: string;
+    variantPhotoRemove: string;
+    variantPhotoInherited: string;
+    variantPhotoNoGallery: string;
     noVariantsHint: string;
     receiptTitle: string;
     bulkReceiptTitle: string;

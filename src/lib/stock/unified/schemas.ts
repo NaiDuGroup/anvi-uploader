@@ -6,6 +6,7 @@ import { STOCK_CATEGORY_KINDS, STOCK_UNITS, type StockCategoryKind, type StockUn
 import { printMethodsSchema } from "./printMethods";
 import { MAX_STOCK_QUANTITY } from "./quantity";
 import { duplicateSkus } from "./variantGrid";
+import { isStockPhotoKey } from "./photoKey";
 
 /** Request bodies of `/api/admin/stock/**`. Unit-specific quantity checks happen in the route once the category is known. */
 
@@ -53,6 +54,8 @@ export const stockVariantOptionsSchema = z.object({
   size: z.string().trim().max(30).optional(),
 });
 
+export const stockPhotoKeySchema = z.string().trim().max(500).refine(isStockPhotoKey, "stock_photo_key_invalid");
+
 export const stockVariantInputSchema = z.object({
   sku: stockSkuSchema,
   label: z.string().trim().max(120).nullable().optional(),
@@ -63,6 +66,8 @@ export const stockVariantInputSchema = z.object({
   reorderLevel: quantitySchema.min(0).nullable().optional(),
   /** Run-size prices of printed apparel; null clears them. */
   priceTiers: garmentPriceTiersSchema.nullable().optional(),
+  /** The variant's own photo (storage key); null = use the item photo. */
+  imageUrl: stockPhotoKeySchema.nullable().optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().min(-100_000).max(100_000).optional(),
 });

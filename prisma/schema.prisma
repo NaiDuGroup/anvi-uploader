@@ -1806,6 +1806,8 @@ model StockVariant {
   isActive      Boolean  @default(true) @map("is_active")
   /// Supplier article code (e.g. Gor Factory «NB8091S102»); import lines are matched by it.
   supplierCode  String?  @map("supplier_code")
+  /// Storage key of this variant's own photo (catalog/stock/...); null = the item photo.
+  imageUrl      String?  @map("image_url")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

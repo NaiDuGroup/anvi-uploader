@@ -45,6 +45,7 @@ export function variantCreateData(
     purchaseCost: decimalOrNull(input.purchaseCost, 4),
     reorderLevel: decimalOrNull(input.reorderLevel, 3),
     priceTiers: priceTiersValue(input.priceTiers ?? null),
+    imageUrl: input.imageUrl ?? null,
     isActive: input.isActive ?? true,
     sortOrder: input.sortOrder ?? index,
   };
@@ -62,6 +63,7 @@ export function variantUpdateData(
     purchaseCost: decimalPatch(input.purchaseCost, 4),
     reorderLevel: decimalPatch(input.reorderLevel, 3),
     priceTiers: input.priceTiers === undefined ? undefined : priceTiersValue(input.priceTiers),
+    imageUrl: input.imageUrl,
     isActive: input.isActive,
     sortOrder: input.sortOrder,
   };

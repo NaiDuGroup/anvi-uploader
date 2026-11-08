@@ -84,6 +84,8 @@ export function toStockVariantJson(row: Prisma.StockVariantGetPayload<object>): 
     dealerPrice: num(row.dealerPrice),
     reorderLevel: num(row.reorderLevel),
     priceTiers: asPriceTiers(row.priceTiers),
+    imageUrl: row.imageUrl,
+    imagePublicUrl: publicAssetUrlFromStorageKey(row.imageUrl),
     sortOrder: row.sortOrder,
     isActive: row.isActive,
     updatedAt: row.updatedAt.toISOString(),

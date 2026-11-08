@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
             nameEn: item.nameEn,
             label: v.label,
             sku: v.sku,
-            imagePublicUrl: publicAssetUrlFromStorageKey(item.imageUrl),
+            imagePublicUrl: publicAssetUrlFromStorageKey(v.imageUrl || item.imageUrl),
             stockQuantity: qty,
             isActive: active,
           });

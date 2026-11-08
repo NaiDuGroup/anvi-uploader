@@ -36,6 +36,8 @@ export interface DtfStockVariantRow {
   /** Dealer price per piece (fixed, no run-size steps). */
   dealerPrice?: DecimalLike;
   priceTiers: unknown;
+  /** Storage key of the variant's own photo (colour shot); null = the item photo. */
+  imageUrl?: string | null;
 }
 
 export interface DtfStockItemRow {
@@ -229,6 +231,8 @@ export function dtfGarmentsFromStockItem(item: DtfStockItemRow): DtfGarmentJson[
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
   const byColor = new Map<string, DtfGarmentJson>();
+  // Colours whose photo already comes from one of their own variants (not the item photo).
+  const ownPhoto = new Set<string>();
   for (const v of variants) {
     const color: string = optionString(v.options, "color");
     const key: string = dtfColorKey(color);
@@ -254,6 +258,11 @@ export function dtfGarmentsFromStockItem(item: DtfStockItemRow): DtfGarmentJson[
       byColor.set(key, garment);
     }
     garment.colorHex ??= optionString(v.options, "colorHex") || null;
+    const variantPhoto: string | null = v.imageUrl?.trim() ? publicAssetUrlFromStorageKey(v.imageUrl.trim()) : null;
+    if (variantPhoto && !ownPhoto.has(key)) {
+      garment.imageUrl = variantPhoto;
+      ownPhoto.add(key);
+    }
     const size: DtfGarmentSizeJson = toSize(v);
     // Two variants with the same size in one colour cannot be told apart in the editor.
     if (!garment.variants.some((s) => s.size.toUpperCase() === size.size.toUpperCase())) {

@@ -118,7 +118,7 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
   const giftSetTemplates = parseGiftSetTemplates(acct.giftSetTemplates);
   const boxSkus = [...new Set(giftSetTemplates.map((t) => t.boxSku).filter((s): s is string => Boolean(s)))];
   const boxRows = boxSkus.length
-    ? await prisma.stockVariant.findMany({ where: { sku: { in: boxSkus } }, select: { sku: true, stockQuantity: true, item: { select: { nameRu: true, imageUrl: true } } } })
+    ? await prisma.stockVariant.findMany({ where: { sku: { in: boxSkus } }, select: { sku: true, stockQuantity: true, imageUrl: true, item: { select: { nameRu: true, imageUrl: true } } } })
     : [];
   const printableMap = await lfMaterialPrintableWidthByIdsRaw(
     prisma,
@@ -191,7 +191,7 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
     giftSetBoxNames: Object.fromEntries(boxRows.map((b) => [b.sku, b.item.nameRu])),
     giftSetBoxImages: Object.fromEntries(
       boxRows.flatMap((b) => {
-        const url = publicAssetUrlFromStorageKey(b.item.imageUrl);
+        const url = publicAssetUrlFromStorageKey(b.imageUrl || b.item.imageUrl);
         return url ? [[b.sku, url] as const] : [];
       }),
     ),

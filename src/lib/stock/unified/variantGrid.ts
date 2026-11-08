@@ -28,6 +28,8 @@ export type VariantDraft = {
   sortOrder: number;
   /** The SKU was typed by hand — don't overwrite it when the item SKU changes. */
   skuEdited?: boolean;
+  /** The variant's own photo (storage key); null / absent = the item photo. */
+  imageUrl?: string | null;
 };
 
 export const COMMON_CLOTHING_SIZES: readonly string[] = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];

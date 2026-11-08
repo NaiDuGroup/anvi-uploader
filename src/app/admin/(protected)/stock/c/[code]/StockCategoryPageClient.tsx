@@ -99,6 +99,20 @@ function isLow(v: StockVariantJson): boolean {
   return v.reorderLevel != null && v.stockQuantity <= v.reorderLevel;
 }
 
+/** The variant's own photo (colour shot) in its row; nothing when it uses the item photo. */
+function VariantThumb({ url }: { url: string | null }) {
+  if (!url) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- catalog bucket URLs, sized by CSS
+    <img
+      src={url}
+      alt=""
+      loading="lazy"
+      className="mr-1.5 inline-block h-8 w-8 shrink-0 rounded border border-gray-200 bg-white object-contain align-middle"
+    />
+  );
+}
+
 /** A single plain variant: show its actions on the item row instead of an expandable list. */
 function isSingle(item: StockItemJson): boolean {
   return item.variants.length === 1 && !item.variants[0].label;
@@ -370,6 +384,7 @@ export default function StockCategoryPageClient({ code }: { code: string }) {
                         <li key={v.id} className={cn("rounded-lg border border-gray-100 bg-gray-50/60 p-3", !v.isActive && "opacity-60")}>
                           {!single ? (
                             <p className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
+                              <VariantThumb url={v.imagePublicUrl} />
                               <ColorSwatch hex={v.options.colorHex} title={v.options.color} />
                               {v.label || "—"}
                             </p>
@@ -642,6 +657,7 @@ function VariantsTable({
           {item.variants.map((v) => (
             <tr key={v.id} className={cn("border-b border-gray-50 last:border-0", !v.isActive && "text-gray-400")}>
               <td className="p-2 font-medium">
+                <VariantThumb url={v.imagePublicUrl} />
                 {v.label || "—"}
                 {!v.isActive ? <span className="ml-1 text-[10px] font-normal">({s.badgeInactive})</span> : null}
               </td>
