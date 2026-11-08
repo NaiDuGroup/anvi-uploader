@@ -3010,6 +3010,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 zoneId: ready ? (uvZoneIdFromPaperType(f.paperType) ?? undefined) : undefined,
                 readyVariantId: ready ? (parseUvLineData(line.uvLineData)?.item?.variantId ?? undefined) : undefined,
               });
+              // «Повторить заказ» is a new order: today's template price (the server has no stored price for it).
+              if (repeatFiles) base.giftSet = { ...base.giftSet, savedPrice: null };
               base.copiesStr = String(lineSet.quantity);
               base.linePriceStr = "";
               base.lfCustomerType = lineSet.customerType;
