@@ -9,6 +9,7 @@ import { LibraryOwnerField, libraryOwnerIncomplete, type LibraryOwner } from "./
 import { libraryFetch, libraryOrderNumber, type LibraryItem } from "./libraryClient";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { markInLibrary } from "./useLibraryStatus";
+import { LibraryThumb, ThumbImage, orderFileThumbUrl } from "./LibraryThumb";
 
 export type SaveToLibraryTarget =
   | { kind: "file"; fileId: string; fileName: string; orderNumber: number; orderClient: LibraryOwner | null }
@@ -87,6 +88,9 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
           </>
         }
       >
+        {done.saved.length === 1 && target.kind === "file" ? (
+          <LibraryThumb item={done.saved[0]!} className="mb-3 h-32 w-full rounded-lg border border-gray-200" />
+        ) : null}
         <p className="text-sm text-emerald-700">
           {done.saved.length === 1 && target.kind === "file" ? d.savedOne : d.savedMany(done.saved.length)}
         </p>
@@ -132,6 +136,13 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
       }
     >
       <div className="space-y-3">
+        {target.kind === "file" ? (
+          <ThumbImage
+            src={orderFileThumbUrl(target.fileId)}
+            fileName={target.fileName}
+            className="h-32 w-full rounded-lg border border-gray-200"
+          />
+        ) : null}
         {target.kind === "file" ? (
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">{d.titleLabel}</span>

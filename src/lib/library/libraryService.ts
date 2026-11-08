@@ -8,6 +8,7 @@ import {
   buildLibraryKey,
   defaultLibraryTitle,
   isLibraryKey,
+  libraryThumbKeys,
   libraryPhoneSearchDigits,
   normalizeLibraryTags,
 } from "./libraryKeys";
@@ -250,6 +251,10 @@ export async function hardDeleteLibraryFile(
   if (references > 0) return { ok: false, error: "in_use", references };
   await prisma.libraryFile.delete({ where: { id } });
   if (isLibraryKey(row.storageKey)) await deleteLibraryObject(row.storageKey);
+  const thumbs = libraryThumbKeys(row.id);
+  await Promise.all([deleteLibraryObject(thumbs.thumb), deleteLibraryObject(thumbs.none)]).catch((error) =>
+    console.error("library: thumb delete failed", row.id, error),
+  );
   return { ok: true };
 }
 

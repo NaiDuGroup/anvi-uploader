@@ -132,3 +132,23 @@ export function libraryPhoneSearchDigits(query: string): string[] {
   const local = digits.replace(/^(?:373|0)+/, "");
   return local.length >= 3 && local !== digits ? [digits, local] : [digits];
 }
+
+/** Folder of cached preview thumbnails (`library/thumbs/<id>.webp`); never a client id or «common». */
+export const LIBRARY_THUMBS_FOLDER = "thumbs";
+
+/** Cached thumbnail of a library item, and the marker left when its file cannot be previewed. */
+export function libraryThumbKeys(libraryId: string): { thumb: string; none: string } {
+  if (!/^[0-9a-f-]{36}$/i.test(libraryId)) throw new Error("Invalid library id");
+  const base = `${LIBRARY_PREFIX}${LIBRARY_THUMBS_FOLDER}/${libraryId.toLowerCase()}`;
+  return { thumb: `${base}.webp`, none: `${base}.none` };
+}
+
+const RASTER_THUMB_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "tif", "tiff", "bmp"]);
+
+/** How a file gets a thumbnail: first PDF page, a scaled raster, or none (PSD, AI, ZIP, …). */
+export function thumbKindOf(fileName: string): "pdf" | "raster" | null {
+  const dot = fileName.lastIndexOf(".");
+  const ext = dot > 0 ? fileName.slice(dot + 1).toLowerCase() : "";
+  if (ext === "pdf") return "pdf";
+  return RASTER_THUMB_EXTS.has(ext) ? "raster" : null;
+}

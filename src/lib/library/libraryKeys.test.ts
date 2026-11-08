@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  libraryThumbKeys,
+  thumbKindOf,
   LIBRARY_PREFIX,
   buildLibraryKey,
   defaultLibraryTitle,
@@ -133,5 +135,26 @@ describe("libraryPhoneSearchDigits", () => {
   it("ignores queries with fewer than 3 digits", () => {
     expect(libraryPhoneSearchDigits("логотип A4")).toEqual([]);
     expect(libraryPhoneSearchDigits("0")).toEqual([]);
+  });
+});
+
+describe("library thumbnails", () => {
+  it("keeps thumbs under library/thumbs by item id", () => {
+    const id = "4C6C8A30-658B-48EA-A550-E09FD6009C0B";
+    expect(libraryThumbKeys(id)).toEqual({
+      thumb: "library/thumbs/4c6c8a30-658b-48ea-a550-e09fd6009c0b.webp",
+      none: "library/thumbs/4c6c8a30-658b-48ea-a550-e09fd6009c0b.none",
+    });
+    expect(isLibraryKey(libraryThumbKeys(id).thumb)).toBe(true);
+    expect(() => libraryThumbKeys("../x")).toThrow();
+  });
+
+  it("previews PDFs and rasters (TIF included), not PSD / AI / archives", () => {
+    expect(thumbKindOf("Макет.PDF")).toBe("pdf");
+    expect(thumbKindOf("banner.tiff")).toBe("raster");
+    expect(thumbKindOf("logo.png")).toBe("raster");
+    expect(thumbKindOf("logo.psd")).toBeNull();
+    expect(thumbKindOf("files.zip")).toBeNull();
+    expect(thumbKindOf("noext")).toBeNull();
   });
 });

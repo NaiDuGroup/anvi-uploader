@@ -2,35 +2,53 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { useLanguageStore } from "@/stores/useLanguageStore";
-import { libraryExt, libraryFileUrl, libraryHasImagePreview, type LibraryItem } from "./libraryClient";
+import { thumbKindOf } from "@/lib/library/libraryKeys";
+import { libraryExt, type LibraryItem } from "./libraryClient";
 
-/** Image preview of a library item (raster ≤ 15 MB), else its type label. */
-export function LibraryThumb({ item, className }: { item: LibraryItem; className?: string }) {
-  const noFile = useLanguageStore((s) => s.t.library.noFile);
-  const [broken, setBroken] = useState(false);
-  const showImg = libraryHasImagePreview(item) && !broken;
+export function libraryThumbUrl(id: string): string {
+  return `/api/admin/library/${id}/thumb`;
+}
+
+export function orderFileThumbUrl(fileId: string): string {
+  return `/api/admin/library/order-file-thumb/${fileId}`;
+}
+
+/**
+ * Preview image (server-rendered WebP: first PDF page, scaled raster / TIF),
+ * else — and when the preview fails — the file type label.
+ */
+export function ThumbImage({ src, fileName, className }: { src: string; fileName: string; className?: string }) {
+  const [state, setState] = useState<"loading" | "ok" | "failed">("loading");
+  const showImg = thumbKindOf(fileName) !== null && state !== "failed";
   return (
-    <div className={cn("flex items-center justify-center overflow-hidden bg-gray-50", className)}>
+    <div
+      className={cn(
+        "flex items-center justify-center overflow-hidden bg-gray-50",
+        showImg && state === "loading" && "animate-pulse",
+        className,
+      )}
+    >
       {showImg ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={libraryFileUrl(item.id)}
+          src={src}
           alt=""
           loading="lazy"
+          decoding="async"
           className="h-full w-full object-contain"
-          onError={() => setBroken(true)}
+          onLoad={() => setState("ok")}
+          onError={() => setState("failed")}
         />
       ) : (
-        <span
-          className={cn(
-            "rounded-md px-2 py-1 text-xs font-bold",
-            broken ? "bg-red-50 text-red-600" : "bg-white text-gray-500 ring-1 ring-gray-200",
-          )}
-        >
-          {broken ? noFile : libraryExt(item.fileName)}
+        <span className="rounded-md bg-white px-2 py-1 text-xs font-bold text-gray-500 ring-1 ring-gray-200">
+          {libraryExt(fileName)}
         </span>
       )}
     </div>
   );
+}
+
+/** Preview of a library item. */
+export function LibraryThumb({ item, className }: { item: Pick<LibraryItem, "id" | "fileName">; className?: string }) {
+  return <ThumbImage key={item.id} src={libraryThumbUrl(item.id)} fileName={item.fileName} className={className} />;
 }

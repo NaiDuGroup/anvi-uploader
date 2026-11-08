@@ -59,17 +59,8 @@ export async function libraryFetch<T>(url: string, init?: RequestInit): Promise<
   }
 }
 
-const PREVIEW_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "avif", "bmp"]);
-/** Above this the grid shows a type label instead of loading the whole image. */
-const PREVIEW_MAX_BYTES = 15 * 1024 * 1024;
-
 export function libraryFileUrl(id: string, download = false): string {
   return `/api/admin/library/${id}/file${download ? "?download=1" : ""}`;
-}
-
-export function libraryHasImagePreview(item: Pick<LibraryItem, "fileName" | "sizeBytes">): boolean {
-  const ext = item.fileName.split(".").pop()?.toLowerCase() ?? "";
-  return PREVIEW_EXTS.has(ext) && (item.sizeBytes == null || item.sizeBytes <= PREVIEW_MAX_BYTES);
 }
 
 export function libraryExt(fileName: string): string {
