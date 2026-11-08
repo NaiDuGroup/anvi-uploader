@@ -78,3 +78,25 @@ export async function returnGiftSetBoxStockForOrder(
   }
 }
 
+
+/**
+ * Box of a stored set line (restore from trash: the lines are read back from
+ * the database, not resolved). Only the group's first line carries `boxSku`.
+ */
+export async function takeGiftSetBoxStockForStoredLine(
+  tx: Tx,
+  line: { id: string; setGroupId: string | null; setData: unknown },
+  params: { orderId: string; orderNumber: number | null; createdById: string | null },
+): Promise<OrderProcurementMetaItem | null> {
+  if (!line.setGroupId) return null;
+  const set = parseOrderLineSetData(line.setData);
+  if (!set?.boxSku) return null;
+  return takeGiftSetBoxStock(tx, {
+    boxSku: set.boxSku,
+    quantity: set.quantity,
+    orderId: params.orderId,
+    orderNumber: params.orderNumber,
+    orderLineId: line.id,
+    createdById: params.createdById,
+  });
+}

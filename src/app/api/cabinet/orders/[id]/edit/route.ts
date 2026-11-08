@@ -64,6 +64,8 @@ export async function GET(
           dtfLineData: true,
           uvLineData: true,
           sublimationLineData: true,
+          setGroupId: true,
+          setData: true,
           productionStatus: true,
           files: {
             select: { id: true, fileName: true, copies: true, color: true, paperType: true, pageCount: true },
