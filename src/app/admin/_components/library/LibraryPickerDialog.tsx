@@ -126,7 +126,7 @@ export function LibraryPickerDialog({
               <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Макеты клиента{clientName ? ` — ${clientName}` : ""}
               </h3>
-              <ul className="grid gap-2 sm:grid-cols-2">{own.map(row)}</ul>
+              <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">{own.map(row)}</ul>
             </section>
           ) : null}
           {rest.length > 0 ? (
@@ -134,7 +134,7 @@ export function LibraryPickerDialog({
               <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 {allOwners ? "Все макеты" : "Общие"}
               </h3>
-              <ul className="grid gap-2 sm:grid-cols-2">{rest.map(row)}</ul>
+              <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">{rest.map(row)}</ul>
             </section>
           ) : null}
         </div>
