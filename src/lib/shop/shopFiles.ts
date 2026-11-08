@@ -1,7 +1,7 @@
 import "server-only";
 import { deleteLocalFile, readLocalFile, saveLocalFile } from "@/lib/local-storage";
 import { copyObject, deleteObjects, getObjectBytesIfSmall, isLocalObjectStorage } from "@/lib/r2";
-import { shopOrderFileKey } from "./orderRules";
+import { isShopOrderFileKey, shopOrderFileKey } from "./orderRules";
 
 /**
  * Storefront order files: copied from `uploads/` (deleted by the R2 lifecycle
@@ -25,7 +25,9 @@ export async function copyUploadToShopOrders(uploadKey: string): Promise<string 
   return (await copyObject(uploadKey, dest)) ? dest : null;
 }
 
-export async function deleteShopOrderFiles(keys: readonly string[]): Promise<void> {
+/** Deletes storefront copies only: any key outside `shop-orders/` (e.g. `library/`) is skipped. */
+export async function deleteShopOrderFiles(input: readonly string[]): Promise<void> {
+  const keys = input.filter(isShopOrderFileKey);
   if (keys.length === 0) return;
   if (isLocalObjectStorage()) {
     await Promise.all(keys.map((k) => deleteLocalFile(k)));

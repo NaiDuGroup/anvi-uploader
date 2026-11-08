@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isDealerOrderFileUrl, orderFileUrlIssues } from "@/lib/library/libraryKeys";
 import { nanoid } from "nanoid";
 import { ZodError } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -311,6 +312,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const validated = dealerWizardOrderSchema.parse(await request.json());
+    // Own uploads and links only: library / storefront keys are not the dealer's.
+    if (orderFileUrlIssues(validated.lines, (u) => isDealerOrderFileUrl(u, { dryRun: validated.dryRun })).length > 0) {
+      return NextResponse.json({ error: "Invalid file key", code: "invalid_file_url" }, { status: 400 });
+    }
 
     const contact = orderContactFromStudioCustomer(user.studioCustomer);
     if (!contact.phone || contact.phone.length < 8) {

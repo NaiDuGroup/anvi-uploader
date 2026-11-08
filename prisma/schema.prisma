@@ -871,6 +871,7 @@ model StudioCustomer {
   userAccount     User?
   invoices        Invoice[]
   fiscalInvoices  FiscalInvoice[] @relation("clientFiscalInvoices")
+  libraryFiles    LibraryFile[]
 
   @@index([phoneNormalized])
   @@map("clients")
@@ -1025,6 +1026,44 @@ model DesignAsset {
 
   @@index([category])
   @@map("design_assets")
+}
+
+/// «Библиотека макетов»: recurring artwork staff saved on purpose. The object
+/// is a server-side copy under `library/<clientId|common>/…` in the uploads
+/// bucket — outside the 7-day `uploads/` lifecycle rule — and new orders reuse
+/// `storageKey` as their `File.fileUrl` without copying (see `src/lib/library`).
+/// Owner: one client (`clientId`) or «Общий» (null, studio-wide).
+model LibraryFile {
+  id            String          @id @default(uuid())
+  /// Null = «Общий». A deleted client's items become common (like orders: SetNull).
+  clientId      String?         @map("client_id")
+  title         String
+  tags          String[]        @default([])
+  storageKey    String          @unique @map("storage_key")
+  fileName      String          @map("file_name")
+  sizeBytes     Float?          @map("size_bytes")
+  pixelWidth    Int?            @map("pixel_width")
+  pixelHeight   Int?            @map("pixel_height")
+  dpi           Float?
+  widthMm       Float?          @map("width_mm")
+  heightMm      Float?          @map("height_mm")
+  pageCount     Int?            @map("page_count")
+  /// Order / file it was saved from (plain ids: orders can be purged from the trash).
+  sourceOrderId String?         @map("source_order_id")
+  sourceFileId  String?         @map("source_file_id")
+  /// New orders created with this file (counted on order creation).
+  useCount      Int             @default(0) @map("use_count")
+  lastUsedAt    DateTime?       @map("last_used_at")
+  createdById   String?         @map("created_by_id")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  /// Soft delete («В архив»): hidden from the library and the picker.
+  archivedAt    DateTime?       @map("archived_at")
+  client        StudioCustomer? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([clientId])
+  @@index([sourceFileId])
+  @@map("library_files")
 }
 
 model File {

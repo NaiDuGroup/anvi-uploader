@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isDealerOrderFileUrl, orderFileUrlIssues } from "@/lib/library/libraryKeys";
 import { prisma } from "@/lib/prisma";
 import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
 import { getCustomerSessionUser } from "@/lib/auth";
@@ -216,6 +217,9 @@ export async function PUT(
 
   try {
     const input = dealerOrderUpdateSchema.parse(await request.json());
+    if (orderFileUrlIssues(input.lines, (u) => isDealerOrderFileUrl(u, { dryRun: input.dryRun })).length > 0) {
+      return NextResponse.json({ error: "Invalid file key", code: "invalid_file_url" }, { status: 400 });
+    }
     const result = await dealerEditOrder({
       orderId: id,
       actor: { userId: user.id, studioCustomerId: user.studioCustomerId },

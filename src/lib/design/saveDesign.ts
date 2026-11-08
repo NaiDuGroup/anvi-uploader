@@ -60,11 +60,13 @@ export async function uploadDesignRender(input: {
   fileName: string;
 }): Promise<DesignRenderKeys> {
   const printBlob = await exportCanvasAsBlob(input.exportCanvas, input.dpi);
-  const printUpload = await uploadFile(blobToFile(printBlob, input.fileName));
+  // `designRender` scope → `designs/…`: not under the 7-day `uploads/` lifecycle rule.
+  const printUpload = await uploadFile(blobToFile(printBlob, input.fileName), "designRender");
 
   const thumbBlob = await buildThumbnailBlob(input.exportCanvas);
   const thumbUpload = await uploadFile(
     blobToFile(thumbBlob, `thumb-${input.fileName}`),
+    "designRender",
   );
 
   return { renderKey: printUpload.fileUrl, thumbKey: thumbUpload.fileUrl };

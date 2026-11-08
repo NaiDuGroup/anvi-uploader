@@ -18,6 +18,8 @@ interface SearchParams {
   clientId?: string;
   /** Comma-separated Design Studio ids to prefill the wizard. */
   designs?: string;
+  /** «Повторить заказ»: order id to prefill a new order from. */
+  repeat?: string;
 }
 
 export default async function AdminNewOrderPage({
@@ -38,6 +40,7 @@ export default async function AdminNewOrderPage({
       fromInvoiceLineItemId={params.fromInvoiceLineItemId ?? null}
       initialClientId={params.clientId ?? null}
       initialDesigns={params.designs ?? null}
+      repeatOrderId={params.repeat ?? null}
     />
   );
 }

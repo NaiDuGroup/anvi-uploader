@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isDealerOrderFileUrl, orderFileUrlIssues } from "@/lib/library/libraryKeys";
 import { z, ZodError } from "zod";
 import { getCustomerSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -44,6 +45,9 @@ export async function POST(
 
   try {
     const body = bodySchema.parse(await request.json());
+    if (orderFileUrlIssues([{ files: body.files }], (u) => isDealerOrderFileUrl(u)).length > 0) {
+      return NextResponse.json({ error: "Invalid file key", code: "invalid_file_url" }, { status: 400 });
+    }
     const actor = { userId: user.id, studioCustomerId: user.studioCustomerId };
     if (body.kind === "replace") {
       const result = await ownerReplaceLineFile(prisma, {

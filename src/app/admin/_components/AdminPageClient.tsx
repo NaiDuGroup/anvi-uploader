@@ -26,6 +26,13 @@ import { Input } from "@/components/ui/input";
 import { FileThumb } from "@/components/FileThumb";
 import { FileMetaLine } from "@/components/FileMetaLine";
 import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
+import {
+  InLibraryBadge,
+  SaveFileToLibraryButton,
+  SaveOrderToLibraryLink,
+} from "@/app/admin/_components/library/LibraryFileControl";
+import { LibraryCompletionHint, type LibraryHintOrder } from "@/app/admin/_components/library/LibraryCompletionHint";
+import { LIBRARY_HINT_STATUSES, libraryHintCandidateIds } from "@/lib/library/libraryHint";
 import { ShopOrderBadge, ShopOrderRow } from "@/app/admin/_components/ShopOrderPanel";
 import { ShopTesterButton } from "@/app/admin/_components/ShopTesterButton";
 import { playNotificationSound } from "@/lib/notificationSound";
@@ -66,6 +73,7 @@ import {
   LayoutGrid,
   Printer,
   MoreHorizontal,
+  Repeat2,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { OrderStatus } from "@/lib/validations";
@@ -572,6 +580,10 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   // «Нужен макет» lines met by an order-level status write (kept, or the write refused).
   const { notice: statusNotice, show: showStatusNotice, hide: hideStatusNotice } = useStatusWriteNotice();
 
+  /** «Сохранить макеты в библиотеку?» after an order was set to ready / delivered. */
+  const [libraryHint, setLibraryHint] = useState<LibraryHintOrder | null>(null);
+  const closeLibraryHint = useCallback(() => setLibraryHint(null), []);
+
   const handleStatusChange = useCallback(
     async (orderId: string, newStatus: string) => {
       if (newStatus === "ISSUE") {
@@ -582,6 +594,20 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       try {
         const outcome = await updateOrder(orderId, { status: newStatus as OrderStatus });
         showStatusNotice(orderStatusWriteNotice(t, outcome));
+        if (outcome?.kind === "ok" && LIBRARY_HINT_STATUSES.has(newStatus)) {
+          const st = useOrdersStore.getState();
+          const order = st.orders.find((o) => o.id === orderId) ?? st.workshopOrders.find((o) => o.id === orderId);
+          const fileIds = order ? libraryHintCandidateIds(order.files) : [];
+          if (order && fileIds.length > 0) {
+            setLibraryHint({
+              orderId,
+              orderNumber: order.orderNumber,
+              orderClient: order.clientId ? { clientId: order.clientId, clientName: order.clientName ?? null } : null,
+              fileIds,
+              fileCount: order.files.length,
+            });
+          }
+        }
       } finally {
         setOrderSaving(null);
       }
@@ -1192,6 +1218,9 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       )}
 
       <StatusWriteNotice notice={statusNotice} onClose={hideStatusNotice} />
+      {libraryHint ? (
+        <LibraryCompletionHint key={libraryHint.orderId} order={libraryHint} onClose={closeLibraryHint} />
+      ) : null}
 
       {toast && (
         <div className="fixed top-4 right-4 max-sm:left-4 z-[60] flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-lg">
@@ -1351,6 +1380,9 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   order: {
     id: string;
     orderNumber: number;
+    /** Linked studio client: preselected owner of «В библиотеку». */
+    clientId?: string | null;
+    clientName?: string | null;
     /** Order status: line badges show only in the workshop phase. */
     status?: string;
     productType: string;
@@ -1369,6 +1401,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   const totalFiles = lineGroups.reduce((n, g) => n + (g.files?.length ?? 0), 0);
   const useAccordion = totalFiles >= FILES_ACCORDION_MIN;
   const showDetails = !useAccordion || expanded;
+  const orderClient = order.clientId ? { clientId: order.clientId, clientName: order.clientName ?? null } : null;
 
   const renderFileRow = (f: AdminOrderFileRow, lfQuantity?: number) => {
     const isLink = isExternalUrl(f.fileUrl);
@@ -1406,11 +1439,12 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
               >
                 {f.fileName}
               </button>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 {f.pageCount ? (
                   <span className="text-gray-400">{t.admin.pagesCount(f.pageCount)}</span>
                 ) : null}
                 <OrderFileLifecycleBadge fileUrl={f.fileUrl} />
+                <InLibraryBadge fileId={f.id} fileUrl={f.fileUrl} />
               </div>
               <FileMetaLine fileId={f.id} hideMissing className="block truncate whitespace-nowrap text-[10px] leading-tight max-sm:whitespace-normal" />
             </>
@@ -1438,14 +1472,23 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
             <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
           </a>
         ) : (
-          <a
-            href={`/api/download/${f.id}`}
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
-            title={t.admin.downloadFile}
-            aria-label={t.admin.downloadFile}
-          >
-            <Download className="h-4 w-4 shrink-0" aria-hidden />
-          </a>
+          <>
+            <SaveFileToLibraryButton
+              fileId={f.id}
+              fileUrl={f.fileUrl}
+              fileName={f.fileName}
+              orderNumber={order.orderNumber}
+              orderClient={orderClient}
+            />
+            <a
+              href={`/api/download/${f.id}`}
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+              title={t.admin.downloadFile}
+              aria-label={t.admin.downloadFile}
+            >
+              <Download className="h-4 w-4 shrink-0" aria-hidden />
+            </a>
+          </>
         )}
       </div>
     );
@@ -1463,6 +1506,12 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
             <Download className="h-3.5 w-3.5 shrink-0" aria-hidden />
             {t.admin.downloadAll}
           </a>
+          <SaveOrderToLibraryLink
+            orderId={order.id}
+            orderNumber={order.orderNumber}
+            fileCount={totalFiles}
+            orderClient={orderClient}
+          />
           {useAccordion && (
             <button
               type="button"
@@ -2003,6 +2052,17 @@ function AdminOrderCard({
                 <Flame className={cn("h-4 w-4", order.isPrio ? "text-red-500" : "text-gray-400")} aria-hidden />
                 {order.isPrio ? t.admin.prioOff : t.admin.prioOn}
               </DropdownMenu.Item>
+              {!isWorkshop && order.source !== "shop" && (
+                <DropdownMenu.Item asChild>
+                  <Link
+                    href={`/admin/orders/new?repeat=${order.id}`}
+                    className="flex min-h-11 cursor-pointer items-center gap-2.5 px-3 text-sm text-gray-700 outline-none data-[highlighted]:bg-gray-50"
+                  >
+                    <Repeat2 className="h-4 w-4 text-gray-400" aria-hidden />
+                    {t.library.repeatOrder}
+                  </Link>
+                </DropdownMenu.Item>
+              )}
               {!isWorkshop && (
                 <>
                   <DropdownMenu.Separator className="my-1 h-px bg-gray-100" />
@@ -2630,6 +2690,17 @@ const OrderTable = memo(function OrderTable({
                             <FileText className="w-4 h-4" />
                           )}
                         </button>
+                        {order.source !== "shop" && (
+                          <Link
+                            href={`/admin/orders/new?repeat=${order.id}`}
+                            className="p-1.5 rounded-md text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                            title={t.library.repeatOrder}
+                            aria-label={t.library.repeatOrder}
+                            data-testid="repeat-order"
+                          >
+                            <Repeat2 className="w-4 h-4" />
+                          </Link>
+                        )}
                         <button
                           type="button"
                           onClick={() => onDelete(order.id)}

@@ -59,7 +59,16 @@ import {
   type CustomerFormValue,
 } from "@/app/admin/_components/orderForms";
 import { resolveR2Key, uploadFile, type UploadResult } from "@/app/admin/_components/orderForms/uploadHelpers";
+import { WizardLibraryPickButton, WizardReuseInfo, WizardMissingFileNote, WizardExpiredPhotosNote } from "@/app/admin/_components/library/WizardLibraryParts";
+import { LibraryPickerDialog } from "@/app/admin/_components/library/LibraryPickerDialog";
+import type { LibraryItem } from "@/app/admin/_components/library/libraryClient";
+import {
+  loadRepeatOrderFiles,
+  reuseFromLibraryItem,
+  type WizardReusedFile,
+} from "@/app/admin/_components/library/wizardReuse";
 import { buildDesignFileName } from "@/lib/design/fileName";
+import { withoutMissingLayoutPhotos } from "./repeatOrder";
 import type { DesignListItemJson } from "@/lib/design/designJson";
 import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
 import type { NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
@@ -480,6 +489,12 @@ interface NewOrderPageClientProps {
   /** When set, wizard hydrates from GET /api/admin/orders/:id and PATCHes on save. */
   editOrderId?: string | null;
   /**
+   * «Повторить заказ»: prefill a NEW order from this order (same client and
+   * lines). Files come from the library or storage when still there; the
+   * others are flagged «файл нужно загрузить заново».
+   */
+  repeatOrderId?: string | null;
+  /**
    * Server-side bundle of catalog + economics data resolved by
    * {@link loadWizardBootstrap} during RSC render. Replaces the four
    * `useEffect` fetches we used to issue on mount, eliminating the
@@ -504,13 +519,22 @@ export interface AdminWizardSlot {
   sourceOrderLineId: string | null;
   /** New order only: artwork sent as a link (Google Drive, …) instead of a file. */
   linkUrl?: string;
+  /**
+   * Already stored artwork reused as is (no upload, no copy): «Из библиотеки»
+   * (`library/…`) or a file of the repeated order still in storage.
+   */
+  reuse?: WizardReusedFile;
+  /** «Повторить заказ»: the original file is gone — shown until a file is attached. */
+  missingFileName?: string;
+  /** «Повторить заказ»: layout photos dropped because they are gone from storage. */
+  expiredPhotoCount?: number;
 }
 
 /** Text the «подсказка типа» reads for a row: the order comment and the row's file name / link. */
 function typeHintInputForSlot(slot: AdminWizardSlot | undefined, notes: string): TypeHintInput {
   return {
     notes,
-    fileNames: [slot?.file?.name ?? slot?.existingFile?.fileName ?? null, slot?.linkUrl ?? null],
+    fileNames: [slot?.file?.name ?? slot?.existingFile?.fileName ?? slot?.reuse?.fileName ?? null, slot?.linkUrl ?? null],
   };
 }
 
@@ -552,7 +576,12 @@ function linkNotAllowedFor(productType: ProductType): boolean {
 }
 
 function slotHasArtwork(s: AdminWizardSlot): boolean {
-  return Boolean(s.file || s.existingFile || s.linkUrl);
+  return Boolean(s.file || s.existingFile || s.linkUrl || s.reuse);
+}
+
+/** Name shown for a row's artwork, or null when it has none. */
+function slotArtworkName(s: AdminWizardSlot): string | null {
+  return s.file?.name ?? s.existingFile?.fileName ?? s.reuse?.fileName ?? s.linkUrl ?? null;
 }
 
 type CatalogPick = { type: "catalog"; productId: string } | { type: "other" } | null;
@@ -614,6 +643,8 @@ interface SlotAssign {
    * forcing the manager to upload the same artwork again.
    */
   bcBackExistingFile: { id: string; fileName: string } | null;
+  /** «Повторить заказ»: reverse artwork reused from storage / the library (no upload). */
+  bcBackReuse?: WizardReusedFile | null;
   /**
    * Edit mode: the run and price the line was stored with. While the row's
    * paper, run, sides, tier and size still match, the row shows (and the
@@ -1539,10 +1570,10 @@ function bcArtworkKeys(
   a: SlotAssign,
 ): { front: BcArtworkKey | null; back: BcArtworkKey | null } {
   return {
-    front: slot.file ?? slot.existingFile?.id ?? null,
+    front: slot.file ?? slot.existingFile?.id ?? (slot.reuse ? resolveR2Key(slot.reuse.fileUrl) : null),
     back:
       a.bcSides === "two"
-        ? (a.bcBackFile ?? a.bcBackExistingFile?.id ?? null)
+        ? (a.bcBackFile ?? a.bcBackExistingFile?.id ?? (a.bcBackReuse ? resolveR2Key(a.bcBackReuse.fileUrl) : null))
         : null,
   };
 }
@@ -1823,6 +1854,7 @@ function parseLayoutJson<T>(raw: unknown): T | undefined {
 
 /** Measure persisted layout image vs current catalog print size (e.g. after product type change). */
 async function validateLayoutFromExistingServerFile(
+  /** A stored file id, or a same-origin URL (`/api/admin/file-by-key?key=…` for reused keys). */
   fileId: string,
   expected: { width: number; height: number },
 ): Promise<SizeValidationResult> {
@@ -1833,7 +1865,7 @@ async function validateLayoutFromExistingServerFile(
     tolerance: 0.02,
   };
   try {
-    const res = await fetch(`/api/download/${fileId}`, {
+    const res = await fetch(fileId.startsWith("/") ? fileId : `/api/download/${fileId}`, {
       credentials: "same-origin",
     });
     if (!res.ok) return fallback;
@@ -1892,6 +1924,9 @@ async function measureSlotLayout(
   }
   if (slot.existingFile) {
     return validateLayoutFromExistingServerFile(slot.existingFile.id, expected);
+  }
+  if (slot.reuse) {
+    return validateLayoutFromExistingServerFile(resolveR2Key(slot.reuse.fileUrl), expected);
   }
   return null;
 }
@@ -1983,6 +2018,14 @@ async function buildAdminOrderUpdateLines(
             copies: 1,
             paperType: BUSINESS_CARD_FRONT_PAPER_TYPE,
           });
+        } else if (slot.reuse) {
+          files.push({
+            fileName: slot.reuse.fileName,
+            fileUrl: slot.reuse.fileUrl,
+            copies: 1,
+            color: "color",
+            paperType: BUSINESS_CARD_FRONT_PAPER_TYPE,
+          });
         } else {
           throw new Error("Each row needs a file");
         }
@@ -2003,6 +2046,14 @@ async function buildAdminOrderUpdateLines(
               copies: 1,
               paperType: BUSINESS_CARD_BACK_PAPER_TYPE,
             });
+          } else if (a.bcBackReuse) {
+            files.push({
+              fileName: a.bcBackReuse.fileName,
+              fileUrl: a.bcBackReuse.fileUrl,
+              copies: 1,
+              color: "color",
+              paperType: BUSINESS_CARD_BACK_PAPER_TYPE,
+            });
           } else {
             throw new Error("Back artwork required");
           }
@@ -2010,12 +2061,15 @@ async function buildAdminOrderUpdateLines(
         continue;
       }
 
-      if (slot.file || slot.linkUrl) {
+      if (slot.file || slot.linkUrl || slot.reuse) {
         onFileStatus?.(slot.id, "uploading");
-        // A pasted link is stored as is (name = address), like on create.
+        // A pasted link is stored as is (name = address), like on create;
+        // a reused library / stored key as well (no copy).
         const { fileName, fileUrl } = slot.file
           ? await uploadArtwork(slot.file)
-          : { fileName: slot.linkUrl!, fileUrl: slot.linkUrl! };
+          : slot.reuse
+            ? { fileName: slot.reuse.fileName, fileUrl: slot.reuse.fileUrl }
+            : { fileName: slot.linkUrl!, fileUrl: slot.linkUrl! };
         onFileStatus?.(slot.id, "done");
         if (a.productType === "paper_print") {
           const paperCopies = parseAdminCopiesInput(a.copiesStr);
@@ -2242,10 +2296,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     initialClientId = null,
     initialDesigns = null,
     editOrderId = null,
+    repeatOrderId: repeatOrderIdProp = null,
     bootstrap,
     audience = "staff",
   } = props;
   const dealerMode: boolean = audience === "dealer";
+  /** «Повторить заказ» (staff, new order only). */
+  const repeatOrderId: string | null = dealerMode || editOrderId ? null : repeatOrderIdProp;
+  /** Order the wizard hydrates from: the edited one, or the repeated one. */
+  const sourceOrderId: string | null = editOrderId ?? repeatOrderId;
+  /** Row whose «Из библиотеки» picker is open (`"new"` = add a row). */
+  const [libraryPickFor, setLibraryPickFor] = useState<string | null>(null);
   const lfBreakdownFullDetail = !dealerMode && isSuperAdmin(staffRole);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -2268,7 +2329,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
   const [step, setStep] = useState<WizardStep>("files");
   const [slots, setSlots] = useState<AdminWizardSlot[]>(() =>
-    editOrderId ? [] : [{ id: newSlotId(), sourceOrderLineId: null }],
+    sourceOrderId ? [] : [{ id: newSlotId(), sourceOrderLineId: null }],
   );
   const [assignBySlot, setAssignBySlot] = useState<Record<string, SlotAssign>>({});
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
@@ -2517,7 +2578,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const [uploadStatuses, setUploadStatuses] = useState<
     Record<string, "pending" | "uploading" | "done" | "error">
   >({});
-  const [editLoading, setEditLoading] = useState(Boolean(editOrderId));
+  const [editLoading, setEditLoading] = useState(Boolean(sourceOrderId));
   const [editLoadError, setEditLoadError] = useState("");
   /** The edited order does not exist (or was deleted): show «Заказ не найден» instead of an empty form. */
   const [editNotFound, setEditNotFound] = useState(false);
@@ -2588,7 +2649,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   }, [initialClientId, editOrderId]);
 
   useEffect(() => {
-    if (!editOrderId) {
+    if (!sourceOrderId) {
       setEditLoading(false);
       setEditLoadError("");
       return;
@@ -2600,9 +2661,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
     setEditNotFound(false);
 
+    // «Повторить заказ»: which of the order's files can be reused (library / storage).
+    let repeatFiles: Record<string, WizardReusedFile | null> | null = null;
+    let repeatMissingPhotos: Record<string, string[]> = {};
+    const repeatFilesPromise = repeatOrderId
+      ? loadRepeatOrderFiles(repeatOrderId).then((m) => {
+          repeatFiles = m.files;
+          repeatMissingPhotos = m.missingPhotos;
+        })
+      : Promise.resolve();
+
     // Dealers reopen their own order from a cost-free prefill (409 once printing started).
-    fetch(dealerMode ? `/api/cabinet/orders/${editOrderId}/edit` : `/api/admin/orders/${editOrderId}`)
+    fetch(dealerMode ? `/api/cabinet/orders/${sourceOrderId}/edit` : `/api/admin/orders/${sourceOrderId}`)
       .then(async (res) => {
+        await repeatFilesPromise;
         if (dealerMode && res.status === 409) throw new Error(DEALER_ORDER_LOCKED_CODE);
         if (res.status === 404) {
           if (!cancelled) {
@@ -2683,6 +2755,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         );
         const nextSlots: AdminWizardSlot[] = [];
         const nextAssign: Record<string, SlotAssign> = {};
+        /** Row → line of the hydrated order it came from. */
+        const slotRepeatSourceLine = new Map<string, string>();
 
         // «Набор»: units the saved order could not take (short → «Закупка»): not held.
         const shortVariantIds = procurementVariantIds(
@@ -2723,18 +2797,32 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           storedLineTypesRef.current.set(line.id, line.productType);
           for (const [rowIdx, f] of rowFiles.entries()) {
             const sid = newSlotId();
-            nextSlots.push({
-              id: sid,
-              existingFile: {
-                id: f.id,
-                fileName: f.fileName,
-                copies: f.copies,
-                color: f.color,
-                paperType: f.paperType,
-                pageCount: f.pageCount,
-              },
-              sourceOrderLineId: line.id,
-            });
+            slotRepeatSourceLine.set(sid, line.id);
+            if (repeatFiles) {
+              // A new order: reuse what is still stored, flag the rest. A
+              // multi-file line becomes one row per file, as the server stores
+              // new orders (`expandToOneFilePerLine`).
+              const reused: WizardReusedFile | null = repeatFiles[f.id] ?? null;
+              nextSlots.push({
+                id: sid,
+                reuse: reused ?? undefined,
+                missingFileName: reused ? undefined : f.fileName,
+                sourceOrderLineId: null,
+              });
+            } else {
+              nextSlots.push({
+                id: sid,
+                existingFile: {
+                  id: f.id,
+                  fileName: f.fileName,
+                  copies: f.copies,
+                  color: f.color,
+                  paperType: f.paperType,
+                  pageCount: f.pageCount,
+                },
+                sourceOrderLineId: line.id,
+              });
+            }
             const base = defaultAssign(
               mugs,
               nbs,
@@ -2844,12 +2932,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               base.bcSheetPaperId =
                 line.sheetPaperId ?? bcd?.paperSnapshot.id ?? null;
               base.bcBackExistingFile =
-                businessCardBack != null
+                businessCardBack != null && !repeatFiles
                   ? {
                       id: businessCardBack.id,
                       fileName: businessCardBack.fileName,
                     }
                   : null;
+              base.bcBackReuse =
+                businessCardBack != null && repeatFiles ? (repeatFiles[businessCardBack.id] ?? null) : null;
               if (bcd) {
                 // Staff «ручная цена» saved on the line comes back into the price field.
                 const storedManual = storedManualSheetLineTotalMdl(bcd);
@@ -2931,6 +3021,31 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           }
         }
 
+        // A repeated order is priced at today's rates: drop the sold-price snapshots.
+        // Layout photos gone from storage leave the mug / notebook / pen layout (with a warning).
+        if (repeatFiles) {
+          for (const sl of nextSlots) {
+            const lineId = slotRepeatSourceLine.get(sl.id);
+            const missing = lineId ? repeatMissingPhotos[lineId] : undefined;
+            const a = nextAssign[sl.id];
+            if (!missing?.length || !a) continue;
+            const gone = new Set(missing);
+            const mug = withoutMissingLayoutPhotos(a.mugLayoutData ?? undefined, gone);
+            const nb = withoutMissingLayoutPhotos(a.notebookLayoutData ?? undefined, gone);
+            const pen = withoutMissingLayoutPhotos(a.penLayoutData ?? undefined, gone);
+            const removed = mug.removed + nb.removed + pen.removed;
+            if (removed === 0) continue;
+            nextAssign[sl.id] = {
+              ...a,
+              mugLayoutData: mug.layout ?? a.mugLayoutData,
+              notebookLayoutData: nb.layout ?? a.notebookLayoutData,
+              penLayoutData: pen.layout ?? a.penLayoutData,
+            };
+            sl.expiredPhotoCount = removed;
+          }
+          for (const sid of Object.keys(nextAssign)) nextAssign[sid] = { ...nextAssign[sid]!, bcStored: null };
+        }
+
         // Derive the order-level tier from the hydrated LF lines. Client's
         // isDealer flag wins when a registered client is attached; otherwise
         // fall back to the first LF line's tier; else default to retail.
@@ -2950,17 +3065,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
         setSlots(nextSlots);
         setAssignBySlot(nextAssign);
-        const staffFee = dealerMode ? 0 : (order.dealerUrgencyFeeMdl ?? 0);
+        const staffFee = dealerMode || repeatFiles ? 0 : (order.dealerUrgencyFeeMdl ?? 0);
         setStaffUrgencyFeeMdl(staffFee);
         setCustomer({
           ...EMPTY_CUSTOMER_VALUE,
           phone: order.phone,
           clientName: order.clientName ?? "",
-          notes: order.notes ?? "",
+          // A repeat starts with an empty comment and a calculated price.
+          notes: repeatFiles ? "" : (order.notes ?? ""),
           // Dealer urgency fee still charged: the field is the goods price (price − fee);
           // the server adds the fee back on save.
           priceStr:
-            order.price != null && Number.isFinite(Number(order.price))
+            !repeatFiles && order.price != null && Number.isFinite(Number(order.price))
               ? round2(Number(order.price) - staffFee).toFixed(2)
               : "",
           selectedClient: order.studioClient ?? null,
@@ -2983,7 +3099,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     };
     // `dealerMode` is fixed for the page's lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editOrderId]);
+  }, [sourceOrderId]);
 
   const syncAssignForSlots = useCallback(() => {
     setAssignBySlot((prev) => {
@@ -4306,8 +4422,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     slots.forEach((s, index) => {
       const reason = slotAdvanceBlocker(s);
       if (reason) {
-        const name =
-          s.file?.name ?? s.existingFile?.fileName ?? s.linkUrl ?? np.fileNotChosenPlaceholder;
+        const name = slotArtworkName(s) ?? s.missingFileName ?? np.fileNotChosenPlaceholder;
         out.push(np.advanceBlockerRow(index + 1, name, reason));
       }
     });
@@ -4402,7 +4517,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       // A double-sided run needs the reverse artwork; the front comes from
       // the row's own file like every other product. In edit mode the
       // reverse may already be on the order instead of freshly picked.
-      if (a.bcSides === "two" && !a.bcBackFile && !a.bcBackExistingFile) {
+      if (a.bcSides === "two" && !a.bcBackFile && !a.bcBackExistingFile && !a.bcBackReuse) {
         return np.blockBcBack;
       }
       // Artwork made without bleed loses its edges in the cut.
@@ -4730,11 +4845,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       if (!a) throw new Error("Missing row config");
       const localFile: File | undefined = slot.file;
       const linkUrl: string | undefined = slot.linkUrl;
-      if (!localFile && !linkUrl) throw new Error("Missing file");
+      const reuse: WizardReusedFile | undefined = slot.reuse;
+      if (!localFile && !linkUrl && !reuse) throw new Error("Missing file");
       onSlot?.(slot.id, "uploading");
-      // A pasted link is stored as is (name = address), like on the home page.
+      // A pasted link is stored as is (name = address), like on the home page;
+      // a reused library / stored key too — nothing is uploaded or copied.
       const upload = (f: File | undefined): Promise<UploadResult> =>
-        f ? uploadArtwork(f) : Promise.resolve({ fileName: linkUrl!, fileUrl: linkUrl! });
+        f
+          ? uploadArtwork(f)
+          : Promise.resolve(
+              reuse ? { fileName: reuse.fileName, fileUrl: reuse.fileUrl } : { fileName: linkUrl!, fileUrl: linkUrl! },
+            );
 
       // A ready gift set: every row (print place) is its own line — notebook / pen / UV.
       if (a.giftSet?.role === "ready") {
@@ -4819,7 +4940,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         });
       } else if (isSheetProductType(a.productType)) {
         if (!a.bcSheetPaperId) throw new Error("Paper required");
-        if (a.bcSides === "two" && !a.bcBackFile) {
+        if (a.bcSides === "two" && !a.bcBackFile && !a.bcBackReuse) {
           throw new Error("Back artwork required");
         }
         const trim = bcAssignTrimSize(a);
@@ -4836,7 +4957,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         // One line, one or two files: the sheet is imposed in the workshop,
         // so the faces must stay together instead of becoming two lines.
         const front = await upload(localFile);
-        const back = a.bcBackFile ? await upload(a.bcBackFile) : null;
+        const back = a.bcBackFile
+          ? await upload(a.bcBackFile)
+          : a.bcSides === "two" && a.bcBackReuse
+            ? { fileName: a.bcBackReuse.fileName, fileUrl: a.bcBackReuse.fileUrl }
+            : null;
 
         lines.push({
           productType: a.productType,
@@ -5106,6 +5231,38 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
   const [linkInput, setLinkInput] = useState("");
 
+  /** Stored keys the rows already reuse (front and reverse): «уже в заказе» in the picker. */
+  const libraryKeysInOrder = useMemo(() => {
+    const keys = new Set<string>();
+    for (const s of slots) {
+      if (s.reuse && !s.file) keys.add(s.reuse.fileUrl);
+      const back = assignBySlot[s.id]?.bcBackReuse;
+      if (back && assignBySlot[s.id]?.bcSides === "two") keys.add(back.fileUrl);
+    }
+    return keys;
+  }, [slots, assignBySlot]);
+
+  /**
+   * «Из библиотеки»: the picked item becomes the row's file (its stored key is
+   * reused, nothing is uploaded). `"new"` → first empty row, else a new row on top.
+   */
+  function pickFromLibrary(item: LibraryItem): void {
+    const reuse = reuseFromLibraryItem(item);
+    const target = libraryPickFor;
+    setLibraryPickFor(null);
+    setSlots((prev) => {
+      if (target && target !== "new" && prev.some((s) => s.id === target)) {
+        return prev.map((s) => (s.id === target ? { ...s, reuse, missingFileName: undefined } : s));
+      }
+      const emptyIdx = prev.findIndex((s) => !slotHasArtwork(s));
+      if (emptyIdx !== -1) {
+        return prev.map((s, i) => (i === emptyIdx ? { ...s, reuse, missingFileName: undefined } : s));
+      }
+      if (prev.length >= MAX_WIZARD_SLOTS) return prev;
+      return [{ id: newSlotId(), reuse, sourceOrderLineId: null }, ...prev];
+    });
+  }
+
   /** Pasted link → its own row (into the first empty row, else a new one on top). */
   function addLinkSlot(): void {
     const url = linkInput.trim();
@@ -5260,11 +5417,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       const setItem = a ? giftSetRowItem(a) : null;
       const row: ConfirmLine = {
         id: s.id,
-        name:
-          s.file?.name ??
-          s.existingFile?.fileName ??
-          s.linkUrl ??
-          t.admin.newOrderPage.fileNotChosenPlaceholder,
+        name: slotArtworkName(s) ?? t.admin.newOrderPage.fileNotChosenPlaceholder,
         product:
           gs?.role === "ready" && setTemplate && gs.zoneId
             ? readyZoneLineType(gs.zoneId) === "notebook"
@@ -5351,6 +5504,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           </h1>
         </div>
       </header>
+      {repeatOrderId ? (
+        <p className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900" data-testid="repeat-order-banner">
+          {editLoading
+            ? t.library.repeatLoading
+            : slots.some((sl) => sl.missingFileName && !slotHasArtwork(sl))
+              ? t.library.repeatMissing
+              : t.library.repeatOk}
+        </p>
+      ) : null}
 
       <StepProgress
         current={stepIndex + 1}
@@ -5468,6 +5630,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                     {t.upload.addLink}
                   </Button>
                 </div>
+              </div>
+            )}
+            {!dealerMode && (
+              <div className="flex justify-center">
+                <WizardLibraryPickButton
+                  label={t.library.addFromLibrary}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50/60 px-3 text-sm font-medium text-amber-800 hover:bg-amber-100"
+                  onClick={() => setLibraryPickFor("new")}
+                />
               </div>
             )}
               </div>
@@ -5725,9 +5896,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
                         const lk = wizardLineKey(s);
                         const wizardFileShownName =
-                          s.file?.name ??
-                          s.existingFile?.fileName ??
-                          s.linkUrl ??
+                          slotArtworkName(s) ??
+                          s.missingFileName ??
                           t.admin.newOrderPage.fileNotChosenPlaceholder;
                         const layoutFocusAnchor =
                           Boolean(
@@ -5787,10 +5957,27 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     }
                                   />
                                 )}
+                                {s.reuse && !s.file ? (
+                                  <WizardReuseInfo
+                                    reuse={s.reuse}
+                                    onClear={() =>
+                                      setSlots((prev) =>
+                                        prev.map((row) => (row.id === s.id ? { ...row, reuse: undefined } : row)),
+                                      )
+                                    }
+                                  />
+                                ) : null}
+                                {!slotHasArtwork(s) && s.missingFileName ? (
+                                  <WizardMissingFileNote fileName={s.missingFileName} />
+                                ) : null}
+                {s.expiredPhotoCount ? <WizardExpiredPhotosNote count={s.expiredPhotoCount} /> : null}
                                 {s.linkUrl && linkNotAllowedFor(a.productType) ? (
                                   <p className="ml-7 text-[11px] font-medium text-red-600">
                                     {t.admin.newOrderPage.linkNeedsFile}
                                   </p>
+                                ) : null}
+                                {!slotHasArtwork(s) && !dealerMode ? (
+                                  <WizardLibraryPickButton onClick={() => setLibraryPickFor(s.id)} />
                                 ) : null}
                                 {!slotHasArtwork(s) ? (
                                   <FileDropzone
@@ -7136,7 +7323,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 : "text-gray-700"
                           }`}
                         >
-                          {s.file?.name ?? s.existingFile?.fileName ?? s.linkUrl ?? "—"}
+                          {slotArtworkName(s) ?? "—"}
                         </span>
                       </li>
                     );
@@ -7222,6 +7409,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         ) : null}
       </div>
     </div>
+      {libraryPickFor !== null ? (
+        <LibraryPickerDialog
+          usedKeys={libraryKeysInOrder}
+          clientId={customer.selectedClient?.id ?? null}
+          clientName={
+            customer.selectedClient
+              ? customer.selectedClient.companyName || customer.selectedClient.personName || customer.selectedClient.phone
+              : null
+          }
+          onClose={() => setLibraryPickFor(null)}
+          onPick={pickFromLibrary}
+        />
+      ) : null}
       <StockItemPickerModal
         open={stockPicker !== null}
         onClose={() => setStockPicker(null)}

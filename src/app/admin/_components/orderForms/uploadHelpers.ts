@@ -32,7 +32,11 @@ export interface UploadResult {
   fileUrl: string;
 }
 
-export async function uploadFile(file: File): Promise<UploadResult> {
+/**
+ * `scope` picks the storage prefix (`uploadScopePolicy.ts`); omitted = an order
+ * file under `uploads/` (deleted by the R2 lifecycle rule after 7 days).
+ */
+export async function uploadFile(file: File, scope?: "designRender"): Promise<UploadResult> {
   const res = await fetch("/api/upload-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -40,6 +44,7 @@ export async function uploadFile(file: File): Promise<UploadResult> {
       fileName: file.name,
       contentType: file.type || "application/octet-stream",
       fileSize: file.size,
+      ...(scope ? { scope } : {}),
     }),
   });
   if (!res.ok) throw new Error("Failed to get upload URL");

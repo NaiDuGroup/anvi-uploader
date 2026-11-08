@@ -80,14 +80,34 @@ function loadPdfJs(): Promise<PdfJs> {
     g.DOMMatrix ??= DOMMatrix;
     g.ImageData ??= ImageData;
     g.Path2D ??= Path2D;
-    const worker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+    // Loaded from node_modules at runtime (`webpackIgnore`): bundled by webpack
+    // the worker module fails to initialise («Object.defineProperty called on
+    // non-object»). next.config traces these files for the routes that render.
+    const worker: unknown = await import(/* webpackIgnore: true */ "pdfjs-dist/legacy/build/pdf.worker.mjs");
     (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = worker;
-    return import("pdfjs-dist/legacy/build/pdf.mjs");
+    return (await import(/* webpackIgnore: true */ "pdfjs-dist/legacy/build/pdf.mjs")) as PdfJs;
   })();
   return pdfJsPromise;
 }
 
 export async function pdfArtworkToPng(buffer: Buffer, dpi: number): Promise<Buffer> {
+  return renderFirstPage(buffer, () => dpi / PT_PER_INCH, "pdfArtworkToPng");
+}
+
+/**
+ * First page scaled to fit `maxSidePx` (preview thumbnails): a page of any
+ * physical size, a business card or a 3 m banner, comes out the same size.
+ */
+export async function pdfFirstPageToPng(buffer: Buffer, maxSidePx: number): Promise<Buffer> {
+  return renderFirstPage(buffer, (w, h) => maxSidePx / Math.max(w, h, 1), "pdfFirstPageToPng");
+}
+
+/** `scaleFor(widthPt, heightPt)` → render scale (1 = 72 dpi). */
+async function renderFirstPage(
+  buffer: Buffer,
+  scaleFor: (widthPt: number, heightPt: number) => number,
+  label: string,
+): Promise<Buffer> {
   const pdfjs = await loadPdfJs();
   let doc: Awaited<ReturnType<PdfJs["getDocument"]>["promise"]> | null = null;
   try {
@@ -99,7 +119,8 @@ export async function pdfArtworkToPng(buffer: Buffer, dpi: number): Promise<Buff
       CanvasFactory: NapiCanvasFactory,
     }).promise;
     const page = await doc.getPage(1);
-    const viewport = page.getViewport({ scale: dpi / PT_PER_INCH });
+    const base = page.getViewport({ scale: 1 });
+    const viewport = page.getViewport({ scale: scaleFor(base.width, base.height) });
     const width = Math.round(viewport.width);
     const height = Math.round(viewport.height);
     if (width <= 0 || height <= 0 || width > MAX_SIDE_PX || height > MAX_SIDE_PX) {
@@ -117,7 +138,7 @@ export async function pdfArtworkToPng(buffer: Buffer, dpi: number): Promise<Buff
     }).promise;
     return canvas.toBuffer("image/png");
   } catch (error) {
-    console.error("pdfArtworkToPng:", error);
+    console.error(`${label}:`, error);
     throw new Error(SHEET_ARTWORK_PDF_UNREADABLE);
   } finally {
     await doc?.destroy();

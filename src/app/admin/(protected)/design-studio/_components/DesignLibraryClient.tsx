@@ -58,6 +58,8 @@ export default function DesignLibraryClient() {
   const [query, setQuery] = useState("");
   const [tag, setTag] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  /** Designs whose preview no longer loads (old renders under `uploads/` expire after 7 days). */
+  const [brokenThumbs, setBrokenThumbs] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
   /** Ids queued for deletion; non-empty opens the confirm dialog. */
   const [deleteIds, setDeleteIds] = useState<string[]>([]);
@@ -220,12 +222,13 @@ export default function DesignLibraryClient() {
               </label>
               <Link href={`/admin/design-studio/${item.id}`} className="block">
                 <div className="flex aspect-[3/4] items-center justify-center bg-gray-50">
-                  {item.thumbKey ? (
+                  {item.thumbKey && !brokenThumbs.has(item.id) ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={resolveDesignFileUrl(item.thumbKey)}
                       alt=""
                       className="h-full w-full object-contain"
+                      onError={() => setBrokenThumbs((prev) => new Set(prev).add(item.id))}
                     />
                   ) : (
                     <span className="text-xs text-gray-400">{ds.noPreview}</span>

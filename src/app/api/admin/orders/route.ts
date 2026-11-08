@@ -24,6 +24,8 @@ import {
   createOrderWithResolvedLines,
   resolveOrderLines,
 } from "@/lib/orderCreate/orderLines";
+import { isStaffOrderFileUrl, orderFileUrlIssues } from "@/lib/library/libraryKeys";
+import { recordLibraryUse } from "@/lib/library/libraryUsage";
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -41,6 +43,17 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const validated = createAdminOrderSchema.parse(body);
+    // Order files must be our own storage keys (uploads / library / storefront copies) or http(s) links.
+    const badFileUrls = orderFileUrlIssues(
+      [...(validated.lines ?? []), { files: validated.files ?? [] }],
+      isStaffOrderFileUrl,
+    );
+    if (badFileUrls.length > 0) {
+      return NextResponse.json(
+        { error: "Invalid file key", code: "invalid_file_url", fields: badFileUrls },
+        { status: 400 },
+      );
+    }
 
     let clientId: string | null | undefined = validated.clientId ?? undefined;
     let phoneForOrder = validated.phone;
@@ -105,6 +118,8 @@ export async function POST(request: NextRequest) {
       resolved,
       actorId: user.id,
       afterCreate: async (tx, out) => {
+        // «Из библиотеки»: count one use of each library file the order reuses.
+        await recordLibraryUse(tx, resolved.flatMap((r) => r.input.files.map((f) => f.fileUrl)));
         if (!validated.fromInvoiceLineItemId) return;
         const lineItem = await tx.invoiceLineItem.findUnique({
           where: { id: validated.fromInvoiceLineItemId },

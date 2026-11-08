@@ -12,6 +12,7 @@ import { corporateEn } from "./corporate/en";
 import { shopReportEn } from "./shopReport/en";
 import { shopFunnelEn } from "./shopFunnel/en";
 import { shopPromoEn } from "./shopPromo/en";
+import { libraryEn } from "./library/en";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const en: TranslationDictionary = {
@@ -165,6 +166,7 @@ export const en: TranslationDictionary = {
     mobileNavAria: "Mobile navigation",
     orderMoreActions: "More actions",
     appShellSubtitle: "Print studio",
+    navLibrary: "Design library",
     navClients: "Clients",
     navStock: "Stock",
     stockHubIntro: "Stock areas",
@@ -2940,6 +2942,7 @@ export const en: TranslationDictionary = {
     historyAction: "line",
     historyDerived: "(from lines)",
   },
+  library: libraryEn,
   giftSet: {
     typeLabel: "Gift set",
     typeHint: "Pen + notebook (+ mug) in a box, or a ready set with a thermos",

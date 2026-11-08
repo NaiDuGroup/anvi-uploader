@@ -12,6 +12,7 @@ import { corporateRu } from "./corporate/ru";
 import { shopReportRu } from "./shopReport/ru";
 import { shopFunnelRu } from "./shopFunnel/ru";
 import { shopPromoRu } from "./shopPromo/ru";
+import { libraryRu } from "./library/ru";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ru: TranslationDictionary = {
@@ -165,6 +166,7 @@ export const ru: TranslationDictionary = {
     mobileNavAria: "Мобильная навигация",
     orderMoreActions: "Ещё действия",
     appShellSubtitle: "Типография",
+    navLibrary: "Библиотека макетов",
     navClients: "Клиенты",
     navStock: "Склад",
     stockHubIntro: "Разделы склада",
@@ -3116,6 +3118,7 @@ export const ru: TranslationDictionary = {
     historyAction: "позиция",
     historyDerived: "(по позициям)",
   },
+  library: libraryRu,
   giftSet: {
     typeLabel: "Набор",
     typeHint: "Ручка + блокнот (+ кружка) в коробке или готовый набор с термосом",

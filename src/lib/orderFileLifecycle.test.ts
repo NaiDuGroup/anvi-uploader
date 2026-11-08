@@ -24,6 +24,13 @@ describe("parseOrderFileUploadedAt", () => {
     expect(parseOrderFileUploadedAt("company/logo/1701234567890-abc-logo.png")).toBeNull();
   });
 
+  it("returns null for «Библиотека макетов» keys (library/ never expires, no badge)", () => {
+    expect(parseOrderFileUploadedAt("library/common/abcDEF1234-logo.pdf")).toBeNull();
+    expect(parseOrderFileUploadedAt("library/3f1c2a9e-1b2c-4d5e-8f90-123456789abc/1701234567890-abcdefgh-logo.pdf")).toBeNull();
+    expect(parseOrderFileExpiryAt("library/common/abcDEF1234-logo.pdf")).toBeNull();
+    expect(parseOrderFileExpiryAt("designs/1701234567890-abcdefgh-render.png")).toBeNull();
+  });
+
   it("returns null when the timestamp prefix is missing or malformed", () => {
     expect(parseOrderFileUploadedAt("uploads/no-timestamp-here.pdf")).toBeNull();
     expect(parseOrderFileUploadedAt("uploads/123-short-ts.pdf")).toBeNull();

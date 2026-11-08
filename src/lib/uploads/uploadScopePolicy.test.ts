@@ -230,3 +230,17 @@ describe("upload keys", () => {
     expect(buildUploadKey(d.config.prefix, d.fileName, 123, "abcdefgh")).toBe("uploads/123-abcdefgh-evil.png");
   });
 });
+
+describe("designRender scope (Design Studio renders)", () => {
+  it("is staff only and lands under designs/ in the main bucket, outside the uploads/ lifecycle", () => {
+    expect(decideUploadRequest({ ...base, contentType: "image/png", scope: "designRender" }, anon)).toMatchObject({ ok: false, status: 401 });
+    const d = decideUploadRequest({ ...base, fileName: "render.png", contentType: "image/png", scope: "designRender" }, staff);
+    if (!d.ok) throw new Error("expected ok");
+    expect(d.config.bucket).toBe("uploads");
+    expect(buildUploadKey(d.config.prefix, d.fileName, 123, "abcdefgh")).toBe("designs/123-abcdefgh-render.png");
+  });
+
+  it("accepts images only", () => {
+    expect(decideUploadRequest({ ...base, scope: "designRender" }, staff)).toMatchObject({ ok: false, status: 415 });
+  });
+});
