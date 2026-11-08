@@ -220,6 +220,32 @@ export function computeUvConsumption(
   };
 }
 
+/**
+ * The «до минимума» floor of a UV line (0 = none).
+ *
+ * - Direct print for dealers: none (owner 2026-11-09, like large format) — a
+ *   dealer pays area × rate (each zone at least the zone minimum) + set-up fee.
+ * - A retail stock item: none (item + print, owner 2026-11-05).
+ * - A retail client item: the UV line minimum.
+ * - UV-DTF: stickers and client items the UV-DTF minimum (retail / dealer —
+ *   its own setting); a stock item on UV-DTF never had one.
+ */
+export function uvLineMinimumMdl(
+  source: UvItemSource,
+  technique: UvTechnique | undefined,
+  customerType: UvCustomerType | undefined,
+  settings: Pick<UvSettings, "minimumLineTotalMdl" | "uvDtfMinimumDealerMdl" | "uvDtfMinimumRetailMdl">,
+): number {
+  const transfer: boolean = source === "stickers" || technique === "transfer";
+  const dealer: boolean = customerType === "dealer";
+  if (transfer) {
+    if (source === "stock") return 0;
+    return dealer ? settings.uvDtfMinimumDealerMdl : settings.uvDtfMinimumRetailMdl;
+  }
+  if (dealer || source === "stock") return 0;
+  return settings.minimumLineTotalMdl;
+}
+
 export interface UvLineTotals {
   consumption: UvConsumption;
   pricing: UvLinePricing;
@@ -284,18 +310,7 @@ export function computeUvLineTotals(input: {
     varnishSurchargeTotalMdl +
     primerSurchargeTotalMdl +
     setupFeeMdl;
-  // A stock item's retail price stands (item + print, owner 2026-11-05: no line minimum on stock
-  // items); dealers keep the line minimum on direct UV until the owner decides (as before).
-  // Client items pay at least the line minimum; stickers and client items on UV-DTF the UV-DTF minimum
-  // (a stock item on UV-DTF never had one).
-  const lineMinimum: number =
-    source === "stock" && (transfer || !dealer)
-      ? 0
-      : transfer
-        ? dealer
-          ? settings.uvDtfMinimumDealerMdl
-          : settings.uvDtfMinimumRetailMdl
-        : settings.minimumLineTotalMdl;
+  const lineMinimum: number = uvLineMinimumMdl(source, input.technique, input.customerType, settings);
   const minimumLineUpliftMdl: number = roundMoney2(Math.max(0, lineMinimum - subtotal));
   const pricing: UvLinePricing = {
     tierMinQty: input.tierMinQty,

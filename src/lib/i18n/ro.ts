@@ -2464,6 +2464,7 @@ export const ro: TranslationDictionary = {
       lowres: (dpi) => `La această mărime doar ${dpi} dpi — imprimarea va fi neclară`,
       nodpi: "Fișierul nu are dpi — mărimea fizică nu poate fi verificată, doar proporțiile",
       blocked: "Macheta e mai mare decât mărimea comandată. Corectați mărimea sau încărcați fișierul potrivit.",
+      neither: (print, item) => `Macheta nu corespunde nici mărimii imprimării ${print}, nici mărimii articolului ${item}`,
     },
     card: {
       dpi: (dpi, size) => `~${dpi} dpi la ${size} mm`,

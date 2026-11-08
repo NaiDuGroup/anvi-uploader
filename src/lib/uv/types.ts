@@ -24,6 +24,22 @@ export interface UvItemSnapshot {
 export interface UvClientItem {
   description: string;
   notes: string | null;
+  /**
+   * Real size of the client's item (cm), e.g. the whole lid of a box; the zones
+   * are the print size inside it. Required for dealers since 2026-11-09; absent
+   * on older lines.
+   */
+  itemWidthCm?: number | null;
+  itemHeightCm?: number | null;
+  /** Photo of the actual item / material (R2 `uploads/` key). Not artwork: never laid out or printed. */
+  photo?: UvItemPhoto | null;
+}
+
+/** Photo of a client's item, stored in the line data (not a `File` row, so it is never artwork). */
+export interface UvItemPhoto {
+  /** R2 key under `uploads/`. */
+  fileUrl: string;
+  fileName: string;
 }
 
 export interface UvLineZone {

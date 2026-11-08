@@ -2455,6 +2455,7 @@ export const en: TranslationDictionary = {
       lowres: (dpi) => `Only ${dpi} dpi at this size — the print will be blurry`,
       nodpi: "The file has no dpi — only proportions can be checked",
       blocked: "The artwork is larger than the ordered size. Fix the size or upload a file of that size.",
+      neither: (print, item) => `The artwork matches neither the print size ${print} nor the item size ${item}`,
     },
     card: {
       dpi: (dpi, size) => `~${dpi} dpi at ${size} mm`,

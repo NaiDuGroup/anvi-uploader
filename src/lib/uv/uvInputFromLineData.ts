@@ -9,7 +9,14 @@ export function uvInputFromLineData(data: UvLineData | null): UvLineInput | unde
     technique: data.technique ?? "direct",
     variantId: data.item?.variantId,
     clientItem: data.clientItem
-      ? { description: data.clientItem.description, notes: data.clientItem.notes ?? undefined }
+      ? {
+          description: data.clientItem.description,
+          notes: data.clientItem.notes ?? undefined,
+          ...(data.clientItem.itemWidthCm != null && data.clientItem.itemHeightCm != null
+            ? { itemWidthCm: data.clientItem.itemWidthCm, itemHeightCm: data.clientItem.itemHeightCm }
+            : {}),
+          ...(data.clientItem.photo ? { photo: data.clientItem.photo } : {}),
+        }
       : undefined,
     quantity: data.quantity,
     zones: data.zones.map((z) => ({

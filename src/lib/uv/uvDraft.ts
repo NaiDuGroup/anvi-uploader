@@ -10,7 +10,7 @@ import {
 import type { UvCatalogJson } from "@/lib/uv/dto";
 import { isUvErrorCode, type UvErrorCode } from "@/lib/uv/uvErrors";
 import { UvLineError } from "@/lib/uv/uvLineCalc";
-import { uvLineInputSchema, type UvLineInput } from "@/lib/uv/uvLineInput";
+import { uvLineInputSchema, uvZoneLargerThanItem, type UvLineInput } from "@/lib/uv/uvLineInput";
 import type { UvCustomerType, UvLineData } from "@/lib/uv/types";
 
 /** Editable (string-typed) state of one UV zone in the order wizard. */
@@ -38,6 +38,18 @@ export interface UvDraft {
   zones: UvZoneDraft[];
   /** Direct UV print (default) or UV-DTF through film; stickers are always UV-DTF. */
   technique?: UvTechnique;
+  /** Client item: its real size in cm as typed («Размер изделия»); the zones are the print size. */
+  itemWidthStr?: string;
+  itemHeightStr?: string;
+  /** Client item: uploaded photo of the item / material (`previewUrl`: local blob for the wizard only). */
+  photo?: UvDraftPhoto | null;
+}
+
+export interface UvDraftPhoto {
+  fileUrl: string;
+  fileName: string;
+  /** `blob:` URL of the picked file (this browser session only; never sent). */
+  previewUrl?: string;
 }
 
 export type UvQuote = { ok: true; data: UvLineData } | { ok: false; code: UvErrorCode | "uv_incomplete" };
@@ -171,6 +183,36 @@ function parseCm(value: string): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+/** Item size typed for a client item (cm), or null while incomplete. */
+export function uvDraftItemSize(draft: UvDraft): { widthCm: number; heightCm: number } | null {
+  if (draft.source !== "client") return null;
+  const widthCm = parseCm(draft.itemWidthStr ?? "");
+  const heightCm = parseCm(draft.itemHeightStr ?? "");
+  return widthCm && heightCm ? { widthCm, heightCm } : null;
+}
+
+function uvDraftClientItemExtras(draft: UvDraft): {
+  itemWidthCm?: number;
+  itemHeightCm?: number;
+  photo?: { fileUrl: string; fileName: string };
+} {
+  const size = uvDraftItemSize(draft);
+  return {
+    ...(size ? { itemWidthCm: size.widthCm, itemHeightCm: size.heightCm } : {}),
+    ...(draft.photo ? { photo: { fileUrl: draft.photo.fileUrl, fileName: draft.photo.fileName } } : {}),
+  };
+}
+
+/** Index of the first zone whose print size does not fit the typed item size (client items). */
+export function uvDraftZoneLargerThanItem(draft: UvDraft): number | null {
+  const size = uvDraftItemSize(draft);
+  if (!size) return null;
+  return uvZoneLargerThanItem(
+    { itemWidthCm: size.widthCm, itemHeightCm: size.heightCm },
+    draft.zones.map((z) => ({ widthCm: parseCm(z.widthStr) ?? null, heightCm: parseCm(z.heightStr) ?? null })),
+  );
+}
+
 export function uvDraftQuantity(draft: UvDraft): number {
   return parsePositiveInt(draft.quantityStr);
 }
@@ -186,7 +228,7 @@ export function uvDraftToInput(draft: UvDraft): UvLineInput | null {
     variantId: draft.source === "stock" ? (draft.variantId ?? undefined) : undefined,
     clientItem:
       draft.source === "client" && description
-        ? { description, notes: notes || undefined }
+        ? { description, notes: notes || undefined, ...uvDraftClientItemExtras(draft) }
         : undefined,
     quantity: uvDraftQuantity(draft),
     zones: draft.zones.map((z) => ({
@@ -211,6 +253,7 @@ export function uvDraftToInput(draft: UvDraft): UvLineInput | null {
  * price); {@link uvDraftToInput} still requires it to save the line.
  */
 export function quoteUvDraft(draft: UvDraft, customerType: UvCustomerType, catalog: UvCatalogJson): UvQuote {
+  if (uvDraftZoneLargerThanItem(draft) != null) return { ok: false, code: "uv_print_larger_than_item" };
   const priced: UvDraft =
     draft.source === "client" && !draft.description.trim() ? { ...draft, description: "—" } : draft;
   const input: UvLineInput | null = uvDraftToInput(priced);
@@ -240,6 +283,15 @@ export function uvDraftFromLineData(data: UvLineData): UvDraft {
     variantId: data.item?.variantId ?? null,
     description: data.clientItem?.description ?? "",
     notes: data.clientItem?.notes ?? "",
+    ...(data.source === "client"
+      ? {
+          itemWidthStr: data.clientItem?.itemWidthCm != null ? cmText(data.clientItem.itemWidthCm) : "",
+          itemHeightStr: data.clientItem?.itemHeightCm != null ? cmText(data.clientItem.itemHeightCm) : "",
+          photo: data.clientItem?.photo
+            ? { fileUrl: data.clientItem.photo.fileUrl, fileName: data.clientItem.photo.fileName }
+            : null,
+        }
+      : {}),
     quantityStr: String(data.quantity),
     zones: data.zones.map((z) => ({
       id: z.id,

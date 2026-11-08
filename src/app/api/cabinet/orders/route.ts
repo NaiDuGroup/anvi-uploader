@@ -338,7 +338,7 @@ export async function POST(request: NextRequest) {
     }
 
     // A print without a rate goes in unpriced: the studio prices it (order total null).
-    const { resolved, lfLineTotalsMdl } = await resolveOrderLines(lineInputs, { allowUnpricedPrint: true });
+    const { resolved, lfLineTotalsMdl } = await resolveOrderLines(lineInputs, { allowUnpricedPrint: true, dealerCabinet: true });
     const lineTotals = await dealerLineTotalsMdl(resolved, lfLineTotalsMdl);
     const goodsTotal = dealerOrderTotalMdl(lineTotals, dealerFreeLines(resolved));
 

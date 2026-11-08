@@ -2,6 +2,7 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
 import {
+  AdminOrderResolveError,
   adminOrderDtfRunQuantities,
   deductStockForAdminOrderLines,
   resolveAdminOrderLineProducts,
@@ -17,6 +18,7 @@ import { newLineProductionFields } from "@/lib/orderLineStatusSync";
 import type { AdminOrderLineInput } from "@/lib/validations";
 import { applyGiftSetsToResolved } from "@/lib/giftSet/giftSetServer";
 import type { StoredGiftSetPrice } from "@/lib/giftSet/giftSet";
+import { uvDealerLinesIssue } from "@/lib/uv/uvDealerClientItem";
 
 export interface ResolvedOrderLines {
   resolved: ResolvedAdminOrderLine[];
@@ -36,8 +38,14 @@ export async function resolveOrderLines(
     allowUnpricedPrint?: boolean;
     /** Edit: the order's stored set prices — a saved set keeps its price when the template changed since. */
     storedGiftSetPrices?: ReadonlyMap<string, StoredGiftSetPrice>;
+    /** Dealer cabinet: UV on a client's item needs its photo and real size (`uvDealerClientItemIssue`). */
+    dealerCabinet?: boolean;
   },
 ): Promise<ResolvedOrderLines> {
+  if (opts?.dealerCabinet) {
+    const issue = uvDealerLinesIssue(lineInputs);
+    if (issue) throw new AdminOrderResolveError(issue);
+  }
   const resolved: ResolvedAdminOrderLine[] = new Array(lineInputs.length);
   const lfLineTotalsMdl = new Map<number, number>();
 
@@ -63,7 +71,9 @@ export async function resolveOrderLines(
   const dtfRuns = adminOrderDtfRunQuantities(lineInputs);
   for (let i = 0; i < lineInputs.length; i++) {
     if (resolved[i]) continue;
-    resolved[i] = await resolveAdminOrderLineProducts(lineInputs[i]!, dtfRuns[i], opts);
+    resolved[i] = await resolveAdminOrderLineProducts(lineInputs[i]!, dtfRuns[i], {
+      allowUnpricedPrint: opts?.allowUnpricedPrint,
+    });
   }
   // «Набор»: template check + set price (staff manual set price: applied again by the admin route).
   await applyGiftSetsToResolved(resolved, { allowManualPrice: false, storedPrices: opts?.storedGiftSetPrices });

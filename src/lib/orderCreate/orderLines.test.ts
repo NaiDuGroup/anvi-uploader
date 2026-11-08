@@ -13,6 +13,7 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 const helpers = vi.hoisted(() => ({
+  AdminOrderResolveError: class AdminOrderResolveError extends Error {},
   adminOrderDtfRunQuantities: vi.fn(),
   deductStockForAdminOrderLines: vi.fn(),
   resolveAdminOrderLineProducts: vi.fn(),
@@ -20,7 +21,7 @@ const helpers = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/adminOrderCreateHelpers", () => helpers);
 
-import { createOrderWithResolvedLines } from "./orderLines";
+import { createOrderWithResolvedLines, resolveOrderLines } from "./orderLines";
 
 const resolved = [{ input: { productType: "mug", files: [] } }] as never;
 
@@ -52,5 +53,22 @@ describe("createOrderWithResolvedLines", () => {
     expect(tx.orderLog.create).toHaveBeenCalledWith({
       data: { orderId: "o1", userId: "client", action: "order_created" },
     });
+  });
+});
+
+describe("resolveOrderLines · dealer cabinet", () => {
+  const clientUv = (clientItem: Record<string, unknown>) =>
+    ({
+      productType: "uv_print",
+      files: [],
+      uv: { source: "client", quantity: 1, zones: [], clientItem: { description: "Крышка", ...clientItem } },
+    }) as never;
+
+  it("refuses UV on a client's item without photo or size before pricing anything", async () => {
+    await expect(resolveOrderLines([clientUv({})], { dealerCabinet: true })).rejects.toThrow("uv_item_photo_required");
+    await expect(
+      resolveOrderLines([clientUv({ photo: { fileUrl: "uploads/a.jpg", fileName: "a.jpg" } })], { dealerCabinet: true }),
+    ).rejects.toThrow("uv_item_size_required");
+    expect(helpers.resolveAdminOrderLineProducts).not.toHaveBeenCalled();
   });
 });

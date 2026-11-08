@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { Camera, Loader2, Plus, X } from "lucide-react";
+import { uploadFile } from "@/app/admin/_components/orderForms/uploadHelpers";
+import { useInkBox } from "@/lib/files/localInkBox";
+import { UvItemPhotoThumb } from "./UvItemPhotoThumb";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { PrintMethodCode, printMethodPagePath } from "@/lib/printMethods/methods";
 import {
@@ -30,6 +34,7 @@ import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
 import { marginPercentOnCostBasis, sellOnCostBasis } from "@/lib/accounting/vatBasis";
 import { cn } from "@/lib/utils";
 import { uvSizeCmLabel } from "@/lib/uv/uvSizeLabel";
+import { uvLineMinimumMdl } from "@/lib/uv/uvLineCalc";
 
 /** Compact trigger so MenuSelect fits the dense UV row (same as the DTF editor). */
 const selectButtonClass = "min-h-8 px-2.5 text-[13px]";
@@ -59,7 +64,13 @@ export interface UvLineEditorProps {
   customerType?: "retail" | "dealer";
   /** Dealer cabinet: show how the price is built, without costs and margin. */
   hideCosts?: boolean;
+  /** Dealer cabinet: a client's item needs its photo and real size (optional for staff). */
+  requireItemDetails?: boolean;
+  /** The row's artwork: a picked file, or a stored one (`url` to fetch it) — for the ink-area hint. */
+  artwork?: { file?: File | null; url?: string | null; fileName?: string | null } | null;
 }
+
+const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp";
 
 /** Label / value row of the profit breakdown (same layout as the large-format panel). */
 function Row({ label, value, className }: { label: React.ReactNode; value: React.ReactNode; className?: string }) {
@@ -82,8 +93,33 @@ export function UvLineEditor({
   onOpenItemPicker,
   customerType,
   hideCosts = false,
+  requireItemDetails = false,
+  artwork,
 }: UvLineEditorProps) {
   const e = t.uv.editor;
+  const photoInput = useRef<HTMLInputElement>(null);
+  const [photoState, setPhotoState] = useState<"idle" | "uploading" | "failed">("idle");
+  const isClient: boolean = value.source === "client";
+  const itemWidthStr: string = value.itemWidthStr ?? "";
+  const itemHeightStr: string = value.itemHeightStr ?? "";
+  const itemSizeMissing: boolean = !itemWidthStr.trim() || !itemHeightStr.trim();
+  const inkBox = useInkBox(
+    isClient || value.source === "stock" ? (artwork?.file ?? null) : null,
+    isClient || value.source === "stock" ? (artwork?.file ? null : (artwork?.url ?? null)) : null,
+    artwork?.file?.name ?? artwork?.fileName ?? null,
+  );
+
+  async function pickPhoto(file: File | undefined): Promise<void> {
+    if (!file) return;
+    setPhotoState("uploading");
+    try {
+      const { fileUrl, fileName } = await uploadFile(file);
+      onChange({ ...value, photo: { fileUrl, fileName, previewUrl: URL.createObjectURL(file) } });
+      setPhotoState("idle");
+    } catch {
+      setPhotoState("failed");
+    }
+  }
   const item: UvStockItemJson | undefined =
     value.source === "stock" ? catalog.items.find((i) => i.id === value.variantId) : undefined;
   const qty: number = uvDraftQuantity(value);
@@ -169,6 +205,73 @@ export function UvLineEditor({
           />
         </div>
         {!value.description.trim() && <p className="text-[11px] text-amber-700">{e.descriptionNeeded}</p>}
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[11px] font-semibold text-gray-600">{e.itemSize}</span>
+          <input
+            aria-label={`${e.itemSize}: ${e.widthCm}`}
+            placeholder={e.widthCm}
+            inputMode="decimal"
+            className={cn(numberClass, requireItemDetails && !itemWidthStr.trim() && "border-amber-300")}
+            value={itemWidthStr}
+            onChange={(ev) => onChange({ ...value, itemWidthStr: ev.target.value })}
+          />
+          <span className="text-gray-400">×</span>
+          <input
+            aria-label={`${e.itemSize}: ${e.heightCm}`}
+            placeholder={e.heightCm}
+            inputMode="decimal"
+            className={cn(numberClass, requireItemDetails && !itemHeightStr.trim() && "border-amber-300")}
+            value={itemHeightStr}
+            onChange={(ev) => onChange({ ...value, itemHeightStr: ev.target.value })}
+          />
+          <span className="text-xs text-gray-400">{e.cm}</span>
+          <span className="text-[11px] text-gray-500">· {e.itemSizeHint}</span>
+        </div>
+        {requireItemDetails && itemSizeMissing && <p className="text-[11px] text-amber-700">{e.itemSizeNeeded}</p>}
+        <div className="flex flex-wrap items-center gap-2">
+          {value.photo && <UvItemPhotoThumb photo={value.photo} label={e.photo} />}
+          <input
+            ref={photoInput}
+            type="file"
+            accept={PHOTO_ACCEPT}
+            className="hidden"
+            onChange={(ev) => {
+              void pickPhoto(ev.target.files?.[0]);
+              ev.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            disabled={photoState === "uploading"}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-lg border bg-white px-2.5 text-xs font-medium shadow-sm hover:bg-gray-50 disabled:opacity-60",
+              requireItemDetails && !value.photo ? "border-amber-300 text-amber-800" : "border-gray-200 text-gray-700",
+            )}
+            onClick={() => photoInput.current?.click()}
+          >
+            {photoState === "uploading" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Camera className="h-3.5 w-3.5" aria-hidden />
+            )}
+            {photoState === "uploading" ? e.photoUploading : value.photo ? e.photoReplace : e.photoAdd}
+          </button>
+          {value.photo ? (
+            <button
+              type="button"
+              className="text-xs text-gray-500 underline hover:text-red-600"
+              onClick={() => onChange({ ...value, photo: null })}
+            >
+              {e.photoRemove}
+            </button>
+          ) : (
+            !requireItemDetails && <span className="text-[11px] text-gray-400">{e.photoOptional}</span>
+          )}
+        </div>
+        {photoState === "failed" && <p className="text-[11px] text-red-600">{e.photoFailed}</p>}
+        {requireItemDetails && !value.photo && photoState !== "uploading" && (
+          <p className="text-[11px] text-amber-700">{e.photoNeeded}</p>
+        )}
         </div>
       )}
 
@@ -192,8 +295,13 @@ export function UvLineEditor({
         {value.zones.map((z, i) => {
           const zoneData = data?.zones.find((dz) => dz.id === z.id);
           const sizeFromItem: boolean = value.source === "stock" && i === 0 && item?.printArea != null;
+          const showInk: boolean = i === 0 && !sizeFromItem && !transfer && inkBox != null;
           return (
-            <div key={z.id} className="flex flex-wrap items-center gap-1">
+            <div key={z.id} className="flex flex-col gap-0.5">
+            {isClient && (
+              <span className="text-[11px] font-semibold text-gray-600">{e.printSize}</span>
+            )}
+            <div className="flex flex-wrap items-center gap-1">
               <MenuSelect<UvPlacement>
                 ariaLabel={e.placement}
                 className="w-36"
@@ -300,6 +408,29 @@ export function UvLineEditor({
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
+            </div>
+            {showInk && inkBox && (
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-600">
+                <span className="tabular-nums">
+                  {e.inkBox(
+                    `${uvSizeCmLabel(inkBox.widthCm, inkBox.heightCm, e.cm, (n) => formatMoney(n, locale))}${inkBox.assumedDpi ? ` ${e.inkBoxAt300}` : ""}`,
+                  )}
+                </span>
+                <button
+                  type="button"
+                  className="font-medium text-gold-text underline hover:text-gold-dark"
+                  onClick={() =>
+                    setZone(i, {
+                      widthStr: String(inkBox.widthCm),
+                      heightStr: String(inkBox.heightCm),
+                    })
+                  }
+                >
+                  {e.inkBoxUse}
+                </button>
+                {inkBox.whiteBackground && <span className="text-gray-500">· {e.inkBoxWhiteNote}</span>}
+              </p>
+            )}
             </div>
           );
         })}
@@ -419,13 +550,9 @@ export function UvProfitPanel({
       ? settings.uvDtfDealerPerMeterMdl
       : settings.uvDtfRetailPerMeterMdl
     : null;
-  // Retail stock items have no line minimum (see `computeUvLineTotals`).
-  const lineMinimum: number | null = settings && !(data.source === "stock" && (transfer || !dealer))
-    ? transfer
-      ? dealer
-        ? settings.uvDtfMinimumDealerMdl
-        : settings.uvDtfMinimumRetailMdl
-      : settings.minimumLineTotalMdl
+  // Same floor the price was built with (none for dealers' direct print, retail stock items).
+  const lineMinimum: number | null = settings
+    ? uvLineMinimumMdl(data.source, data.technique, data.customerType, settings) || null
     : null;
   const pct = (n: number): string => fmt(n);
 

@@ -157,6 +157,10 @@ export interface UvLineFacts {
   /** Client item: what the client brought. */
   clientItemDescription: string | null;
   clientItemNotes: string | null;
+  /** Client item: its real size (cm) and photo of the item / material (dealers since 2026-11-09). */
+  clientItemWidthCm?: number | null;
+  clientItemHeightCm?: number | null;
+  clientItemPhoto?: { fileUrl: string; fileName: string } | null;
   /** «Набор» C: the item is the set's own (thermos), not a client item; its card is grouped by it. */
   giftSetItem?: boolean;
   quantity: number;

@@ -27,10 +27,66 @@ export const uvZoneInputSchema = z.object({
   primer: z.boolean().default(false),
 });
 
+/** R2 key of an order upload (`uploads/…`): the item photo is never a link or a library / catalog key. */
+export function isUvItemPhotoKey(value: string): boolean {
+  return (
+    value.startsWith("uploads/") &&
+    value.length > "uploads/".length &&
+    !value.includes("..") &&
+    !value.includes("\\") &&
+    !/[\u0000-\u001f\u007f]/.test(value)
+  );
+}
+
+export const uvItemPhotoInputSchema = z.object({
+  fileUrl: z.string().max(1024).refine(isUvItemPhotoKey, "uv_item_photo_invalid"),
+  fileName: z.string().trim().min(1).max(255),
+});
+
 export const uvClientItemInputSchema = z.object({
   description: z.string().trim().min(1).max(UV_MAX_DESCRIPTION),
   notes: z.string().trim().max(UV_MAX_NOTES).optional(),
+  /** Real size of the item (cm); the zones are the print size inside it. */
+  itemWidthCm: z.number().positive().max(500).optional(),
+  itemHeightCm: z.number().positive().max(500).optional(),
+  /** Photo of the actual item / material (required for dealers, see `uvDealerClientItemIssue`). */
+  photo: uvItemPhotoInputSchema.optional(),
 });
+
+/** Small slack for typed sizes (mm rounding): a print 0.05 cm over the item still fits. */
+const FIT_SLACK_CM = 0.05;
+
+/**
+ * Does a print of `print` fit on an item of `item` (cm)? Either orientation:
+ * the print may be turned 90° on the item.
+ */
+export function uvPrintFitsItem(
+  print: { widthCm: number; heightCm: number },
+  item: { widthCm: number; heightCm: number },
+): boolean {
+  const fits = (w: number, h: number): boolean =>
+    w <= item.widthCm + FIT_SLACK_CM && h <= item.heightCm + FIT_SLACK_CM;
+  return fits(print.widthCm, print.heightCm) || fits(print.heightCm, print.widthCm);
+}
+
+/** First zone of a client item that does not fit its declared item size (null when all fit or no size). */
+export function uvZoneLargerThanItem(
+  clientItem: { itemWidthCm?: number | null; itemHeightCm?: number | null } | null | undefined,
+  zones: readonly { widthCm?: number | null; heightCm?: number | null }[],
+): number | null {
+  const w = clientItem?.itemWidthCm;
+  const h = clientItem?.itemHeightCm;
+  if (!(w != null && w > 0 && h != null && h > 0)) return null;
+  const index = zones.findIndex(
+    (z) =>
+      z.widthCm != null &&
+      z.heightCm != null &&
+      z.widthCm > 0 &&
+      z.heightCm > 0 &&
+      !uvPrintFitsItem({ widthCm: z.widthCm, heightCm: z.heightCm }, { widthCm: w, heightCm: h }),
+  );
+  return index >= 0 ? index : null;
+}
 
 /** What the operator submits for a UV line; prices are computed server-side. */
 export const uvLineInputSchema = z
@@ -53,6 +109,16 @@ export const uvLineInputSchema = z
     }
     if (data.source === "client" && !data.clientItem) {
       ctx.addIssue({ code: "custom", message: "uv_client_item_required", path: ["clientItem"] });
+    }
+    if (data.source === "client" && data.clientItem) {
+      const { itemWidthCm, itemHeightCm } = data.clientItem;
+      if ((itemWidthCm == null) !== (itemHeightCm == null)) {
+        ctx.addIssue({ code: "custom", message: "uv_item_size_required", path: ["clientItem"] });
+      }
+      const tooBig = uvZoneLargerThanItem(data.clientItem, data.zones);
+      if (tooBig != null) {
+        ctx.addIssue({ code: "custom", message: "uv_print_larger_than_item", path: ["zones", tooBig] });
+      }
     }
     const zoneIds = new Set(data.zones.map((z) => z.id));
     if (zoneIds.size !== data.zones.length) {

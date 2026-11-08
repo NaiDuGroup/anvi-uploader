@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle } from "lucide-react";
-import { checkArtworkSize, type ArtworkSizeIssue } from "@/lib/files/artworkSizeCheck";
+import { checkArtworkSizeForItem, type ArtworkSizeIssue } from "@/lib/files/artworkSizeCheck";
 import type { PrintSizeCm } from "@/lib/files/declaredPrintSize";
 import { formatFileMeta, sizeCm, type FileMetaJson } from "@/lib/files/fileMetaFormat";
 import { useFileMeta } from "@/lib/files/useFileMeta";
@@ -20,6 +20,7 @@ export function ArtworkSizeCheckLine({
   declared,
   className,
   metaEndpoint,
+  itemSize,
 }: {
   file?: File | null;
   fileId?: string | null;
@@ -27,6 +28,11 @@ export function ArtworkSizeCheckLine({
   className?: string;
   /** Where stored-file facts come from; the dealer wizard passes the cabinet endpoint. */
   metaEndpoint?: string;
+  /**
+   * UV on a client's item: the item's real size. A file made to the item size
+   * (print placed on the material) is as good as one made to the print size.
+   */
+  itemSize?: PrintSizeCm | null;
 }) {
   const { t, locale } = useLanguageStore();
   const local = useLocalFileMeta(file ?? null);
@@ -40,8 +46,9 @@ export function ArtworkSizeCheckLine({
   if (!meta || meta.metaStatus === "missing") return null;
 
   const line = formatFileMeta(meta, text, locale);
-  const check = checkArtworkSize(meta, declared);
+  const { check, against } = checkArtworkSizeForItem(meta, declared, itemSize);
   const declaredText = declared ? sizeCm(declared.widthCm * 10, declared.heightCm * 10, text, locale) : "";
+  const itemText = itemSize ? sizeCm(itemSize.widthCm * 10, itemSize.heightCm * 10, text, locale) : "";
   const fileText =
     check?.fileWidthCm && check.fileHeightCm
       ? sizeCm(check.fileWidthCm * 10, check.fileHeightCm * 10, text, locale)
@@ -52,11 +59,18 @@ export function ArtworkSizeCheckLine({
     if (issue === "lowres") return text.check.lowres(check?.effectiveDpi ?? 0);
     return text.check.nodpi;
   };
-  const issues = check?.issues ?? [];
+  // Neither the print nor the item size: one warning instead of «larger» / «aspect» (UV is not blocked).
+  const issues = (check?.issues ?? []).filter((i) => against !== "neither" || (i !== "larger" && i !== "aspect"));
 
   return (
     <div className={`text-[11px] leading-tight ${className ?? ""}`}>
       {line && <p className="tabular-nums text-gray-500">{line}</p>}
+      {against === "neither" && (
+        <p className="mt-0.5 flex items-start gap-1 text-amber-700">
+          <AlertTriangle className="mt-px h-3 w-3 shrink-0" aria-hidden />
+          {text.check.neither(declaredText, itemText)}
+        </p>
+      )}
       {issues.map((issue) => (
         <p
           key={issue}

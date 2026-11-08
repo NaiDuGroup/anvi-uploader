@@ -55,7 +55,9 @@ export function dealerEditUvLineData(raw: unknown): Json | null {
   return {
     ...pick(d, ["version", "source", "technique", "customerType", "quantity"]),
     item: item ? pick(item, ["variantId"]) : null,
-    clientItem: clientItem ? pick(clientItem, ["description", "notes"]) : null,
+    clientItem: clientItem
+      ? pick(clientItem, ["description", "notes", "itemWidthCm", "itemHeightCm", "photo"])
+      : null,
     zones: (d.zones as unknown[]).map((z) => {
       const zone = pick(obj(z), UV_ZONE_KEYS);
       return transfer ? { ...zone, whiteLayers: UV_DTF_WHITE_LAYERS } : zone;

@@ -67,6 +67,29 @@ export interface UvDictionary {
     pieces: (count: number) => string;
     /** Client item: price is shown before the description, but the order is not saved without it. */
     descriptionNeeded: string;
+    /** Client item: its real size, e.g. the whole box lid (cm). */
+    itemSize: string;
+    itemSizeHint: string;
+    /** Zone size label on client items: what is priced. */
+    printSize: string;
+    itemSizeNeeded: string;
+    photo: string;
+    photoAdd: string;
+    photoReplace: string;
+    photoRemove: string;
+    photoUploading: string;
+    photoFailed: string;
+    photoNeeded: string;
+    photoOptional: string;
+    photoOpen: string;
+    /** Ink bounding box found in the artwork («≈ 15,2×15 см»). */
+    inkBox: (size: string) => string;
+    inkBoxAt300: string;
+    inkBoxUse: string;
+    inkBoxWhiteNote: string;
+    /** «Далее» blockers (lowercase fragments like the wizard's). */
+    blockItemPhoto: string;
+    blockItemSize: string;
     picker: {
       title: string;
       close: string;
@@ -118,6 +141,9 @@ export interface UvDictionary {
     hint: string;
   };
   workshop: {
+    /** «изделие 33,8×26,2 см». */
+    itemSize: (size: string) => string;
+    itemPhoto: string;
     /** Workshop board section of UV-DTF sticker lines (technique «transfer»). */
     sectionUvDtf: string;
     downloadPng: string;

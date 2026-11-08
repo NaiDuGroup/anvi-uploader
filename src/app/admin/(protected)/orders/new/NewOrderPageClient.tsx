@@ -210,6 +210,7 @@ import {
   emptyUvStickersDraft,
   quoteUvDraft,
   uvDraftFromLineData,
+  uvDraftItemSize,
   uvDraftQuantity,
   uvDraftToInput,
   withUvItem,
@@ -4737,6 +4738,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         return !quote || quote.code === "uv_incomplete" ? np.blockIncomplete : t.uv.errors[quote.code];
       }
       if (a.uv?.source === "client" && !a.uv.description.trim()) return np.blockClientItemDescription;
+      // Dealers: the workshop must see the item and its real size (optional for staff).
+      if (dealerMode && !a.giftSet && a.uv?.source === "client") {
+        if (!uvDraftItemSize(a.uv)) return t.uv.editor.blockItemSize;
+        if (!a.uv.photo) return t.uv.editor.blockItemPhoto;
+      }
     }
     if (a.productType === "sublimation_print") {
       const quote = sublimationSlotQuote(a, sublimationCatalog);
@@ -6191,6 +6197,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                         ? giftSetDeclaredSize(a)
                                         : slotDeclaredSize(a, s.existingFile?.paperType ?? null, dtfCatalog)
                                     }
+                                    itemSize={!a.giftSet && a.productType === "uv_print" && a.uv ? uvDraftItemSize(a.uv) : null}
                                   />
                                 )}
                                 {s.reuse && !s.file ? (
@@ -7318,6 +7325,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   t={t}
                                   locale={locale}
                                   costsIncludeVat={printEconomics?.purchaseCostsIncludeVat ?? true}
+                                  requireItemDetails={dealerMode && !a.giftSet}
+                                  artwork={{
+                                    file: s.file ?? null,
+                                    url: s.existingFile
+                                      ? dealerMode
+                                        ? `/api/cabinet/files/${s.existingFile.id}/preview`
+                                        : `/api/preview/${s.existingFile.id}`
+                                      : null,
+                                    fileName: s.existingFile?.fileName ?? null,
+                                  }}
                                 />
                               )}
                               {a.productType === "sublimation_print" && a.sublimation && (

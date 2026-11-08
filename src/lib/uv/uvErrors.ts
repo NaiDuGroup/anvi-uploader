@@ -12,6 +12,13 @@ export const UV_ERROR_CODES = [
   "uv_placement_label_required",
   "uv_stickers_need_transfer",
   "uv_as_is_needs_transfer",
+  /** Dealers: a client's item needs a photo of the actual item / material. */
+  "uv_item_photo_required",
+  "uv_item_photo_invalid",
+  /** Dealers: a client's item needs its real size (width × height). */
+  "uv_item_size_required",
+  /** The print size does not fit inside the item size. */
+  "uv_print_larger_than_item",
 ] as const;
 export type UvErrorCode = (typeof UV_ERROR_CODES)[number];
 

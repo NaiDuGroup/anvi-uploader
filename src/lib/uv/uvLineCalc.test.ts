@@ -304,8 +304,8 @@ describe("buildUvLineData", () => {
       frame,
     );
     expect(two.pricing).toMatchObject({ printSellTotalMdl: 15, minimumLineUpliftMdl: 0, totalSellPriceMdl: 42 });
-    // Dealers keep the line minimum on direct UV (unchanged, until the owner decides).
-    expect(build({ quantity: 1 }, { ...SETTINGS, minimumLineTotalMdl: 100 }, "dealer", frame).pricing.totalSellPriceMdl).toBe(100);
+    // Dealers: no line minimum on direct UV either (owner 2026-11-09, like large format).
+    expect(build({ quantity: 1 }, { ...SETTINGS, minimumLineTotalMdl: 100 }, "dealer", frame).pricing.totalSellPriceMdl).toBe(17);
     expect(build({ quantity: 10 }, { ...SETTINGS, minimumLineTotalMdl: 100 }, "dealer", frame).pricing.totalSellPriceMdl).toBe(170);
   });
 

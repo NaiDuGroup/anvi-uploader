@@ -213,6 +213,7 @@ export async function dealerEditOrder(params: {
 
   const { resolved, lfLineTotalsMdl } = await resolveOrderLines(lineInputs, {
     allowUnpricedPrint: true,
+    dealerCabinet: true,
     // A saved set keeps its price (and a staff set price) when the template price changed since.
     storedGiftSetPrices: storedGiftSetPrices(preOrder.orderLines),
   });

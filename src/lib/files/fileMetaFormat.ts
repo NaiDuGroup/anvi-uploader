@@ -41,6 +41,8 @@ export interface FileMetaText {
     nodpi: string;
     /** Client cabinet: why the order cannot be sent. */
     blocked: string;
+    /** UV on a client's item: the file is neither the print size nor the item size. */
+    neither: (print: string, item: string) => string;
   };
   /** Business-card artwork, measured against the card size. */
   card: {

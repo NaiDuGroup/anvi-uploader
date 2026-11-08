@@ -11,6 +11,10 @@ export type UvPublicSummary = {
   giftSetItem?: boolean;
   /** Staff notes on the client's item; production views only. */
   clientItemNotes?: string | null;
+  /** Real size of the client's item, «33.8×26.2 см» (the zones are the print size inside it). */
+  clientItemSizeLabel?: string | null;
+  /** Photo of the client's item (the customer's own upload, so shown in the cabinet too). */
+  clientItemPhoto?: { fileUrl: string; fileName: string } | null;
   quantity: number;
   zones: {
     placement: UvLineData["zones"][number]["placement"];
@@ -56,6 +60,17 @@ export function toUvPublicSummary(
     clientItemDescription: data.clientItem?.description ?? null,
     ...(set?.kind === "ready" && set.zoneId && data.source === "client" ? { giftSetItem: true } : {}),
     ...(production ? { clientItemNotes: data.clientItem?.notes ?? null } : {}),
+    ...(data.clientItem?.itemWidthCm != null && data.clientItem.itemHeightCm != null
+      ? {
+          clientItemSizeLabel: uvZoneSizeLabel({
+            widthCm: data.clientItem.itemWidthCm,
+            heightCm: data.clientItem.itemHeightCm,
+          }),
+        }
+      : {}),
+    ...(data.clientItem?.photo
+      ? { clientItemPhoto: { fileUrl: data.clientItem.photo.fileUrl, fileName: data.clientItem.photo.fileName } }
+      : {}),
     quantity: data.quantity,
     zones: data.zones.map((z) => ({
       placement: z.placement,

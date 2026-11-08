@@ -5,6 +5,7 @@ import { uvItemDisplayName } from "@/lib/uv/stockItems";
 import { toUvPublicSummary, type UvPublicSummary } from "@/lib/uv/uvPublicSummary";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { UvItemPhotoThumb } from "./UvItemPhotoThumb";
 
 type UvSummaryZone = UvPublicSummary["zones"][number];
 
@@ -71,8 +72,11 @@ export function UvLineSummaryView({
 }) {
   const locale: string = useLanguageStore((s) => s.locale);
   const { item, notes, quantity, zones } = uvLineSummaryText(data, t, locale);
+  const sizeLabel: string | null = data.clientItemSizeLabel ?? null;
   return (
-    <div className={cn("text-xs leading-snug text-gray-700", className)}>
+    <div className={cn("flex items-start gap-2 text-xs leading-snug text-gray-700", className)}>
+      {data.clientItemPhoto && <UvItemPhotoThumb photo={data.clientItemPhoto} label={t.uv.workshop.itemPhoto} size="md" />}
+      <div className="min-w-0">
       <p className="flex items-center gap-1.5 font-medium text-gray-900">
         {data.item?.colorHex && (
           <span
@@ -83,9 +87,11 @@ export function UvLineSummaryView({
         )}
         {item}
       </p>
+      {sizeLabel && <p className="tabular-nums text-gray-600">{t.uv.workshop.itemSize(sizeLabel)}</p>}
       {notes && <p className="text-gray-500">{notes}</p>}
       <p className="tabular-nums">{quantity}</p>
       <p className="text-gray-500">{zones}</p>
+      </div>
     </div>
   );
 }

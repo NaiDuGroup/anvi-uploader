@@ -367,6 +367,10 @@ function uvLineFacts(data: UvLineData, files: readonly WorkshopBoardFile[]): UvL
     colorHex: data.item?.colorHex ?? null,
     clientItemDescription: data.clientItem?.description ?? null,
     clientItemNotes: data.clientItem?.notes ?? null,
+    ...(data.clientItem?.itemWidthCm != null && data.clientItem.itemHeightCm != null
+      ? { clientItemWidthCm: data.clientItem.itemWidthCm, clientItemHeightCm: data.clientItem.itemHeightCm }
+      : {}),
+    ...(data.clientItem?.photo ? { clientItemPhoto: data.clientItem.photo } : {}),
     quantity: data.quantity,
     ...(data.technique === "transfer"
       ? { transfer: true, filmMeters: data.consumption.filmMeters ?? 0 }

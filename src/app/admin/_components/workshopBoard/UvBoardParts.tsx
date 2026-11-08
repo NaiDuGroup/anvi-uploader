@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { UvLineFacts, UvZoneFacts } from "@/lib/workshopBoard/types";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { UvItemPhotoThumb } from "@/app/admin/_components/uv/UvItemPhotoThumb";
 
 function zoneText(z: UvZoneFacts, t: TranslationDictionary, giftSetItem: boolean): string {
   const place: string = z.placementLabel ?? t.uv.placements[z.placement];
@@ -60,6 +61,16 @@ export function UvBoardLineSummary({ facts }: { facts: UvLineFacts }) {
           </span>
         )}
       </div>
+      {(facts.clientItemPhoto || facts.clientItemWidthCm != null) && (
+        <div className="flex items-center gap-2">
+          {facts.clientItemPhoto && <UvItemPhotoThumb photo={facts.clientItemPhoto} label={t.uv.workshop.itemPhoto} />}
+          {facts.clientItemWidthCm != null && facts.clientItemHeightCm != null && (
+            <span className="font-medium tabular-nums text-gray-700">
+              {t.uv.workshop.itemSize(`${facts.clientItemWidthCm}×${facts.clientItemHeightCm} см`)}
+            </span>
+          )}
+        </div>
+      )}
       {facts.clientItemNotes && <p className="text-gray-500">{facts.clientItemNotes}</p>}
       <ul className="flex flex-wrap gap-1">
         {facts.zones.map((z) => (

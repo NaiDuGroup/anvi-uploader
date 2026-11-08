@@ -89,9 +89,14 @@ export function buildUvLineData(
     }
     unitItemCostMdl = ctx.item.unitCostMdl ?? 0;
   } else if (input.source === "client") {
+    const ci = input.clientItem;
     clientItem = {
-      description: input.clientItem?.description.trim() ?? "",
-      notes: input.clientItem?.notes?.trim() || null,
+      description: ci?.description.trim() ?? "",
+      notes: ci?.notes?.trim() || null,
+      ...(ci?.itemWidthCm != null && ci.itemHeightCm != null
+        ? { itemWidthCm: ci.itemWidthCm, itemHeightCm: ci.itemHeightCm }
+        : {}),
+      ...(ci?.photo ? { photo: { fileUrl: ci.photo.fileUrl, fileName: ci.photo.fileName.trim() } } : {}),
     };
   }
 
