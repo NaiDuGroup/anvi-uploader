@@ -19,6 +19,11 @@ import {
 } from "@/lib/stock/unified/materials";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
+import {
+  hasMaterialHistory,
+  lfMaterialHistoryCounts,
+  materialHasHistoryBody,
+} from "@/lib/stock/materialArchive";
 
 function prismaErrorCode(e: unknown): string | undefined {
   if (typeof e === "object" && e !== null && "code" in e) {
@@ -183,11 +188,19 @@ export async function DELETE(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await prisma.$transaction(async (tx) => {
+    // Hard delete only for a roll that never had history; otherwise it goes to the archive
+    // (Cascade / SetNull would erase receipts, write-offs, presets and order links).
+    const refused: boolean = await prisma.$transaction(async (tx) => {
+      const counts = await lfMaterialHistoryCounts(tx, id);
+      if (counts && hasMaterialHistory(counts)) return true;
       await tx.largeFormatMaterial.delete({ where: { id } });
-      // Stock item: removed when unused, otherwise kept inactive with its history.
+      // Stock item: unused here, so retiring removes it.
       if (existing.stockVariantId) await retireMaterialStockVariant(tx, existing.stockVariantId);
+      return false;
     });
+    if (refused) {
+      return NextResponse.json(materialHasHistoryBody("lf"), { status: 409 });
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("DELETE /api/admin/large-format-materials/[id]:", e);

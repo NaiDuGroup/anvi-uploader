@@ -931,6 +931,22 @@ export const en: TranslationDictionary = {
     sheetPaperCatalogDeleteConfirmTitle: "Delete this paper?",
     sheetPaperCatalogDeleteConfirmDescription: (paperName) =>
       `"${paperName}" will be removed from the catalog. Existing orders keep their data.`,
+    materialArchive: {
+      archive: "Archive",
+      unarchive: "Restore from archive",
+      deleteForever: "Delete forever",
+      showArchive: "Show archive",
+      badge: "Archived",
+      archiveConfirmTitle: "Move to archive?",
+      archiveConfirmDescription: (name) =>
+        `"${name}" will no longer be offered in new orders, the shop or price lists. Stock, receipts, write-offs and past orders are kept. You can restore it at any time.`,
+      deleteForeverConfirmTitle: "Delete forever?",
+      deleteForeverConfirmDescription: (name) =>
+        `"${name}" will be deleted permanently. This is only possible when the item has no history (orders, receipts, write-offs).`,
+      hasHistoryError:
+        "This item has history (orders, receipts or write-offs) and cannot be deleted. Keep it in the archive: the history stays.",
+      archiveEmpty: "The archive is empty.",
+    },
     sheetPaperCatalogSaveFailed: "Could not save the paper.",
     sheetPaperCatalogLoadError: "Could not load the paper catalog.",
     catalogStockReceiptBtn: "Stock in",

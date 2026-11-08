@@ -16,6 +16,11 @@ import {
   SHEET_PAPER_GSM_MAX,
   SHEET_PAPER_GSM_MIN,
 } from "@/lib/sheetProduct/sheetProductConfig";
+import {
+  hasMaterialHistory,
+  materialHasHistoryBody,
+  sheetPaperHistoryCounts,
+} from "@/lib/stock/materialArchive";
 
 const sheetSizeCm = z
   .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
@@ -116,11 +121,19 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    await prisma.$transaction(async (tx) => {
+    // Hard delete only for a paper that never had history; otherwise it goes to the archive
+    // (Cascade / SetNull would erase receipts, write-offs and order links).
+    const refused: boolean = await prisma.$transaction(async (tx) => {
+      const counts = await sheetPaperHistoryCounts(tx, id);
+      if (counts && hasMaterialHistory(counts)) return true;
       const deleted = await tx.sheetPaper.delete({ where: { id }, select: { stockVariantId: true } });
-      // Stock item: removed when unused, otherwise kept inactive with its history.
+      // Stock item: unused here, so retiring removes it.
       if (deleted.stockVariantId) await retireMaterialStockVariant(tx, deleted.stockVariantId);
+      return false;
     });
+    if (refused) {
+      return NextResponse.json(materialHasHistoryBody("paper"), { status: 409 });
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (

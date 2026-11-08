@@ -932,6 +932,22 @@ export const ro: TranslationDictionary = {
     sheetPaperCatalogDeleteConfirmTitle: "Ștergi hârtia?",
     sheetPaperCatalogDeleteConfirmDescription: (paperName) =>
       `„${paperName}” va fi ștearsă din catalog. Comenzile își păstrează datele.`,
+    materialArchive: {
+      archive: "Arhivează",
+      unarchive: "Scoate din arhivă",
+      deleteForever: "Șterge definitiv",
+      showArchive: "Arată arhiva",
+      badge: "Arhivă",
+      archiveConfirmTitle: "Trimiteți în arhivă?",
+      archiveConfirmDescription: (name) =>
+        `„${name}” nu va mai apărea la comenzile noi, în magazin și în liste de prețuri. Stocul, intrările, casările și comenzile vechi se păstrează. Poate fi scos din arhivă oricând.`,
+      deleteForeverConfirmTitle: "Ștergeți definitiv?",
+      deleteForeverConfirmDescription: (name) =>
+        `„${name}” va fi șters fără posibilitate de recuperare. Se poate doar dacă poziția nu are istoric (comenzi, intrări, casări).`,
+      hasHistoryError:
+        "Poziția are istoric (comenzi, intrări sau casări) — nu poate fi ștearsă. Lăsați-o în arhivă: istoricul se păstrează.",
+      archiveEmpty: "Arhiva este goală.",
+    },
     sheetPaperCatalogSaveFailed: "Nu s-a putut salva hârtia.",
     sheetPaperCatalogLoadError: "Nu s-a putut încărca catalogul de hârtie.",
     catalogStockReceiptBtn: "Intrare",

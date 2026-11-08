@@ -105,7 +105,8 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
       orderBy: [...PEN_VARIANT_ORDER_BY],
     }),
     // Rolls and papers: pricing rows + balance / cost of their unified stock variants.
-    findLfPricingMaterialsWithPresets(prisma),
+    // Archived rolls / papers (isActive = false) are not offered for new orders.
+    findLfPricingMaterialsWithPresets(prisma, { isActive: true }),
     findSheetPapersPricing(prisma, { isActive: true }),
     getOrCreateAccountingSettings(),
     loadPrinterInkTank(prisma, DEFAULT_PRINT_PROCESS),

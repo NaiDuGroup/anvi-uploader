@@ -938,6 +938,22 @@ export const ru: TranslationDictionary = {
     sheetPaperCatalogDeleteConfirmTitle: "Удалить бумагу?",
     sheetPaperCatalogDeleteConfirmDescription: (paperName) =>
       `«${paperName}» будет удалена из каталога. Заказы сохранят свои данные.`,
+    materialArchive: {
+      archive: "В архив",
+      unarchive: "Вернуть из архива",
+      deleteForever: "Удалить навсегда",
+      showArchive: "Показать архив",
+      badge: "Архив",
+      archiveConfirmTitle: "Отправить в архив?",
+      archiveConfirmDescription: (name) =>
+        `«${name}» исчезнет из выбора в новых заказах, магазине и прайсах. Остаток, приходы, списания и старые заказы сохранятся. Вернуть из архива можно в любой момент.`,
+      deleteForeverConfirmTitle: "Удалить навсегда?",
+      deleteForeverConfirmDescription: (name) =>
+        `«${name}» будет удалён без возможности восстановления. Это возможно только если у позиции нет истории (заказов, приходов, списаний).`,
+      hasHistoryError:
+        "У позиции есть история (заказы, приходы или списания) — удалить нельзя. Оставьте её в архиве: история сохранится.",
+      archiveEmpty: "В архиве ничего нет.",
+    },
     sheetPaperCatalogSaveFailed: "Не удалось сохранить бумагу.",
     sheetPaperCatalogLoadError: "Не удалось загрузить каталог бумаги.",
     catalogStockReceiptBtn: "Приход",

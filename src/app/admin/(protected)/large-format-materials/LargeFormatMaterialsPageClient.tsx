@@ -30,7 +30,6 @@ import {
   adminTableOutlineLabeledButtonClass,
 } from "@/app/admin/_components/AdminTableIconActions";
 import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
-import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 import { DatePicker } from "@/app/admin/_components/DatePicker";
 import { cn } from "@/lib/utils";
 import { stockConsumptionKindLabel } from "@/lib/stockConsumptionUi";
@@ -40,6 +39,14 @@ import type { StockVariantJson } from "@/lib/stock/unified/adminTypes";
 import { materialStockVariantJson } from "@/app/admin/_components/stock/materialStockVariant";
 import { StockInventoryModal } from "@/app/admin/_components/stock/unified/StockOperationModals";
 import { StockHistoryModal } from "@/app/admin/_components/stock/unified/StockHistoryModal";
+import {
+  MaterialArchiveDialog,
+  MaterialArchiveRowActions,
+  MaterialArchivedBadge,
+  setMaterialArchived,
+  type MaterialArchiveAction,
+} from "@/app/admin/_components/stock/MaterialArchiveDialog";
+import { visibleMaterialRows } from "@/lib/stock/materialArchive";
 
 type Row = AdminLargeFormatMaterialJson;
 
@@ -73,6 +80,8 @@ function rowMatchesSearch(r: Row, q: string): boolean {
   return r.name.toLowerCase().includes(s);
 }
 
+const LF_API = "/api/admin/large-format-materials";
+
 export default function LargeFormatMaterialsPageClient() {
   const { t } = useLanguageStore();
   const locale = useLanguageStore((s) => s.locale);
@@ -88,14 +97,15 @@ export default function LargeFormatMaterialsPageClient() {
   /** Stocktake / movement history on the roll's unified stock variant. */
   const [stockOp, setStockOp] = useState<null | { op: "inventory" | "history"; row: Row }>(null);
   const [presetsFor, setPresetsFor] = useState<Row | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
-  const [deleteBusy, setDeleteBusy] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [archiveAction, setArchiveAction] = useState<MaterialArchiveAction | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
+  const [unarchiveBusyId, setUnarchiveBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const filtered = useMemo(
-    () => items.filter((r) => rowMatchesSearch(r, search)),
-    [items, search],
+    () => visibleMaterialRows(items, showArchive).filter((r) => rowMatchesSearch(r, search)),
+    [items, search, showArchive],
   );
 
   const load = useCallback(async () => { await mutate(); }, [mutate]);
@@ -131,6 +141,15 @@ export default function LargeFormatMaterialsPageClient() {
           </div>
         </div>
         <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={showArchive}
+              onChange={(e) => setShowArchive(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            {t.admin.materialArchive.showArchive}
+          </label>
           <Button
             type="button"
             size="sm"
@@ -145,6 +164,9 @@ export default function LargeFormatMaterialsPageClient() {
 
       {error ? (
         <p className="mb-4 text-sm text-red-600">{error}</p>
+      ) : null}
+      {actionError ? (
+        <p className="mb-4 text-sm text-red-600" role="alert">{actionError}</p>
       ) : null}
 
       {!error && loading ? (
@@ -175,7 +197,10 @@ export default function LargeFormatMaterialsPageClient() {
               {filtered.map((r) => (
                 <tr
                   key={r.id}
-                  className="border-b border-gray-100 align-middle transition-colors hover:bg-amber-50/40"
+                  className={cn(
+                    "border-b border-gray-100 align-middle transition-colors hover:bg-amber-50/40",
+                    !r.isActive && "bg-gray-50/60 text-gray-400 opacity-70",
+                  )}
                 >
                   <td className="px-3 py-2.5 font-medium text-gray-900">{r.name}</td>
                   <td className="px-3 py-2.5 tabular-nums text-gray-700">{r.rollWidthMeters}</td>
@@ -233,18 +258,13 @@ export default function LargeFormatMaterialsPageClient() {
                     </span>
                   </td>
                   <td className="px-3 py-2.5">
-                    <span
-                      className={cn(
-                        "inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                        r.isActive
-                          ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100"
-                          : "bg-gray-100 text-gray-600 ring-1 ring-gray-200",
-                      )}
-                    >
-                      {r.isActive
-                        ? lf.lfMaterialCatalogBadgeActive
-                        : lf.lfMaterialCatalogBadgeInactive}
-                    </span>
+                    {r.isActive ? (
+                      <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-100">
+                        {lf.lfMaterialCatalogBadgeActive}
+                      </span>
+                    ) : (
+                      <MaterialArchivedBadge />
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     <AdminTableIconActions aria-label={lf.lfMaterialCatalogColActions}>
@@ -313,20 +333,22 @@ export default function LargeFormatMaterialsPageClient() {
                       >
                         <Pencil className="h-3.5 w-3.5" aria-hidden />
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                          adminTableOutlineIconButtonClass,
-                          "border-red-100 text-red-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700",
-                        )}
-                        title={lf.lfMaterialCatalogDelete}
-                        aria-label={lf.lfMaterialCatalogDelete}
-                        onClick={() => setPendingDelete(r)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      </Button>
+                      <MaterialArchiveRowActions
+                        archived={!r.isActive}
+                        unarchiveBusy={unarchiveBusyId === r.id}
+                        onArchive={() => setArchiveAction({ kind: "archive", id: r.id, name: r.name })}
+                        onDeleteForever={() => setArchiveAction({ kind: "delete", id: r.id, name: r.name })}
+                        onUnarchive={() => {
+                          void (async () => {
+                            setUnarchiveBusyId(r.id);
+                            setActionError(null);
+                            const err = await setMaterialArchived(LF_API, r.id, false, locale);
+                            setUnarchiveBusyId(null);
+                            if (err) setActionError(err);
+                            else void load();
+                          })();
+                        }}
+                      />
                     </AdminTableIconActions>
                   </td>
                 </tr>
@@ -336,46 +358,13 @@ export default function LargeFormatMaterialsPageClient() {
         </div>
       ) : null}
 
-      <AdminConfirmDialog
-        open={pendingDelete != null}
-        title={lf.lfMaterialCatalogDeleteConfirmTitle}
-        description={
-          pendingDelete != null
-            ? lf.lfMaterialCatalogDeleteConfirmDescription(pendingDelete.name)
-            : ""
-        }
-        confirmLabel={lf.lfMaterialCatalogDelete}
-        cancelLabel={lf.lfMaterialCatalogCancel}
-        busy={deleteBusy}
-        error={deleteError}
-        onClose={() => {
-          if (!deleteBusy) {
-            setPendingDelete(null);
-            setDeleteError(null);
-          }
-        }}
-        onConfirm={() => {
-          void (async () => {
-            if (!pendingDelete) return;
-            setDeleteBusy(true);
-            setDeleteError(null);
-            try {
-              const res = await fetch(
-                `/api/admin/large-format-materials/${pendingDelete.id}`,
-                { method: "DELETE" },
-              );
-              if (!res.ok) {
-                setDeleteError(await friendlyErrorText(res, locale));
-                return;
-              }
-              setPendingDelete(null);
-              void load();
-            } catch {
-              setDeleteError(await friendlyErrorText(null, locale));
-            } finally {
-              setDeleteBusy(false);
-            }
-          })();
+      <MaterialArchiveDialog
+        apiBase={LF_API}
+        action={archiveAction}
+        onClose={() => setArchiveAction(null)}
+        onDone={() => {
+          setArchiveAction(null);
+          void load();
         }}
       />
 

@@ -1034,6 +1034,20 @@ export interface TranslationDictionary {
     sheetPaperCatalogDelete: string;
     sheetPaperCatalogDeleteConfirmTitle: string;
     sheetPaperCatalogDeleteConfirmDescription: (paperName: string) => string;
+    /** Archive of rolls / sheet papers (archived = hidden from new orders, history kept). */
+    materialArchive: {
+      archive: string;
+      unarchive: string;
+      deleteForever: string;
+      showArchive: string;
+      badge: string;
+      archiveConfirmTitle: string;
+      archiveConfirmDescription: (name: string) => string;
+      deleteForeverConfirmTitle: string;
+      deleteForeverConfirmDescription: (name: string) => string;
+      hasHistoryError: string;
+      archiveEmpty: string;
+    };
     sheetPaperCatalogSaveFailed: string;
     sheetPaperCatalogLoadError: string;
     /** Shared detailed stock receipt UI for piece catalogs (mugs, notebooks, pens). */

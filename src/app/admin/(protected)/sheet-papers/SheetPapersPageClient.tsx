@@ -10,7 +10,6 @@ import {
   Pencil,
   Plus,
   Search,
-  Trash2,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,14 +25,20 @@ import {
   adminTableOutlineIconButtonClass,
   adminTableOutlineLabeledButtonClass,
 } from "@/app/admin/_components/AdminTableIconActions";
-import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
-import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 import { DatePicker } from "@/app/admin/_components/DatePicker";
 import { StockMovementKind, StockUnit } from "@/lib/stock/unified/kinds";
 import type { StockVariantJson } from "@/lib/stock/unified/adminTypes";
 import { materialStockVariantJson } from "@/app/admin/_components/stock/materialStockVariant";
 import { StockInventoryModal } from "@/app/admin/_components/stock/unified/StockOperationModals";
 import { StockHistoryModal } from "@/app/admin/_components/stock/unified/StockHistoryModal";
+import {
+  MaterialArchiveDialog,
+  MaterialArchiveRowActions,
+  MaterialArchivedBadge,
+  setMaterialArchived,
+  type MaterialArchiveAction,
+} from "@/app/admin/_components/stock/MaterialArchiveDialog";
+import { visibleMaterialRows } from "@/lib/stock/materialArchive";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { cn } from "@/lib/utils";
 import {
@@ -69,6 +74,8 @@ type ReceiptRow = {
 };
 
 /** Sheet paper warehouse: catalog, prices per printed sheet and stock history. */
+const PAPER_API = "/api/admin/sheet-papers";
+
 export default function SheetPapersPageClient() {
   const { t } = useLanguageStore();
   const locale = useLanguageStore((s) => s.locale);
@@ -82,15 +89,17 @@ export default function SheetPapersPageClient() {
   const [receiptFor, setReceiptFor] = useState<Row | null>(null);
   /** Stocktake / movement history on the paper's unified stock variant. */
   const [stockOp, setStockOp] = useState<null | { op: "inventory" | "history"; row: Row }>(null);
-  const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
-  const [deleteBusy, setDeleteBusy] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [archiveAction, setArchiveAction] = useState<MaterialArchiveAction | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
+  const [unarchiveBusyId, setUnarchiveBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
+    const visible = visibleMaterialRows(items, showArchive);
     const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((r) => r.name.toLowerCase().includes(q));
-  }, [items, search]);
+    if (!q) return visible;
+    return visible.filter((r) => r.name.toLowerCase().includes(q));
+  }, [items, search, showArchive]);
 
   const load = useCallback(async () => {
     await mutate();
@@ -127,18 +136,32 @@ export default function SheetPapersPageClient() {
             />
           </div>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          className="shrink-0"
-          onClick={() => setModal({ mode: "add" })}
-        >
-          <Plus className="h-4 w-4" aria-hidden />
-          {lf.sheetPaperCatalogAdd}
-        </Button>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={showArchive}
+              onChange={(e) => setShowArchive(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            {lf.materialArchive.showArchive}
+          </label>
+          <Button
+            type="button"
+            size="sm"
+            className="shrink-0"
+            onClick={() => setModal({ mode: "add" })}
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            {lf.sheetPaperCatalogAdd}
+          </Button>
+        </div>
       </div>
 
       <p className="mb-4 text-sm text-gray-600">{lf.sheetPaperCatalogIntro}</p>
+      {actionError ? (
+        <p className="mb-4 text-sm text-red-600" role="alert">{actionError}</p>
+      ) : null}
 
       {loadError ? (
         <p className="mb-4 text-sm text-red-600">{lf.sheetPaperCatalogLoadError}</p>
@@ -150,7 +173,9 @@ export default function SheetPapersPageClient() {
         <p className="text-sm text-gray-600">
           {items.length === 0
             ? lf.sheetPaperCatalogEmpty
-            : lf.sheetPaperCatalogSearchEmpty}
+            : search.trim()
+              ? lf.sheetPaperCatalogSearchEmpty
+              : lf.sheetPaperCatalogEmpty}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -173,7 +198,10 @@ export default function SheetPapersPageClient() {
               {filtered.map((r) => (
                 <tr
                   key={r.id}
-                  className="align-middle transition-colors hover:bg-amber-50/40"
+                  className={cn(
+                    "align-middle transition-colors hover:bg-amber-50/40",
+                    !r.isActive && "bg-gray-50/60 opacity-70",
+                  )}
                 >
                   <td className="px-3 py-2.5">
                     <p className="font-medium text-gray-900">{sheetPaperDisplayName(r)}</p>
@@ -199,18 +227,13 @@ export default function SheetPapersPageClient() {
                     {r.dealerPricePerSheet}
                   </td>
                   <td className="px-3 py-2.5">
-                    <span
-                      className={cn(
-                        "inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                        r.isActive
-                          ? "bg-emerald-50 text-emerald-800 ring-1 ring-emerald-100"
-                          : "bg-gray-100 text-gray-600 ring-1 ring-gray-200",
-                      )}
-                    >
-                      {r.isActive
-                        ? lf.lfMaterialCatalogBadgeActive
-                        : lf.lfMaterialCatalogBadgeInactive}
-                    </span>
+                    {r.isActive ? (
+                      <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-100">
+                        {lf.lfMaterialCatalogBadgeActive}
+                      </span>
+                    ) : (
+                      <MaterialArchivedBadge />
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-right">
                     <AdminTableIconActions aria-label={lf.sheetPaperCatalogColActions}>
@@ -265,20 +288,22 @@ export default function SheetPapersPageClient() {
                       >
                         <Pencil className="h-3.5 w-3.5" aria-hidden />
                       </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                          adminTableOutlineIconButtonClass,
-                          "border-red-100 text-red-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700",
-                        )}
-                        title={lf.sheetPaperCatalogDelete}
-                        aria-label={lf.sheetPaperCatalogDelete}
-                        onClick={() => setPendingDelete(r)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                      </Button>
+                      <MaterialArchiveRowActions
+                        archived={!r.isActive}
+                        unarchiveBusy={unarchiveBusyId === r.id}
+                        onArchive={() => setArchiveAction({ kind: "archive", id: r.id, name: r.name })}
+                        onDeleteForever={() => setArchiveAction({ kind: "delete", id: r.id, name: r.name })}
+                        onUnarchive={() => {
+                          void (async () => {
+                            setUnarchiveBusyId(r.id);
+                            setActionError(null);
+                            const err = await setMaterialArchived(PAPER_API, r.id, false, locale);
+                            setUnarchiveBusyId(null);
+                            if (err) setActionError(err);
+                            else void load();
+                          })();
+                        }}
+                      />
                     </AdminTableIconActions>
                   </td>
                 </tr>
@@ -288,45 +313,13 @@ export default function SheetPapersPageClient() {
         </div>
       )}
 
-      <AdminConfirmDialog
-        open={pendingDelete != null}
-        title={lf.sheetPaperCatalogDeleteConfirmTitle}
-        description={
-          pendingDelete != null
-            ? lf.sheetPaperCatalogDeleteConfirmDescription(pendingDelete.name)
-            : ""
-        }
-        confirmLabel={lf.sheetPaperCatalogDelete}
-        cancelLabel={lf.sheetPaperCatalogCancel}
-        busy={deleteBusy}
-        error={deleteError}
-        onClose={() => {
-          if (!deleteBusy) {
-            setPendingDelete(null);
-            setDeleteError(null);
-          }
-        }}
-        onConfirm={() => {
-          void (async () => {
-            if (!pendingDelete) return;
-            setDeleteBusy(true);
-            setDeleteError(null);
-            try {
-              const res = await fetch(`/api/admin/sheet-papers/${pendingDelete.id}`, {
-                method: "DELETE",
-              });
-              if (!res.ok) {
-                setDeleteError(await friendlyErrorText(res, locale));
-                return;
-              }
-              setPendingDelete(null);
-              await load();
-            } catch {
-              setDeleteError(await friendlyErrorText(null, locale));
-            } finally {
-              setDeleteBusy(false);
-            }
-          })();
+      <MaterialArchiveDialog
+        apiBase={PAPER_API}
+        action={archiveAction}
+        onClose={() => setArchiveAction(null)}
+        onDone={() => {
+          setArchiveAction(null);
+          void load();
         }}
       />
 
