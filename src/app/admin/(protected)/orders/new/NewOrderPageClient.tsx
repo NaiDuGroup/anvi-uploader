@@ -5028,6 +5028,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
   const [linkInput, setLinkInput] = useState("");
 
+  /** Stored keys the rows already reuse (front and reverse): «уже в заказе» in the picker. */
+  const libraryKeysInOrder = useMemo(() => {
+    const keys = new Set<string>();
+    for (const s of slots) {
+      if (s.reuse && !s.file) keys.add(s.reuse.fileUrl);
+      const back = assignBySlot[s.id]?.bcBackReuse;
+      if (back && assignBySlot[s.id]?.bcSides === "two") keys.add(back.fileUrl);
+    }
+    return keys;
+  }, [slots, assignBySlot]);
+
   /**
    * «Из библиотеки»: the picked item becomes the row's file (its stored key is
    * reused, nothing is uploaded). `"new"` → first empty row, else a new row on top.
@@ -7112,6 +7123,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     </div>
       {libraryPickFor !== null ? (
         <LibraryPickerDialog
+          usedKeys={libraryKeysInOrder}
           clientId={customer.selectedClient?.id ?? null}
           clientName={
             customer.selectedClient
