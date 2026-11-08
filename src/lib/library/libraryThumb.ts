@@ -35,7 +35,10 @@ export async function renderThumb(bytes: Buffer, kind: "pdf" | "raster"): Promis
     .toBuffer();
 }
 
-export type ThumbResult = { ok: true; bytes: Buffer } | { ok: false; reason: "no_preview" | "missing" };
+export type ThumbResult =
+  | { ok: true; bytes: Buffer }
+  /** `too_big` is final (the copy never changes); `no_preview` may be a render bug, so it is not remembered. */
+  | { ok: false; reason: "no_preview" | "too_big" | "missing" };
 
 /** Thumbnail of a stored file, rendered on the fly (no cache: order files expire anyway). */
 export async function thumbForStoredFile(key: string, fileName: string): Promise<ThumbResult> {
@@ -43,7 +46,7 @@ export async function thumbForStoredFile(key: string, fileName: string): Promise
   if (!kind) return { ok: false, reason: "no_preview" };
   const src = await readSource(key);
   if (src === "missing") return { ok: false, reason: "missing" };
-  if (src === "too_big") return { ok: false, reason: "no_preview" };
+  if (src === "too_big") return { ok: false, reason: "too_big" };
   try {
     return { ok: true, bytes: await renderThumb(src, kind) };
   } catch (error) {
@@ -55,7 +58,9 @@ export async function thumbForStoredFile(key: string, fileName: string): Promise
 /**
  * Thumbnail of a library item, cached next to the copies under
  * `library/thumbs/<id>.webp` (rendered once on first view; a `.none` marker
- * remembers files that cannot be previewed so they are not re-read every time).
+ * remembers copies too big to preview so they are not re-read every time).
+ * Render failures are not remembered (a fix would never reach them); the
+ * route lets the browser cache that 404 for a day instead.
  */
 export async function libraryItemThumb(item: { id: string; storageKey: string; fileName: string }): Promise<ThumbResult> {
   if (!thumbKindOf(item.fileName)) return { ok: false, reason: "no_preview" };
@@ -63,14 +68,14 @@ export async function libraryItemThumb(item: { id: string; storageKey: string; f
   const cached = await readObjectBytes(keys.thumb, "uploads").catch(() => null);
   if (cached && cached.byteLength > 0) return { ok: true, bytes: cached };
   const marker = await readObjectBytes(keys.none, "uploads").catch(() => null);
-  if (marker) return { ok: false, reason: "no_preview" };
+  if (marker) return { ok: false, reason: "too_big" };
 
   const res = await thumbForStoredFile(item.storageKey, item.fileName);
   if (res.ok) {
     await writeObjectBytes(keys.thumb, res.bytes, "image/webp", "uploads").catch((error) =>
       console.error("thumb: cache write failed", keys.thumb, error),
     );
-  } else if (res.reason === "no_preview") {
+  } else if (res.reason === "too_big") {
     await writeObjectBytes(keys.none, Buffer.from("1"), "text/plain", "uploads").catch(() => {});
   }
   return res;

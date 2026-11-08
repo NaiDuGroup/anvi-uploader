@@ -80,9 +80,12 @@ function loadPdfJs(): Promise<PdfJs> {
     g.DOMMatrix ??= DOMMatrix;
     g.ImageData ??= ImageData;
     g.Path2D ??= Path2D;
-    const worker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+    // Loaded from node_modules at runtime (`webpackIgnore`): bundled by webpack
+    // the worker module fails to initialise («Object.defineProperty called on
+    // non-object»). next.config traces these files for the routes that render.
+    const worker: unknown = await import(/* webpackIgnore: true */ "pdfjs-dist/legacy/build/pdf.worker.mjs");
     (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = worker;
-    return import("pdfjs-dist/legacy/build/pdf.mjs");
+    return (await import(/* webpackIgnore: true */ "pdfjs-dist/legacy/build/pdf.mjs")) as PdfJs;
   })();
   return pdfJsPromise;
 }

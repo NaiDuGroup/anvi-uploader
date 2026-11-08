@@ -23,7 +23,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
   try {
     const res = await thumbForStoredFile(file.fileUrl, file.fileName);
-    if (!res.ok) return NextResponse.json({ error: "No preview", code: res.reason }, { status: 404 });
+    if (!res.ok) {
+      // The browser keeps «no preview» for a while instead of asking on every render.
+      return NextResponse.json(
+        { error: "No preview", code: res.reason },
+        { status: 404, headers: { "Cache-Control": res.reason === "missing" ? "no-store" : "private, max-age=86400" } },
+      );
+    }
     return new NextResponse(new Uint8Array(res.bytes), {
       status: 200,
       headers: {
