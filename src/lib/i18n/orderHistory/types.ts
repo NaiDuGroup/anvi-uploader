@@ -81,5 +81,11 @@ export interface OrderHistoryDictionary {
   };
   money: (mdl: number) => string;
   pcs: (n: number) => string;
+  /**
+   * Line names in an edit summary are the workshop board's names, often Russian
+   * («Классическая белая кружка»). false → a name with Cyrillic letters is replaced
+   * by the product type («Căni»); Latin names (A4, materials) stay.
+   */
+  cyrillicLineNames: boolean;
   empty: string;
 }

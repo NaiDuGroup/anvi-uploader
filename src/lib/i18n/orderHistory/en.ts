@@ -76,5 +76,6 @@ export const orderHistoryEn: OrderHistoryDictionary = {
   },
   money: (mdl) => `${num(mdl)} MDL`,
   pcs: (n) => `${n} pcs`,
+  cyrillicLineNames: false,
   empty: "—",
 };

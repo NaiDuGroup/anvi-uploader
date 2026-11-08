@@ -111,8 +111,17 @@ export function capitalize(s: string): string {
   return s.length > 0 ? s[0]!.toLocaleUpperCase() + s.slice(1) : s;
 }
 
+const CYRILLIC = /[\u0400-\u04FF]/;
+
+/** A stored line name when this language can show it (board names are often Russian), else null. */
+function readableName(name: string | null, t: T): string | null {
+  if (!name) return null;
+  return t.orderHistory.cyrillicLineNames || !CYRILLIC.test(name) ? name : null;
+}
+
 function lineName(c: { name: string | null; type: string }, t: T): string {
-  if (c.name) return c.name;
+  const name = readableName(c.name, t);
+  if (name) return name;
   const key = lineTypeKey(c.type);
   return key ? lineTypeLabel(key, t) : t.orderHistory.empty;
 }

@@ -226,6 +226,14 @@ describe("summary + status labels", () => {
       "+ Pix, 50 buc · − Cană · Cană albă → Cană neagră · Banner: fișier nou · Banner: alte opțiuni · Client: — → SRL Alfa · Telefon: 1 → 2 · notițe modificate",
     );
   });
+  it("Russian board names: product type in ro, kept in ru; Latin names stay", () => {
+    const changes = [
+      { kind: "line_qty" as const, name: "Классическая белая кружка", type: "mug", from: 10, to: 12 },
+      { kind: "line_qty" as const, name: "A4", type: "paper_print", from: 200, to: 500 },
+    ];
+    expect(summarizeOrderChanges(changes, ro)).toBe(`${ro.mug.productMug}: 10 → 12 buc · A4: 200 → 500 buc`);
+    expect(summarizeOrderChanges(changes, ru)).toBe("Классическая белая кружка: 10 → 12 шт · A4: 200 → 500 шт");
+  });
   it("status labels: order + line, unknown → null", () => {
     expect(historyStatusLabel("DELIVERED", "order", ro)).toBe(ro.statuses.DELIVERED);
     expect(historyStatusLabel("DONE", "line", ru)).toBe(ru.lineStatus.DONE);
