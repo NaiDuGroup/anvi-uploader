@@ -61,6 +61,8 @@ export interface ProductTypeMenuProps {
   selectedClientService?: string | null;
   onPickClientService?: (id: string) => void;
   current?: ProductMenuCurrent | null;
+  /** «Набор» tile (first in the stock group): opens the set dialog. */
+  giftSetEntry?: { title: string; hint: string; onPick: () => void } | null;
 }
 
 interface MenuEntry {
@@ -125,6 +127,7 @@ export function ProductTypeMenu({
   selectedClientService = null,
   onPickClientService,
   current = null,
+  giftSetEntry = null,
 }: ProductTypeMenuProps) {
   const { t } = useLanguageStore();
   const [open, setOpen] = useState<boolean>(false);
@@ -173,7 +176,17 @@ export function ProductTypeMenu({
         pick: done(() => onChange(item.config.dbProductType)),
       })),
     }));
-    const stock: MenuEntry[] = onPickStockCategory
+    const giftSet: MenuEntry[] = (giftSetEntry ? [giftSetEntry] : [])
+      .map((g) => ({
+        id: "gift_set",
+        title: g.title,
+        hint: g.hint,
+        icon: PRODUCT_TYPE_ICONS.gift_set,
+        selected: false,
+        pick: done(() => g.onPick()),
+      }))
+      .filter(matches);
+    const stockCategoryEntries: MenuEntry[] = onPickStockCategory
       ? stockCategories
           .map((c) => ({
             id: `stock:${c.code}`,
@@ -186,6 +199,7 @@ export function ProductTypeMenu({
           }))
           .filter(matches)
       : [];
+    const stock: MenuEntry[] = [...giftSet, ...stockCategoryEntries];
     const services: MenuEntry[] = onPickClientService
       ? clientServices
           .map((s) => ({
@@ -224,6 +238,7 @@ export function ProductTypeMenu({
     clientGroupLabel,
     close,
     triggerRef,
+    giftSetEntry,
   ]);
 
   const flat: MenuEntry[] = useMemo(() => groups.flatMap((g) => g.entries), [groups]);

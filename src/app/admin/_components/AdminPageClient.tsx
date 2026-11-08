@@ -1506,7 +1506,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                   lineCode={formatOrderLineItemRef(order.orderNumber, lineIdx + 1, lineGroups.length)}
                 />
                 <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <OrderLineTypeHeading productType={line.productType} uvLineData={line.uvLineData} t={t} />
+                  <OrderLineTypeHeading productType={line.productType} uvLineData={line.uvLineData} setData={line.setData} t={t} />
                   {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
                 </div>
                 {line.productType === "dtf_apparel" && (
@@ -2929,7 +2929,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 lineCode={formatOrderLineItemRef(order.orderNumber, lineIdx + 1, lineGroups.length)}
               />
               <div className="mb-1 flex flex-wrap items-center gap-2">
-                <OrderLineTypeHeading productType={line.productType} uvLineData={line.uvLineData} t={t} />
+                <OrderLineTypeHeading productType={line.productType} uvLineData={line.uvLineData} setData={line.setData} t={t} />
                 {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
               </div>
               {line.productType === "dtf_apparel" && (

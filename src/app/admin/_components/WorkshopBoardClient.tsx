@@ -1,5 +1,6 @@
 "use client";
 
+import { GiftSetBadge } from "@/components/orders/GiftSetBadge";
 import React, {
   createContext,
   useCallback,
@@ -460,6 +461,7 @@ function BoardLineCard({
               Срочно
             </span>
           )}
+          {line.giftSet ? <GiftSetBadge label={line.giftSet.label} role={line.giftSet.role} /> : null}
           {line.dealerEditedAt ? <DealerEditedBadge at={line.dealerEditedAt} t={t} /> : null}
           {line.dealerUrgency ? (
             <DealerUrgencyBadge orderId={line.orderId} urgency={line.dealerUrgency} t={t} allowWaive={false} />

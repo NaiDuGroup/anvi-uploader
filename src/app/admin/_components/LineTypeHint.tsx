@@ -3,9 +3,9 @@
 import { Lightbulb } from "lucide-react";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { TypeHint, TypeHintTarget } from "@/lib/orderTypeHint/orderTypeHint";
-import { MIXED_PRODUCT_ICON, PRODUCT_TYPE_ICONS, lineTypeLabel } from "@/lib/productTypeIcons";
+import { PRODUCT_TYPE_ICONS, lineTypeLabel } from "@/lib/productTypeIcons";
 
-/** Mug / notebook / pen are stock items: switching opens the item picker. */
+/** Mug / notebook / pen are stock items: switching opens the item picker; «set» opens the «Набор» dialog. */
 export function typeHintPicksItem(target: TypeHintTarget): boolean {
   return target === "mug" || target === "notebook" || target === "pen";
 }
@@ -33,7 +33,7 @@ export function LineTypeHint({
   if (!first) return null;
   const th = t.admin.newOrderPage.typeHint;
   const second = hints[1] && hints[1].target !== "set" ? hints[1] : null;
-  const Icon = first.target === "set" ? MIXED_PRODUCT_ICON : PRODUCT_TYPE_ICONS[first.target];
+  const Icon = first.target === "set" ? PRODUCT_TYPE_ICONS.gift_set : PRODUCT_TYPE_ICONS[first.target];
   const SecondIcon = second ? PRODUCT_TYPE_ICONS[second.target as Exclude<TypeHintTarget, "set">] : null;
   const isSet = first.target === "set";
   return (
@@ -56,15 +56,14 @@ export function LineTypeHint({
         </span>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-5">
-        {!isSet && (
-          <button
-            type="button"
-            className="rounded-md bg-amber-500 px-2 py-0.5 font-medium text-white hover:bg-amber-600"
-            onClick={() => onSwitch(first.target)}
-          >
-            {typeHintPicksItem(first.target) ? th.pickItem : th.switchTo}
-          </button>
-        )}
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-0.5 font-medium text-white hover:bg-amber-600"
+          onClick={() => onSwitch(first.target)}
+        >
+          {isSet ? <Icon className="h-3 w-3" aria-hidden /> : null}
+          {isSet ? th.makeSet : typeHintPicksItem(first.target) ? th.pickItem : th.switchTo}
+        </button>
         <button type="button" className="text-amber-800 underline-offset-2 hover:underline" onClick={onDismiss}>
           {th.dismiss}
         </button>

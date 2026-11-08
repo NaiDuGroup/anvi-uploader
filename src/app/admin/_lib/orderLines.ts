@@ -25,6 +25,8 @@ export type AdminOrderLineGroup = {
   sublimationLineData?: unknown;
   /** Storefront line snapshot (`ShopPrintLineSummary` reads photo / document print options). */
   shopLineData?: unknown;
+  /** «Набор» (`OrderLine.setData`). */
+  setData?: unknown;
   /** `OrderLine.productionStatus`; absent on the synthetic legacy line. */
   productionStatus?: string;
   /** «Нужен макет» details (only while `productionStatus` is NEEDS_LAYOUT). */
