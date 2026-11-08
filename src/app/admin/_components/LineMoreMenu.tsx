@@ -52,8 +52,8 @@ export function LineMoreMenu({
   label: string;
   testId?: string;
   disabled?: boolean;
-  /** `md` 32px (board), `sm` 28px (dense lists). */
-  size?: "sm" | "md";
+  /** `md` 32px (board), `sm` 28px (dense lists), `xs` 24px (line header row). */
+  size?: "xs" | "sm" | "md";
   /** Extra classes on the wrapper (e.g. `ml-auto`). */
   className?: string;
 }) {
@@ -184,7 +184,7 @@ export function LineMoreMenu({
           }}
           className={cn(
             "inline-flex shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 disabled:cursor-wait disabled:opacity-60",
-            size === "sm" ? "h-7 w-7" : "h-8 w-8",
+            size === "xs" ? "h-6 w-6 rounded-md text-gray-400" : size === "sm" ? "h-7 w-7" : "h-8 w-8",
             open && "bg-gray-100 text-gray-700",
           )}
         >

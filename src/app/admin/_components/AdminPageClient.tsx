@@ -109,6 +109,8 @@ import { formatAmountMdl } from "@/lib/money";
 import { OrderLineStatusBadge, OrderLineSummary } from "./OrderLineStatusBadges";
 import {
   AdminLayoutIssueContext,
+  AdminLineHeaderBadges,
+  AdminLineMoreActions,
   AdminLineLayoutIssue,
   OrderLayoutIssueLabel,
   layoutIssueFrameClass,
@@ -1344,6 +1346,7 @@ const AdminOrderLineGroupFrame = memo(function AdminOrderLineGroupFrame({
   totalLines,
   className,
   badge,
+  actions,
   children,
 }: {
   orderNumber: number;
@@ -1352,6 +1355,8 @@ const AdminOrderLineGroupFrame = memo(function AdminOrderLineGroupFrame({
   className?: string;
   /** Shown next to the line code (per-line production status). */
   badge?: React.ReactNode;
+  /** Top-right of the header row (the line's «⋯» menu); never wraps under the badges. */
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -1361,10 +1366,13 @@ const AdminOrderLineGroupFrame = memo(function AdminOrderLineGroupFrame({
         className,
       )}
     >
-      <p className="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600">
-        <span>{formatOrderLineItemRef(orderNumber, lineIndex, totalLines)}</span>
-        {badge}
-      </p>
+      <div className="flex min-h-5 items-start gap-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+          <span>{formatOrderLineItemRef(orderNumber, lineIndex, totalLines)}</span>
+          {badge}
+        </div>
+        {actions}
+      </div>
       {children}
     </div>
   );
@@ -1540,16 +1548,28 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 totalLines={lineGroups.length}
                 className={cn(giftSetLineFrameClass(line.setData), layoutIssueFrameClass(line))}
                 badge={
-                  <OrderLineStatusBadge
+                  <>
+                    <OrderLineStatusBadge
+                      orderStatus={order.status ?? ""}
+                      productionStatus={line.productionStatus}
+                      t={t}
+                    />
+                    <span className="contents normal-case tracking-normal">
+                      <AdminLineHeaderBadges line={line} />
+                    </span>
+                  </>
+                }
+                actions={
+                  <AdminLineMoreActions
+                    orderId={order.id}
                     orderStatus={order.status ?? ""}
-                    productionStatus={line.productionStatus}
-                    t={t}
+                    line={line}
+                    lineCode={formatOrderLineItemRef(order.orderNumber, lineIdx + 1, lineGroups.length)}
                   />
                 }
               >
                 <AdminLineLayoutIssue
                   orderId={order.id}
-                  orderStatus={order.status ?? ""}
                   line={line}
                   lineCode={formatOrderLineItemRef(order.orderNumber, lineIdx + 1, lineGroups.length)}
                 />
@@ -2986,16 +3006,28 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               totalLines={lineGroups.length}
               className={cn("mb-2 last:mb-0", giftSetLineFrameClass(line.setData), layoutIssueFrameClass(line))}
               badge={
-                <OrderLineStatusBadge
+                <>
+                  <OrderLineStatusBadge
+                    orderStatus={order.status}
+                    productionStatus={line.productionStatus}
+                    t={t}
+                  />
+                  <span className="contents normal-case tracking-normal">
+                    <AdminLineHeaderBadges line={line} />
+                  </span>
+                </>
+              }
+              actions={
+                <AdminLineMoreActions
+                  orderId={order.id}
                   orderStatus={order.status}
-                  productionStatus={line.productionStatus}
-                  t={t}
+                  line={line}
+                  lineCode={formatOrderLineItemRef(order.orderNumber, lineIdx + 1, lineGroups.length)}
                 />
               }
             >
               <AdminLineLayoutIssue
                 orderId={order.id}
-                orderStatus={order.status}
                 line={line}
                 lineCode={formatOrderLineItemRef(order.orderNumber, lineIdx + 1, lineGroups.length)}
               />

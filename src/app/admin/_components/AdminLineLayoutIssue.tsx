@@ -9,12 +9,12 @@ import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLine
 import type { StaffReplaceTarget } from "./StaffReplaceLayoutFileDialog";
 import { isOwnerReplaceMarkerVisible } from "@/lib/ownerLineFileReplace";
 import { OwnerReplacedBadge } from "./OwnerReplacedBadge";
-import { LINE_MENU_ICONS, LineMoreMenu } from "./LineMoreMenu";
+import { LINE_MENU_ICONS, LineMoreMenu, lineMenuItemKeys, type LineMoreMenuItem } from "./LineMoreMenu";
 
 /**
  * Studio orders list: «Ждёт файл» (NEEDS_LAYOUT) on one order line (step 3). The
  * amber line card (reason, comment, waiting time, how to replace the file), the
- * «⋯» menu with «Проблема с файлом…» / «Снять отметку» and the order-row label. Actions come from
+ * line header's «⋯» menu with «Проблема с файлом…» / «Снять отметку» and the order-row label. Actions come from
  * {@link AdminLayoutIssueContext} so the memoised list cells need no new props.
  */
 
@@ -96,89 +96,83 @@ export function OrderLayoutIssueLabel({
 }
 
 /**
- * Inside one line frame of the list: the amber «Ждёт файл» card with
- * «Заменить файл» + «⋯» → «Снять отметку», the green «✓ Новый файл получен»,
- * or «⋯» → «Проблема с файлом…» for a line the workshop may still flag.
+ * Inside one line frame of the list, under the header: the amber «Ждёт файл»
+ * card (reason, comment, waiting time, «Заменить файл») for a flagged line.
+ * Nothing otherwise — badges and the «⋯» menu live in the line header
+ * ({@link AdminLineHeaderBadges}, {@link AdminLineMoreActions}), so a calm line spends no extra row.
  */
 export function AdminLineLayoutIssue({
   orderId,
-  orderStatus,
   line,
   lineCode,
 }: {
   orderId: string;
-  orderStatus: string;
   line: LayoutIssueLineFields;
   lineCode: string;
 }) {
   const { t } = useLanguageStore();
   const ctx = useContext(AdminLayoutIssueContext);
   const li = t.layoutIssue;
-  if (line.id === "legacy") return null;
-  const ref: AdminLayoutIssueLineRef = { orderId, lineId: line.id, lineCode };
-  const busy = ctx?.savingLineId === line.id;
-  const btn =
-    "inline-flex h-8 items-center gap-1 rounded-lg border px-2.5 text-xs font-semibold normal-case tracking-normal transition-colors disabled:cursor-wait disabled:opacity-60";
-
-  if (isLineNeedsLayout(line.productionStatus)) {
-    return (
-      <div
-        data-testid={`admin-line-layout-issue-${line.id}`}
-        className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900"
-      >
-        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-          <Clock className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
-          <span className="font-bold">{li.waitingLabel}</span>
-          <span className="text-amber-300" aria-hidden>·</span>
-          <span className="font-medium">{layoutIssueReasonLabel(li, line.layoutIssueReason)}</span>
-          {line.layoutIssueAt ? (
-            <>
-              <span className="text-amber-300" aria-hidden>·</span>
-              <span className="tabular-nums text-amber-700">{layoutIssueWaitLabel(li, line.layoutIssueAt)}</span>
-            </>
-          ) : null}
-        </p>
-        {line.layoutIssueNote ? (
-          <p className="mt-0.5 break-words italic text-amber-800">«{line.layoutIssueNote}»</p>
-        ) : null}
-        <p className="mt-1 text-[11px] leading-snug text-amber-800">{li.staffReplaceHint}</p>
-        {ctx ? (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              data-testid={`admin-line-replace-file-${line.id}`}
-              onClick={() => ctx.replaceFile(staffReplaceTargetOf(orderId, line, lineCode))}
-              className={`${btn} border-gray-300 bg-white text-gray-700 shadow-sm hover:bg-gray-50`}
-            >
-              <FilePen className="h-3.5 w-3.5" aria-hidden />
-              {li.staffReplaceButton}
-            </button>
-            <LineMoreMenu
-              label={li.moreActions}
-              testId={`admin-line-more-${line.id}`}
-              disabled={busy}
-              items={[
-                {
-                  key: "clearLayout",
-                  label: li.clear,
-                  icon: LINE_MENU_ICONS.clearLayout,
-                  testId: `admin-line-clear-layout-${line.id}`,
-                  onSelect: () => ctx.clear(ref),
-                },
-              ]}
-            />
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
-  const fixed = line.layoutFixedAt && isLayoutRecentlyFixed({ lineStatus: line.productionStatus, layoutFixedAt: line.layoutFixedAt });
-  const flaggable = ctx !== null && canFlagLayoutIssue(orderStatus, line.productionStatus ?? "");
-  const replaced = isOwnerReplaceMarkerVisible(line);
-  if (!fixed && !flaggable && !replaced) return null;
+  if (line.id === "legacy" || !isLineNeedsLayout(line.productionStatus)) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div
+      data-testid={`admin-line-layout-issue-${line.id}`}
+      className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900"
+    >
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+        <Clock className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
+        <span className="font-bold">{li.waitingLabel}</span>
+        <span className="text-amber-300" aria-hidden>·</span>
+        <span className="font-medium">{layoutIssueReasonLabel(li, line.layoutIssueReason)}</span>
+        {line.layoutIssueAt ? (
+          <>
+            <span className="text-amber-300" aria-hidden>·</span>
+            <span className="tabular-nums text-amber-700">{layoutIssueWaitLabel(li, line.layoutIssueAt)}</span>
+          </>
+        ) : null}
+      </p>
+      {line.layoutIssueNote ? (
+        <p className="mt-0.5 break-words italic text-amber-800">«{line.layoutIssueNote}»</p>
+      ) : null}
+      <p className="mt-1 text-[11px] leading-snug text-amber-800">{li.staffReplaceHint}</p>
+      {ctx ? (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            data-testid={`admin-line-replace-file-${line.id}`}
+            onClick={() => ctx.replaceFile(staffReplaceTargetOf(orderId, line, lineCode))}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-semibold normal-case tracking-normal text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+          >
+            <FilePen className="h-3.5 w-3.5" aria-hidden />
+            {li.staffReplaceButton}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+interface LineHeaderProps {
+  orderId: string;
+  orderStatus: string;
+  line: LayoutIssueLineFields;
+  lineCode: string;
+}
+
+/**
+ * Header badges of a line frame, after the status chip («#9867.1/2 [Ждёт] …»):
+ * the sky «Файл заменён дилером» and the green «✓ Новый файл получен».
+ */
+export function AdminLineHeaderBadges({ line }: Pick<LineHeaderProps, "line">) {
+  const { t } = useLanguageStore();
+  const li = t.layoutIssue;
+  if (line.id === "legacy" || isLineNeedsLayout(line.productionStatus)) return null;
+  const fixed =
+    line.layoutFixedAt && isLayoutRecentlyFixed({ lineStatus: line.productionStatus, layoutFixedAt: line.layoutFixedAt });
+  const replaced = isOwnerReplaceMarkerVisible(line);
+  if (!fixed && !replaced) return null;
+  return (
+    <>
       {replaced && line.ownerReplacedAt ? (
         <OwnerReplacedBadge
           at={line.ownerReplacedAt}
@@ -195,25 +189,51 @@ export function AdminLineLayoutIssue({
           {li.fixedAt(formatLayoutFixedTime(line.layoutFixedAt))}
         </span>
       ) : null}
-      {flaggable && ctx ? (
-        <LineMoreMenu
-          label={li.moreActions}
-          testId={`admin-line-more-${line.id}`}
-          disabled={busy}
-          size="sm"
-          className="ml-auto"
-          items={[
-            {
-              key: "flagLayout",
-              label: li.flagButton,
-              title: li.flagButtonHint(lineCode),
-              icon: LINE_MENU_ICONS.flagLayout,
-              testId: `admin-line-flag-layout-${line.id}`,
-              onSelect: () => ctx.flag(ref),
-            },
-          ]}
-        />
-      ) : null}
-    </div>
+    </>
+  );
+}
+
+/**
+ * The line's one «⋯» menu, top-right of the frame header: «Проблема с файлом…»
+ * for a line the workshop may flag, «Снять отметку» for a flagged one.
+ * Renders nothing when the line has no such action.
+ */
+export function AdminLineMoreActions({ orderId, orderStatus, line, lineCode }: LineHeaderProps) {
+  const { t } = useLanguageStore();
+  const ctx = useContext(AdminLayoutIssueContext);
+  const li = t.layoutIssue;
+  if (line.id === "legacy" || !ctx) return null;
+  const ref: AdminLayoutIssueLineRef = { orderId, lineId: line.id, lineCode };
+  const keys = lineMenuItemKeys({
+    canFlag: canFlagLayoutIssue(orderStatus, line.productionStatus ?? ""),
+    flagged: isLineNeedsLayout(line.productionStatus),
+  });
+  const items: LineMoreMenuItem[] = keys.map((k) =>
+    k === "flagLayout"
+      ? {
+          key: k,
+          label: li.flagButton,
+          title: li.flagButtonHint(lineCode),
+          icon: LINE_MENU_ICONS.flagLayout,
+          testId: `admin-line-flag-layout-${line.id}`,
+          onSelect: () => ctx.flag(ref),
+        }
+      : {
+          key: k,
+          label: li.clear,
+          icon: LINE_MENU_ICONS.clearLayout,
+          testId: `admin-line-clear-layout-${line.id}`,
+          onSelect: () => ctx.clear(ref),
+        },
+  );
+  return (
+    <LineMoreMenu
+      label={li.moreActions}
+      testId={`admin-line-more-${line.id}`}
+      disabled={ctx.savingLineId === line.id}
+      size="xs"
+      className="-my-1 -mr-1"
+      items={items}
+    />
   );
 }

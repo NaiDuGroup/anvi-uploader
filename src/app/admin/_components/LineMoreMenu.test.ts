@@ -11,6 +11,13 @@ import {
   LineStatusPill,
 } from "./workshopBoard/LineStatusControls";
 import type { WorkshopBoardLine } from "@/lib/workshopBoard/types";
+import {
+  AdminLayoutIssueContext,
+  AdminLineHeaderBadges,
+  AdminLineMoreActions,
+  AdminLineLayoutIssue,
+  type AdminLayoutIssueContextValue,
+} from "./AdminLineLayoutIssue";
 import { layoutIssueRu } from "@/lib/i18n/layoutIssue/ru";
 import { layoutIssueRo } from "@/lib/i18n/layoutIssue/ro";
 import { layoutIssueEn } from "@/lib/i18n/layoutIssue/en";
@@ -201,5 +208,53 @@ describe("no AlertTriangle / rose for this feature", () => {
     const src = readFileSync(path.join(root, file), "utf8");
     expect(src).not.toMatch(/AlertTriangle/);
     expect(src).not.toMatch(/\brose-\d/);
+  });
+});
+
+describe("studio orders list: «⋯» in the line header, no extra row", () => {
+  const ctxValue: AdminLayoutIssueContextValue = {
+    savingLineId: null,
+    flag: () => {},
+    clear: () => {},
+    replaceFile: () => {},
+  };
+  const withCtx = (el: ReactElement) =>
+    renderRu(createElement(AdminLayoutIssueContext.Provider, { value: ctxValue }, el));
+  const line = (over: Record<string, unknown>) => ({ id: "l1", productionStatus: "WAITING", ...over });
+  const props = (over: Record<string, unknown>) => ({
+    orderId: "o1",
+    orderStatus: "SENT_TO_WORKSHOP",
+    line: line(over),
+    lineCode: "#0042.1/2",
+  });
+
+  it("calm waiting line: body renders nothing, header has a small «⋯»", () => {
+    expect(withCtx(createElement(AdminLineLayoutIssue, props({})))).toBe("");
+    const html = withCtx(createElement(AdminLineMoreActions, props({})));
+    expect(html).toContain('data-testid="admin-line-more-l1"');
+    expect(html).toContain("h-6 w-6");
+    expect(withCtx(createElement(AdminLineHeaderBadges, props({})))).toBe("");
+  });
+
+  it("flagged line: amber block keeps «Заменить файл» without a menu; the one «⋯» is in the header", () => {
+    const body = withCtx(createElement(AdminLineLayoutIssue, props({ productionStatus: "NEEDS_LAYOUT" })));
+    expect(body).toContain('data-testid="admin-line-replace-file-l1"');
+    expect(body).not.toContain("admin-line-more-l1");
+    const head = withCtx(createElement(AdminLineMoreActions, props({ productionStatus: "NEEDS_LAYOUT" })));
+    expect(head.match(/data-testid="admin-line-more-l1"/g)).toHaveLength(1);
+  });
+
+  it("done line without markers → header renders nothing", () => {
+    expect(withCtx(createElement(AdminLineMoreActions, props({ productionStatus: "DONE" })))).toBe("");
+    expect(withCtx(createElement(AdminLineHeaderBadges, props({ productionStatus: "DONE" })))).toBe("");
+  });
+
+  it("no layout-issue context (read-only view) → no menu", () => {
+    expect(renderRu(createElement(AdminLineMoreActions, props({})))).toBe("");
+  });
+
+  it("recently fixed line: green badge in the header", () => {
+    const head = withCtx(createElement(AdminLineHeaderBadges, props({ layoutFixedAt: new Date().toISOString() })));
+    expect(head).toContain('data-testid="admin-line-layout-fixed-l1"');
   });
 });
