@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 
 /**
  * Modal for the library dialogs: a bottom sheet on phones, a centred card on
@@ -30,6 +31,7 @@ export function LibrarySheet({
   footer?: ReactNode;
   testId?: string;
 }) {
+  const closeLabel = useLanguageStore((s) => s.t.library.close);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !busy) onClose();
@@ -68,7 +70,7 @@ export function LibrarySheet({
             onClick={onClose}
             disabled={busy}
             className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
-            aria-label="Закрыть"
+            aria-label={closeLabel}
           >
             <X className="h-5 w-5" />
           </button>

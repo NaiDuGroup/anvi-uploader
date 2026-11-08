@@ -7,6 +7,7 @@ import { isLibraryKey } from "@/lib/library/libraryKeys";
 import { useInLibrary } from "./useLibraryStatus";
 import { SaveToLibraryDialog } from "./SaveToLibraryDialog";
 import type { LibraryOwner } from "./LibraryOwnerField";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 
 /** «В библиотеке» badge for an order file (saved from it, or reused from the library). */
 export function InLibraryBadge({
@@ -16,16 +17,18 @@ export function InLibraryBadge({
   fileId: string;
   fileUrl: string;
 }) {
+  const d = useLanguageStore((s) => s.t.library);
   const libId = useInLibrary(fileId);
   if (!libId && !isLibraryKey(fileUrl)) return null;
   return (
     <Link
       href={libId ? `/admin/library?item=${libId}` : "/admin/library"}
       className="inline-flex items-center gap-0.5 rounded bg-emerald-50 px-1.5 py-px text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"
-      title="Макет хранится в библиотеке и не удалится через 7 дней"
+      title={d.inLibraryTitle}
       data-testid="in-library-badge"
     >
-      <BookmarkCheck className="h-3 w-3" aria-hidden />В библиотеке
+      <BookmarkCheck className="h-3 w-3" aria-hidden />
+      {d.inLibraryBadge}
     </Link>
   );
 }
@@ -44,6 +47,7 @@ export function SaveFileToLibraryButton({
   orderNumber: number;
   orderClient: LibraryOwner | null;
 }) {
+  const d = useLanguageStore((s) => s.t.library);
   const libId = useInLibrary(fileId);
   const [open, setOpen] = useState(false);
   // The dialog stays mounted after a save (its «done» screen) although the button hides.
@@ -56,8 +60,8 @@ export function SaveFileToLibraryButton({
           type="button"
           onClick={() => setOpen(true)}
           className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-amber-50 hover:text-amber-700"
-          title="В библиотеку — сохранить макет навсегда"
-          aria-label="В библиотеку"
+          title={d.saveToLibraryTitle}
+          aria-label={d.saveToLibrary}
           data-testid="save-file-to-library"
         >
           <BookmarkPlus className="h-4 w-4 shrink-0" aria-hidden />
@@ -85,6 +89,7 @@ export function SaveOrderToLibraryLink({
   fileCount: number;
   orderClient: LibraryOwner | null;
 }) {
+  const d = useLanguageStore((s) => s.t.library);
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -95,7 +100,7 @@ export function SaveOrderToLibraryLink({
         data-testid="save-order-to-library"
       >
         <BookmarkPlus className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        Все в библиотеку
+        {d.saveAllLink}
       </button>
       {open ? (
         <SaveToLibraryDialog

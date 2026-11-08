@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (denied) return denied;
   const { id } = await params;
   const row = await prisma.libraryFile.findUnique({ where: { id }, select: { storageKey: true, fileName: true } });
-  if (!row) return NextResponse.json({ error: "Не найдено" }, { status: 404 });
+  if (!row) return NextResponse.json({ error: "Не найдено", code: "not_found" }, { status: 404 });
 
   const download = request.nextUrl.searchParams.get("download") === "1";
   const headers = new Headers({ "Cache-Control": "private, max-age=3600" });

@@ -6,14 +6,15 @@ import { BookmarkPlus, Loader2 } from "lucide-react";
 import { defaultLibraryTitle } from "@/lib/library/libraryKeys";
 import { LibrarySheet, sheetCancelClass, sheetInputClass, sheetPrimaryClass } from "./LibrarySheet";
 import { LibraryOwnerField, libraryOwnerIncomplete, type LibraryOwner } from "./LibraryOwnerField";
-import { libraryFetch, type LibraryItem } from "./libraryClient";
+import { libraryFetch, libraryOrderNumber, type LibraryItem } from "./libraryClient";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 import { markInLibrary } from "./useLibraryStatus";
 
 export type SaveToLibraryTarget =
   | { kind: "file"; fileId: string; fileName: string; orderNumber: number; orderClient: LibraryOwner | null }
   | { kind: "order"; orderId: string; orderNumber: number; fileCount: number; orderClient: LibraryOwner | null };
 
-type Skipped = { fileId: string; fileName: string; reason: string };
+type Skipped = { fileId: string; fileName: string; code?: string; reason: string };
 
 /**
  * «В библиотеку» (one file) / «Сохранить все файлы заказа»: title (one file
@@ -21,6 +22,7 @@ type Skipped = { fileId: string; fileName: string; reason: string };
  * copies the file out of the 7-day `uploads/` area into `library/`.
  */
 export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibraryTarget; onClose: () => void }) {
+  const d = useLanguageStore((s) => s.t.library);
   const [title, setTitle] = useState(target.kind === "file" ? defaultLibraryTitle(target.fileName) : "");
   const [owner, setOwner] = useState<LibraryOwner>(target.orderClient?.clientId ? target.orderClient : { clientId: null, clientName: null });
   const [tags, setTags] = useState("");
@@ -30,7 +32,7 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
 
   const submit = async () => {
     if (libraryOwnerIncomplete(owner)) {
-      setError("Выберите клиента");
+      setError(d.chooseClient);
       return;
     }
     setBusy(true);
@@ -66,7 +68,7 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
     setDone(res.data);
   };
 
-  const heading = target.kind === "file" ? "Сохранить в библиотеку" : `Все файлы заказа #${String(target.orderNumber).padStart(4, "0")} в библиотеку`;
+  const heading = target.kind === "file" ? d.saveTitle : d.saveAllTitle(libraryOrderNumber(target.orderNumber));
 
   if (done) {
     return (
@@ -77,26 +79,24 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
         footer={
           <>
             <Link href="/admin/library" className={sheetCancelClass + " inline-flex items-center justify-center"}>
-              Открыть библиотеку
+              {d.openLibrary}
             </Link>
             <button type="button" className={sheetPrimaryClass} onClick={onClose}>
-              Готово
+              {d.done}
             </button>
           </>
         }
       >
         <p className="text-sm text-emerald-700">
-          {done.saved.length === 1 && target.kind === "file"
-            ? "Макет сохранён в библиотеку. Он не удалится через 7 дней."
-            : `Сохранено в библиотеку: ${done.saved.length}. Эти файлы не удалятся через 7 дней.`}
+          {done.saved.length === 1 && target.kind === "file" ? d.savedOne : d.savedMany(done.saved.length)}
         </p>
         {done.skipped.length > 0 ? (
           <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
-            <p className="mb-1 font-semibold">Пропущено: {done.skipped.length}</p>
+            <p className="mb-1 font-semibold">{d.skipped(done.skipped.length)}</p>
             <ul className="space-y-0.5">
               {done.skipped.map((s) => (
                 <li key={s.fileId} className="truncate" title={s.fileName}>
-                  {s.fileName} — {s.reason}
+                  {s.fileName} — {s.code && s.code in d.errors ? d.errors[s.code as keyof typeof d.errors] : s.reason}
                 </li>
               ))}
             </ul>
@@ -116,7 +116,7 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
       footer={
         <>
           <button type="button" className={sheetCancelClass} onClick={onClose} disabled={busy}>
-            Отмена
+            {d.cancel}
           </button>
           <button
             type="button"
@@ -126,7 +126,7 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
             data-testid="save-to-library-submit"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <BookmarkPlus className="h-4 w-4" />}
-            Сохранить
+            {d.save}
           </button>
         </>
       }
@@ -134,7 +134,7 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
       <div className="space-y-3">
         {target.kind === "file" ? (
           <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">Название</span>
+            <span className="mb-1 block text-sm font-medium text-gray-700">{d.titleLabel}</span>
             <input
               className={sheetInputClass}
               value={title}
@@ -144,13 +144,11 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
               autoFocus
             />
             <span className="mt-1 block truncate text-xs text-gray-500" title={target.fileName}>
-              Файл: {target.fileName}
+              {d.fileLabel(target.fileName)}
             </span>
           </label>
         ) : (
-          <p className="text-sm text-gray-600">
-            Файлов в заказе: {target.fileCount}. Названия — по именам файлов; ссылки и уже удалённые файлы будут пропущены.
-          </p>
+          <p className="text-sm text-gray-600">{d.orderFilesInfo(target.fileCount)}</p>
         )}
         <LibraryOwnerField
           value={owner}
@@ -162,15 +160,15 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
           disabled={busy}
         />
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">Теги</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">{d.tagsLabel}</span>
           <input
             className={sheetInputClass}
             value={tags}
             onChange={(e) => setTags(e.target.value)}
-            placeholder="визитки, логотип"
+            placeholder={d.tagsPlaceholder}
             disabled={busy}
           />
-          <span className="mt-1 block text-xs text-gray-500">Через запятую — по ним можно искать.</span>
+          <span className="mt-1 block text-xs text-gray-500">{d.tagsHint}</span>
         </label>
         {error ? (
           <p role="alert" className="text-sm font-medium text-red-700">

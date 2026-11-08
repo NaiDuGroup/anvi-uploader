@@ -6,6 +6,7 @@ import { LibrarySheet, sheetCancelClass, sheetInputClass, sheetPrimaryClass } fr
 import { LibraryOwnerField, libraryOwnerIncomplete, type LibraryOwner } from "./LibraryOwnerField";
 import { libraryFetch, libraryMetaText, type LibraryItem } from "./libraryClient";
 import { LibraryThumb } from "./LibraryThumb";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 
 /** «Изменить»: title, tags and owner of a library item. */
 export function EditLibraryItemDialog({
@@ -17,6 +18,7 @@ export function EditLibraryItemDialog({
   onClose: () => void;
   onSaved: (item: LibraryItem) => void;
 }) {
+  const d = useLanguageStore((s) => s.t.library);
   const [title, setTitle] = useState(item.title);
   const [tags, setTags] = useState(item.tags.join(", "));
   const [owner, setOwner] = useState<LibraryOwner>({ clientId: item.clientId, clientName: item.clientName });
@@ -25,7 +27,7 @@ export function EditLibraryItemDialog({
 
   const save = async () => {
     if (libraryOwnerIncomplete(owner)) {
-      setError("Выберите клиента");
+      setError(d.chooseClient);
       return;
     }
     setBusy(true);
@@ -44,7 +46,7 @@ export function EditLibraryItemDialog({
 
   return (
     <LibrarySheet
-      title="Изменить макет"
+      title={d.editTitle}
       icon={<Pencil className="h-5 w-5 shrink-0 text-amber-600" aria-hidden />}
       onClose={onClose}
       busy={busy}
@@ -52,11 +54,11 @@ export function EditLibraryItemDialog({
       footer={
         <>
           <button type="button" className={sheetCancelClass} onClick={onClose} disabled={busy}>
-            Отмена
+            {d.cancel}
           </button>
           <button type="button" className={sheetPrimaryClass} onClick={() => void save()} disabled={busy || !title.trim()}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Сохранить
+            {d.save}
           </button>
         </>
       }
@@ -68,11 +70,11 @@ export function EditLibraryItemDialog({
             <p className="truncate font-medium text-gray-800" title={item.fileName}>
               {item.fileName}
             </p>
-            <p>{libraryMetaText(item)}</p>
+            <p>{libraryMetaText(item, d.meta)}</p>
           </div>
         </div>
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">Название</span>
+          <span className="mb-1 block text-sm font-medium text-gray-700">{d.titleLabel}</span>
           <input className={sheetInputClass} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} disabled={busy} />
         </label>
         <LibraryOwnerField
@@ -82,12 +84,12 @@ export function EditLibraryItemDialog({
             setError(null);
           }}
           orderClient={item.clientId ? { clientId: item.clientId, clientName: item.clientName } : null}
-          orderClientLabel="Текущий клиент"
+          orderClientLabel={d.currentClient}
           disabled={busy}
         />
         <label className="block">
-          <span className="mb-1 block text-sm font-medium text-gray-700">Теги</span>
-          <input className={sheetInputClass} value={tags} onChange={(e) => setTags(e.target.value)} placeholder="визитки, логотип" disabled={busy} />
+          <span className="mb-1 block text-sm font-medium text-gray-700">{d.tagsLabel}</span>
+          <input className={sheetInputClass} value={tags} onChange={(e) => setTags(e.target.value)} placeholder={d.tagsPlaceholder} disabled={busy} />
         </label>
         {error ? (
           <p role="alert" className="text-sm font-medium text-red-700">

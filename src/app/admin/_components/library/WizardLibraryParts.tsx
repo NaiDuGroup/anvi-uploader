@@ -2,17 +2,19 @@
 
 import { AlertTriangle, BookMarked, X } from "lucide-react";
 import type { WizardReusedFile } from "./wizardReuse";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 
 /** «Из библиотеки» trigger for a wizard row (or the files panel). */
 export function WizardLibraryPickButton({
   onClick,
   className,
-  label = "Из библиотеки",
+  label,
 }: {
   onClick: () => void;
   className?: string;
   label?: string;
 }) {
+  const d = useLanguageStore((s) => s.t.library);
   return (
     <button
       type="button"
@@ -21,19 +23,20 @@ export function WizardLibraryPickButton({
       data-testid="wizard-library-pick"
     >
       <BookMarked className="h-3.5 w-3.5" aria-hidden />
-      {label}
+      {label ?? d.fromLibrary}
     </button>
   );
 }
 
 /** Under a row that reuses stored artwork: where it comes from + «убрать». */
 export function WizardReuseInfo({ reuse, onClear }: { reuse: WizardReusedFile; onClear: () => void }) {
+  const d = useLanguageStore((s) => s.t.library);
   const from =
     reuse.source === "library"
-      ? `Из библиотеки${reuse.title && reuse.title !== reuse.fileName ? ` · ${reuse.title}` : ""}`
+      ? `${d.reuseLibrary}${reuse.title && reuse.title !== reuse.fileName ? ` · ${reuse.title}` : ""}`
       : reuse.source === "link"
-        ? "Ссылка из прошлого заказа"
-        : "Файл из прошлого заказа (хранится 7 дней с загрузки)";
+        ? d.reuseLink
+        : d.reuseStorage;
   return (
     <div className="ml-7 flex min-w-0 items-center gap-1.5 text-[11px]">
       <span
@@ -52,8 +55,8 @@ export function WizardReuseInfo({ reuse, onClear }: { reuse: WizardReusedFile; o
         type="button"
         onClick={onClear}
         className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-        title="Убрать файл"
-        aria-label="Убрать файл"
+        title={d.removeFile}
+        aria-label={d.removeFile}
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -63,11 +66,12 @@ export function WizardReuseInfo({ reuse, onClear }: { reuse: WizardReusedFile; o
 
 /** «Повторить заказ»: the original file is no longer stored. */
 export function WizardMissingFileNote({ fileName }: { fileName: string }) {
+  const d = useLanguageStore((s) => s.t.library);
   return (
     <p className="ml-7 flex items-start gap-1 text-[11px] font-medium text-red-700" data-testid="wizard-missing-file">
       <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
       <span className="min-w-0">
-        Файл нужно загрузить заново: <span className="break-all">{fileName}</span> (удалён из хранилища)
+        {d.missingFile} <span className="break-all">{fileName}</span> {d.missingFileGone}
       </span>
     </p>
   );

@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
   if (denied) return denied;
 
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Неверные данные" }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Неверные данные", code: "invalid" }, { status: 400 });
 
   try {
     const res = await saveOrderFileToLibrary({ ...parsed.data, actorId: user.id });
@@ -108,6 +108,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ item: res.item }, { status: 201 });
   } catch (error) {
     console.error("POST /api/admin/library:", error);
-    return NextResponse.json({ error: "Не удалось сохранить в библиотеку" }, { status: 500 });
+    return NextResponse.json({ error: "Не удалось сохранить в библиотеку", code: "save_failed" }, { status: 500 });
   }
 }

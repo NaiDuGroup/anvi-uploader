@@ -5240,10 +5240,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       {repeatOrderId ? (
         <p className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900" data-testid="repeat-order-banner">
           {editLoading
-            ? "Загружаем позиции заказа для повтора…"
+            ? t.library.repeatLoading
             : slots.some((sl) => sl.missingFileName && !slotHasArtwork(sl))
-              ? "Повтор заказа: клиент и позиции заполнены. Файлы, отмеченные красным, удалены из хранилища — загрузите их заново."
-              : "Повтор заказа: клиент, позиции и файлы заполнены. Проверьте количество и цены."}
+              ? t.library.repeatMissing
+              : t.library.repeatOk}
         </p>
       ) : null}
 
@@ -5368,7 +5368,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             {!dealerMode && (
               <div className="flex justify-center">
                 <WizardLibraryPickButton
-                  label="Добавить из библиотеки"
+                  label={t.library.addFromLibrary}
                   className="inline-flex h-9 items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50/60 px-3 text-sm font-medium text-amber-800 hover:bg-amber-100"
                   onClick={() => setLibraryPickFor("new")}
                 />

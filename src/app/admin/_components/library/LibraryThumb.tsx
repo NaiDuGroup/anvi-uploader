@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 import { libraryExt, libraryFileUrl, libraryHasImagePreview, type LibraryItem } from "./libraryClient";
 
 /** Image preview of a library item (raster ≤ 15 MB), else its type label. */
 export function LibraryThumb({ item, className }: { item: LibraryItem; className?: string }) {
+  const noFile = useLanguageStore((s) => s.t.library.noFile);
   const [broken, setBroken] = useState(false);
   const showImg = libraryHasImagePreview(item) && !broken;
   return (
@@ -26,7 +28,7 @@ export function LibraryThumb({ item, className }: { item: LibraryItem; className
             broken ? "bg-red-50 text-red-600" : "bg-white text-gray-500 ring-1 ring-gray-200",
           )}
         >
-          {broken ? "нет файла" : libraryExt(item.fileName)}
+          {broken ? noFile : libraryExt(item.fileName)}
         </span>
       )}
     </div>

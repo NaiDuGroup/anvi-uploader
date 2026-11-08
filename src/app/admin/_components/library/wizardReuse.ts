@@ -2,6 +2,7 @@
 
 import type { LibraryItem } from "./libraryClient";
 import { libraryMetaText } from "./libraryClient";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 
 /**
  * Stored artwork a wizard row reuses as is (no upload, no copy): a library
@@ -33,7 +34,7 @@ export function reuseFromLibraryItem(item: LibraryItem): WizardReusedFile {
 /** `GET /api/admin/orders/:id/repeat-files`: per file id, the reusable key or null (gone). */
 export async function loadRepeatOrderFiles(orderId: string): Promise<Record<string, WizardReusedFile | null>> {
   const res = await fetch(`/api/admin/orders/${orderId}/repeat-files`);
-  if (!res.ok) throw new Error("Не удалось проверить файлы заказа");
+  if (!res.ok) throw new Error(useLanguageStore.getState().t.library.repeatFilesFailed);
   const body = (await res.json()) as {
     files: Record<string, { fileName: string; fileUrl: string; source: WizardReusedFile["source"]; libraryFileId: string | null } | null>;
   };

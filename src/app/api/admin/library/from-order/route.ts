@@ -24,14 +24,14 @@ export async function POST(request: NextRequest) {
   if (denied) return denied;
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Неверные данные" }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Неверные данные", code: "invalid" }, { status: 400 });
 
   const files = await prisma.file.findMany({
     where: { orderId: parsed.data.orderId },
     select: { id: true, fileName: true },
     orderBy: [{ orderLine: { sortOrder: "asc" } }, { fileName: "asc" }],
   });
-  if (files.length === 0) return NextResponse.json({ error: "В заказе нет файлов" }, { status: 404 });
+  if (files.length === 0) return NextResponse.json({ error: "В заказе нет файлов", code: "no_files" }, { status: 404 });
 
   const saved: LibraryFileJson[] = [];
   const skipped: Array<{ fileId: string; fileName: string; code: string; reason: string }> = [];
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       else skipped.push({ fileId: f.id, fileName: f.fileName, code: res.error, reason: SAVE_TO_LIBRARY_ERROR_RU[res.error] });
     } catch (error) {
       console.error("library from-order:", f.id, error);
-      skipped.push({ fileId: f.id, fileName: f.fileName, code: "error", reason: "Ошибка копирования" });
+      skipped.push({ fileId: f.id, fileName: f.fileName, code: "copy_failed", reason: "Ошибка копирования" });
     }
   }
   return NextResponse.json({ saved, skipped });

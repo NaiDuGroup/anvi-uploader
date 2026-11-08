@@ -1,5 +1,8 @@
 "use client";
 
+import { useLanguageStore } from "@/stores/useLanguageStore";
+import type { LibraryDictionary, LibraryErrorCode } from "@/lib/i18n/library/types";
+
 /** Client-side shapes and calls of «Библиотека макетов» (`/api/admin/library`). */
 export interface LibraryItem {
   id: string;
@@ -26,19 +29,33 @@ export interface LibraryItem {
   archivedAt: string | null;
 }
 
-export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string; status: number; body?: unknown };
+export type ApiResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string; code: string | null; status: number; body?: unknown };
+
+/** Localised text of a library API error (`{ error, code }`), falling back to the server text. */
+export function libraryErrorText(
+  d: LibraryDictionary,
+  body: { error?: string; code?: string; references?: number } | null | undefined,
+): string {
+  const code = body?.code;
+  if (code === "in_use") return d.inUse(body?.references ?? 0);
+  if (code && code in d.errors) return d.errors[code as LibraryErrorCode];
+  return body?.error || d.requestFailed;
+}
 
 export async function libraryFetch<T>(url: string, init?: RequestInit): Promise<ApiResult<T>> {
+  const d = useLanguageStore.getState().t.library;
   try {
     const res = await fetch(url, {
       ...init,
       headers: init?.body ? { "Content-Type": "application/json", ...(init.headers ?? {}) } : init?.headers,
     });
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    if (!res.ok) return { ok: false, error: body.error || "Ошибка запроса", status: res.status, body };
+    const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string; references?: number };
+    if (!res.ok) return { ok: false, error: libraryErrorText(d, body), code: body.code ?? null, status: res.status, body };
     return { ok: true, data: body as T };
   } catch {
-    return { ok: false, error: "Нет связи с сервером", status: 0 };
+    return { ok: false, error: d.network, code: null, status: 0 };
   }
 }
 
@@ -61,18 +78,24 @@ export function libraryExt(fileName: string): string {
 }
 
 /** «12,4 МБ · 3000×2000 px · 300 dpi · 25×17 см» — the facts that are known. */
-export function libraryMetaText(item: Pick<LibraryItem, "sizeBytes" | "pixelWidth" | "pixelHeight" | "dpi" | "widthMm" | "heightMm" | "pageCount">): string {
+export function libraryMetaText(
+  item: Pick<LibraryItem, "sizeBytes" | "pixelWidth" | "pixelHeight" | "dpi" | "widthMm" | "heightMm" | "pageCount">,
+  units: LibraryDictionary["meta"] = useLanguageStore.getState().t.library.meta,
+): string {
   const parts: string[] = [];
+  const num = (v: number) => v.toLocaleString(units.numberLocale, { maximumFractionDigits: 1 });
   if (item.sizeBytes != null) {
     const mb = item.sizeBytes / (1024 * 1024);
-    parts.push(mb >= 1 ? `${mb.toLocaleString("ru-RU", { maximumFractionDigits: 1 })} МБ` : `${Math.max(1, Math.round(item.sizeBytes / 1024))} КБ`);
+    parts.push(mb >= 1 ? `${num(mb)} ${units.mb}` : `${Math.max(1, Math.round(item.sizeBytes / 1024))} ${units.kb}`);
   }
   if (item.pixelWidth && item.pixelHeight) parts.push(`${item.pixelWidth}×${item.pixelHeight} px`);
   if (item.dpi) parts.push(`${Math.round(item.dpi)} dpi`);
-  if (item.widthMm && item.heightMm) {
-    const cm = (mm: number) => (mm / 10).toLocaleString("ru-RU", { maximumFractionDigits: 1 });
-    parts.push(`${cm(item.widthMm)}×${cm(item.heightMm)} см`);
-  }
-  if (item.pageCount && item.pageCount > 1) parts.push(`${item.pageCount} стр.`);
+  if (item.widthMm && item.heightMm) parts.push(`${num(item.widthMm / 10)}×${num(item.heightMm / 10)} ${units.cm}`);
+  if (item.pageCount && item.pageCount > 1) parts.push(units.pages(item.pageCount));
   return parts.join(" · ");
+}
+
+/** Order number as shown everywhere: «#0012». */
+export function libraryOrderNumber(n: number): string {
+  return String(n).padStart(4, "0");
 }

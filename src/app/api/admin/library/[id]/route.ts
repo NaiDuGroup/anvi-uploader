@@ -26,7 +26,7 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
   if (denied) return denied;
   const { id } = await params;
   const row = await prisma.libraryFile.findUnique({ where: { id }, include: { client: { select: LIBRARY_CLIENT_SELECT } } });
-  if (!row) return NextResponse.json({ error: "Не найдено" }, { status: 404 });
+  if (!row) return NextResponse.json({ error: "Не найдено", code: "not_found" }, { status: 404 });
   return NextResponse.json({ item: serializeLibraryFile(row, await librarySourceOrderNumber(row.sourceOrderId)) });
 }
 
@@ -36,14 +36,14 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   if (denied) return denied;
   const { id } = await params;
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: "Неверные данные" }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: "Неверные данные", code: "invalid" }, { status: 400 });
   const body = parsed.data;
 
   const existing = await prisma.libraryFile.findUnique({ where: { id }, select: { id: true, archivedAt: true } });
-  if (!existing) return NextResponse.json({ error: "Не найдено" }, { status: 404 });
+  if (!existing) return NextResponse.json({ error: "Не найдено", code: "not_found" }, { status: 404 });
   if (body.clientId) {
     const c = await prisma.studioCustomer.findUnique({ where: { id: body.clientId }, select: { id: true } });
-    if (!c) return NextResponse.json({ error: "Клиент не найден" }, { status: 400 });
+    if (!c) return NextResponse.json({ error: "Клиент не найден", code: "client_not_found" }, { status: 400 });
   }
 
   const row = await prisma.libraryFile.update({
@@ -73,15 +73,15 @@ export async function DELETE(_request: NextRequest, { params }: Ctx) {
   try {
     const res = await hardDeleteLibraryFile(id);
     if (!res.ok) {
-      if (res.error === "not_found") return NextResponse.json({ error: "Не найдено" }, { status: 404 });
+      if (res.error === "not_found") return NextResponse.json({ error: "Не найдено", code: "not_found" }, { status: 404 });
       return NextResponse.json(
-        { error: `Файл используется в заказах (${res.references}) — его можно только отправить в архив`, code: "in_use" },
+        { error: `Файл используется в заказах (${res.references}) — его можно только отправить в архив`, code: "in_use", references: res.references },
         { status: 409 },
       );
     }
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("DELETE /api/admin/library/[id]:", error);
-    return NextResponse.json({ error: "Не удалось удалить" }, { status: 500 });
+    return NextResponse.json({ error: "Не удалось удалить", code: "delete_failed" }, { status: 500 });
   }
 }

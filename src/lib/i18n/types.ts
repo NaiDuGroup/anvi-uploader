@@ -3,6 +3,7 @@ import type { FileMetaText } from "@/lib/files/fileMetaFormat";
 import type { UvDictionary } from "./uv/types";
 import type { LayoutIssueDictionary } from "./layoutIssue/types";
 import type { DealerUrgencyDictionary } from "./dealerUrgency/types";
+import type { LibraryDictionary } from "./library/types";
 import type { SublimationDictionary } from "./sublimation/types";
 import type { PrintMethodsDictionary } from "./printMethods/types";
 import type { ImportsDictionary } from "./imports/types";
@@ -3213,6 +3214,8 @@ export interface TranslationDictionary {
     historyDerived: string;
   };
   /** «Набор» (gift set): wizard, settings «Шаблоны наборов», badges. */
+  /** «Библиотека макетов». */
+  library: LibraryDictionary;
   giftSet: {
     typeLabel: string;
     typeHint: string;

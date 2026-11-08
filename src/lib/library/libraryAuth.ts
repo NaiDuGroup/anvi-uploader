@@ -8,6 +8,6 @@ import { isAdmin } from "@/lib/roles";
 export async function requireLibraryStaff(): Promise<{ user: User; denied: null } | { user: null; denied: NextResponse }> {
   const user = await getSessionUser();
   if (!user) return { user: null, denied: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  if (!isAdmin(user.role)) return { user: null, denied: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  if (!isAdmin(user.role)) return { user: null, denied: NextResponse.json({ error: "Forbidden", code: "forbidden" }, { status: 403 }) };
   return { user, denied: null };
 }

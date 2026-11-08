@@ -2034,7 +2034,7 @@ function AdminOrderCard({
                     className="flex min-h-11 cursor-pointer items-center gap-2.5 px-3 text-sm text-gray-700 outline-none data-[highlighted]:bg-gray-50"
                   >
                     <Repeat2 className="h-4 w-4 text-gray-400" aria-hidden />
-                    Повторить заказ
+                    {t.library.repeatOrder}
                   </Link>
                 </DropdownMenu.Item>
               )}
@@ -2669,8 +2669,8 @@ const OrderTable = memo(function OrderTable({
                           <Link
                             href={`/admin/orders/new?repeat=${order.id}`}
                             className="p-1.5 rounded-md text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                            title="Повторить заказ"
-                            aria-label="Повторить заказ"
+                            title={t.library.repeatOrder}
+                            aria-label={t.library.repeatOrder}
                             data-testid="repeat-order"
                           >
                             <Repeat2 className="w-4 h-4" />

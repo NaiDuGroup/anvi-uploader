@@ -15,7 +15,7 @@ export function LibraryOwnerField({
   value,
   onChange,
   orderClient,
-  orderClientLabel = "Клиент заказа",
+  orderClientLabel,
   disabled,
 }: {
   value: LibraryOwner;
@@ -26,6 +26,7 @@ export function LibraryOwnerField({
   disabled?: boolean;
 }) {
   const { t } = useLanguageStore();
+  const d = t.library;
   const [picked, setPicked] = useState<ClientPickerValue | null>(null);
   const isCommon = value.clientId === null;
   const isOrderClient = Boolean(orderClient?.clientId) && value.clientId === orderClient?.clientId;
@@ -49,14 +50,14 @@ export function LibraryOwnerField({
 
   return (
     <fieldset className="space-y-1.5">
-      <legend className="mb-1 text-sm font-medium text-gray-700">Чей макет</legend>
+      <legend className="mb-1 text-sm font-medium text-gray-700">{d.ownerLegend}</legend>
       {orderClient?.clientId
-        ? radio(isOrderClient, orderClientLabel, () => onChange(orderClient), orderClient.clientName)
+        ? radio(isOrderClient, orderClientLabel ?? d.orderClient, () => onChange(orderClient), orderClient.clientName)
         : null}
-      {radio(isCommon, "Общий", () => onChange({ clientId: null, clientName: null }), "Виден для всех клиентов студии")}
+      {radio(isCommon, d.common, () => onChange({ clientId: null, clientName: null }), d.commonHint)}
       {radio(
         isOther,
-        orderClient?.clientId ? "Другой клиент" : "Клиент",
+        orderClient?.clientId ? d.otherClient : d.clientLabel,
         () => {
           if (picked) onChange({ clientId: picked.id, clientName: picked.personName || picked.companyName || picked.phone });
           else if (!isOther) onChange({ clientId: "", clientName: null });

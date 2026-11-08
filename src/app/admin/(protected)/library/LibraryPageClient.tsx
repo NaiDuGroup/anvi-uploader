@@ -10,6 +10,7 @@ import {
   libraryFetch,
   libraryFileUrl,
   libraryMetaText,
+  libraryOrderNumber,
   type LibraryItem,
 } from "@/app/admin/_components/library/libraryClient";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -19,13 +20,6 @@ type OwnerFilter = "all" | "common" | "client";
 
 const PAGE_SIZE = 48;
 
-function usesText(n: number): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  const word = mod10 === 1 && mod100 !== 11 ? "раз" : mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14) ? "раза" : "раз";
-  return n === 0 ? "ещё не использован" : `использован ${n} ${word}`;
-}
-
 /**
  * «Библиотека макетов»: artwork staff saved on purpose from orders. Copies
  * live under `library/` (not deleted after 7 days like `uploads/`) and new
@@ -33,6 +27,7 @@ function usesText(n: number): string {
  */
 export default function LibraryPageClient({ focusItemId }: { focusItemId: string | null }) {
   const { t } = useLanguageStore();
+  const d = t.library;
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [owner, setOwner] = useState<OwnerFilter>("all");
@@ -112,7 +107,7 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
     // It leaves the current view (active ↔ archive).
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     setTotal((n) => Math.max(0, n - 1));
-    setNotice(value ? `«${item.title}» — в архиве` : `«${item.title}» — восстановлен`);
+    setNotice(value ? d.archivedNotice(item.title) : d.restoredNotice(item.title));
   };
 
   const hardDelete = async () => {
@@ -127,7 +122,7 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
     }
     setItems((prev) => prev.filter((i) => i.id !== deleting.id));
     setTotal((n) => Math.max(0, n - 1));
-    setNotice(`«${deleting.title}» удалён`);
+    setNotice(d.deletedNotice(deleting.title));
     setDeleting(null);
   };
 
@@ -151,16 +146,13 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900 sm:text-2xl">
             <BookMarked className="h-6 w-6 text-amber-600" aria-hidden />
-            Библиотека макетов
+            {d.pageTitle}
           </h1>
-          <p className="mt-1 max-w-2xl text-sm text-gray-500">
-            Повторяющиеся макеты клиентов и общие. Не удаляются через 7 дней, как файлы заказов. Сохранить файл —
-            кнопка «В библиотеку» у файла в заказе; использовать — «Из библиотеки» в новом заказе.
-          </p>
+          <p className="mt-1 max-w-2xl text-sm text-gray-500">{d.pageIntro}</p>
         </div>
         <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700">
           <input type="checkbox" className="size-4 accent-amber-600" checked={archived} onChange={(e) => setArchived(e.target.checked)} />
-          Архив
+          {d.archiveToggle}
         </label>
       </div>
 
@@ -171,25 +163,25 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Название, тег, клиент или телефон"
+            placeholder={d.searchPlaceholder}
             className="h-10 w-full rounded-lg border border-gray-300 pl-9 pr-9 text-sm text-gray-900 placeholder:text-gray-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200"
-            aria-label="Поиск по библиотеке"
+            aria-label={d.searchAria}
           />
           {query ? (
             <button
               type="button"
               onClick={() => setQuery("")}
               className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-gray-400 hover:bg-gray-100"
-              aria-label="Очистить"
+              aria-label={d.clearSearch}
             >
               <X className="h-4 w-4" />
             </button>
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {filterBtn("all", "Все")}
-          {filterBtn("common", "Общие")}
-          {filterBtn("client", "Клиент")}
+          {filterBtn("all", d.filterAll)}
+          {filterBtn("common", d.filterCommon)}
+          {filterBtn("client", d.filterClient)}
           {owner === "client" ? (
             <div className="w-full sm:w-80">
               <ClientPicker value={client} onChange={setClient} t={t.admin} />
@@ -201,7 +193,7 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
       {notice ? (
         <div className="mb-3 flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           <span>{notice}</span>
-          <button type="button" onClick={() => setNotice(null)} className="shrink-0 text-amber-800" aria-label="Закрыть">
+          <button type="button" onClick={() => setNotice(null)} className="shrink-0 text-amber-800" aria-label={d.close}>
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -209,26 +201,26 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
       {error ? <p className="mb-3 text-sm text-red-700">{error}</p> : null}
 
       {owner === "client" && !client ? (
-        <p className="py-10 text-center text-sm text-gray-500">Выберите клиента.</p>
+        <p className="py-10 text-center text-sm text-gray-500">{d.pickClientFirst}</p>
       ) : !loading && items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white py-12 text-center text-sm text-gray-500">
           {archived
-            ? "В архиве пусто."
+            ? d.emptyArchive
             : debounced
-              ? "Ничего не найдено."
+              ? d.emptySearch
               : owner === "common"
-                ? "Общих макетов пока нет. При сохранении выберите «Общий» — такой макет виден для всех клиентов."
+                ? d.emptyCommon
                 : owner === "client"
-                  ? "У этого клиента пока нет макетов в библиотеке."
-                  : "Библиотека пока пустая. Откройте заказ и нажмите «В библиотеку» у файла."}
+                  ? d.emptyClient
+                  : d.emptyAll}
         </div>
       ) : (
         <>
-          <p className="mb-2 text-xs text-gray-500">Найдено: {total}</p>
+          <p className="mb-2 text-xs text-gray-500">{d.found(total)}</p>
           <ul className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" data-testid="library-grid">
             {items.map((item) => (
               <li key={item.id} className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <a href={libraryFileUrl(item.id)} target="_blank" rel="noopener noreferrer" className="block" title="Открыть файл">
+                <a href={libraryFileUrl(item.id)} target="_blank" rel="noopener noreferrer" className="block" title={d.openFile}>
                   <LibraryThumb item={item} className="aspect-[4/3] w-full border-b border-gray-100" />
                 </a>
                 <div className="flex flex-1 flex-col gap-1.5 p-3">
@@ -244,9 +236,9 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
                         "max-w-full truncate rounded px-1.5 py-0.5 text-[11px] font-medium",
                         item.clientId ? "bg-blue-50 text-blue-800" : "bg-gray-100 text-gray-700",
                       )}
-                      title={item.clientId ? `${item.clientName ?? "Клиент"} ${item.clientPhone ?? ""}` : "Общий"}
+                      title={item.clientId ? `${item.clientName ?? d.clientFallback} ${item.clientPhone ?? ""}` : d.common}
                     >
-                      {item.clientId ? (item.clientName ?? item.clientPhone ?? "Клиент") : "Общий"}
+                      {item.clientId ? (item.clientName ?? item.clientPhone ?? d.clientFallback) : d.common}
                     </span>
                     {item.tags.map((tag) => (
                       <button
@@ -259,17 +251,17 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
                       </button>
                     ))}
                   </div>
-                  <p className="text-[11px] text-gray-500">{libraryMetaText(item) || "—"}</p>
+                  <p className="text-[11px] text-gray-500">{libraryMetaText(item, d.meta) || "—"}</p>
                   <p className="text-[11px] text-gray-500">
-                    {usesText(item.useCount)}
-                    {item.sourceOrderNumber ? ` · из заказа #${String(item.sourceOrderNumber).padStart(4, "0")}` : null}
+                    {d.uses(item.useCount)}
+                    {item.sourceOrderNumber ? ` · ${d.fromOrder(libraryOrderNumber(item.sourceOrderNumber))}` : null}
                   </p>
                   <div className="mt-auto flex flex-wrap items-center gap-1 pt-1">
                     <a
                       href={libraryFileUrl(item.id, true)}
                       className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-blue-600"
-                      title="Скачать"
-                      aria-label="Скачать"
+                      title={d.download}
+                      aria-label={d.download}
                     >
                       <Download className="h-4 w-4" />
                     </a>
@@ -277,8 +269,8 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
                       type="button"
                       onClick={() => setEditing(item)}
                       className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-amber-700"
-                      title="Изменить"
-                      aria-label="Изменить"
+                      title={d.edit}
+                      aria-label={d.edit}
                     >
                       <Pencil className="h-4 w-4" />
                     </button>
@@ -287,8 +279,8 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
                       onClick={() => void setArchivedFlag(item, !archived)}
                       disabled={rowBusy === item.id}
                       className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50"
-                      title={archived ? "Восстановить" : "В архив"}
-                      aria-label={archived ? "Восстановить" : "В архив"}
+                      title={archived ? d.restore : d.archive}
+                      aria-label={archived ? d.restore : d.archive}
                     >
                       {rowBusy === item.id ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -303,8 +295,8 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
                         type="button"
                         onClick={() => setDeleting(item)}
                         className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
-                        title="Удалить навсегда"
-                        aria-label="Удалить навсегда"
+                        title={d.deleteForever}
+                        aria-label={d.deleteForever}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -323,7 +315,7 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
                 className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Показать ещё
+                {d.showMore}
               </button>
             </div>
           ) : null}
@@ -347,14 +339,10 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
       ) : null}
       <AdminConfirmDialog
         open={deleting !== null}
-        title="Удалить макет навсегда?"
-        description={
-          deleting
-            ? `«${deleting.title}» и его файл будут удалены без возможности восстановления. Если файл используется в заказах, удаление не пройдёт — тогда он остаётся в архиве.`
-            : ""
-        }
-        confirmLabel="Удалить"
-        cancelLabel="Отмена"
+        title={d.deleteConfirmTitle}
+        description={deleting ? d.deleteConfirmText(deleting.title) : ""}
+        confirmLabel={d.deleteConfirm}
+        cancelLabel={d.cancel}
         busy={deleteBusy}
         onConfirm={() => void hardDelete()}
         onClose={() => setDeleting(null)}

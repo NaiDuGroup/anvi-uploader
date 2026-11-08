@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { LibrarySheet, sheetCancelClass, sheetInputClass } from "./LibrarySheet";
 import { libraryFetch, libraryMetaText, type LibraryItem } from "./libraryClient";
 import { LibraryThumb } from "./LibraryThumb";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 
 /**
  * «Из библиотеки» in the order wizard: the order client's items first, then
@@ -23,6 +24,7 @@ export function LibraryPickerDialog({
   onPick: (item: LibraryItem) => void;
   onClose: () => void;
 }) {
+  const d = useLanguageStore((s) => s.t.library);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [allOwners, setAllOwners] = useState(false);
@@ -68,11 +70,11 @@ export function LibraryPickerDialog({
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold text-gray-900">{item.title}</span>
           <span className="block truncate text-xs text-gray-500">
-            {item.clientId ? (item.clientName ?? "Клиент") : "Общий"}
+            {item.clientId ? (item.clientName ?? d.clientFallback) : d.common}
             {item.tags.length ? ` · ${item.tags.map((t) => `#${t}`).join(" ")}` : ""}
           </span>
           <span className="block truncate text-[11px] text-gray-400">
-            {[libraryMetaText(item), item.useCount ? `использован ${item.useCount}×` : ""].filter(Boolean).join(" · ")}
+            {[libraryMetaText(item, d.meta), item.useCount ? d.usesShort(item.useCount) : ""].filter(Boolean).join(" · ")}
           </span>
         </span>
       </button>
@@ -81,14 +83,14 @@ export function LibraryPickerDialog({
 
   return (
     <LibrarySheet
-      title="Из библиотеки"
+      title={d.pickerTitle}
       icon={<BookMarked className="h-5 w-5 shrink-0 text-amber-600" aria-hidden />}
       onClose={onClose}
       wide
       testId="library-picker"
       footer={
         <button type="button" className={sheetCancelClass} onClick={onClose}>
-          Отмена
+          {d.cancel}
         </button>
       }
     >
@@ -100,13 +102,13 @@ export function LibraryPickerDialog({
             className={cn(sheetInputClass, "pl-9")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Название, тег, клиент или телефон"
+            placeholder={d.pickerSearch}
             autoFocus
           />
         </div>
         <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-gray-600">
           <input type="checkbox" className="size-4 accent-amber-600" checked={allOwners} onChange={(e) => setAllOwners(e.target.checked)} />
-          Все клиенты (не только {clientId ? "этого клиента и общие" : "общие"})
+          {d.pickerAllClients(Boolean(clientId))}
         </label>
       </div>
       {loading ? (
@@ -117,14 +119,14 @@ export function LibraryPickerDialog({
         <p className="py-4 text-sm text-red-700">{error}</p>
       ) : items.length === 0 ? (
         <p className="py-8 text-center text-sm text-gray-500">
-          {debounced ? "Ничего не найдено." : "Подходящих макетов в библиотеке нет."}
+          {debounced ? d.pickerNothing : d.pickerEmpty}
         </p>
       ) : (
         <div className="space-y-3">
           {own.length > 0 ? (
             <section>
               <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Макеты клиента{clientName ? ` — ${clientName}` : ""}
+                {d.pickerClientSection(clientName)}
               </h3>
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">{own.map(row)}</ul>
             </section>
@@ -132,7 +134,7 @@ export function LibraryPickerDialog({
           {rest.length > 0 ? (
             <section>
               <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                {allOwners ? "Все макеты" : "Общие"}
+                {allOwners ? d.pickerAll : d.pickerCommon}
               </h3>
               <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">{rest.map(row)}</ul>
             </section>
