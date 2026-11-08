@@ -7,6 +7,7 @@ import type { ResolvedAdminOrderLine } from "@/lib/adminOrderCreateHelpers";
 import { AdminOrderResolveError } from "@/lib/adminOrderCreateHelpers";
 import type { UvLineData } from "@/lib/uv/types";
 import {
+  isGiftSetBoxLineType,
   parseGiftSetTemplates,
   planGiftSets,
   READY_THERMOS_SET_COLOURS,
@@ -39,6 +40,8 @@ export async function saveGiftSetTemplates(templates: GiftSetTemplate[]): Promis
 }
 
 function lineCopies(r: ResolvedAdminOrderLine): number {
+  // The box of a set has no file: N boxes = its quantity.
+  if (isGiftSetBoxLineType(r.input.productType)) return r.input.quantity ?? 0;
   if (r.input.productType === "uv_print") {
     return (r.uvExtras?.uvLineData as UvLineData | undefined)?.quantity ?? r.input.uv?.quantity ?? 0;
   }
@@ -109,10 +112,25 @@ export async function applyGiftSetsToResolved(
   const plan = planGiftSets(planLines, templates, opts);
   if (!plan.ok) throw new AdminOrderResolveError(plan.code);
 
+  // Box lines: the box's stock variant (by the template's box SKU).
+  const boxSkus = [
+    ...new Set(
+      [...plan.byLine.values()].filter(({ data }) => data.role === "box" && data.boxSku).map(({ data }) => data.boxSku!),
+    ),
+  ];
+  const boxVariants = boxSkus.length
+    ? await prisma.stockVariant.findMany({ where: { sku: { in: boxSkus } }, select: { id: true, sku: true } })
+    : [];
+  const boxVariantBySku = new Map(boxVariants.map((v) => [v.sku, v.id]));
+
   for (const [i, { groupId, data }] of plan.byLine) {
     const r = resolved[i]!;
     r.giftSetExtras = { setGroupId: groupId, setData: data };
-    if (data.kind === "ready" && data.zoneId) {
+    if (data.role === "box") {
+      // No print, no price of its own («входит в набор»); written off through `setData.boxSku`.
+      r.setBoxExtras = { stockVariantId: data.boxSku ? (boxVariantBySku.get(data.boxSku) ?? null) : null };
+      r.manualUnitPriceMdl = null;
+    } else if (data.kind === "ready" && data.zoneId) {
       const template = templates.find((t) => t.id === data.templateId)!;
       const zone = template.zones.find((z) => z.id === data.zoneId)!;
       const rv = readyVariant(r)!;

@@ -3241,6 +3241,16 @@ export interface TranslationDictionary {
     /** «+ коробка 30×23×8,5» (box size or SKU). */
     box: (size: string) => string;
     boxLine: (size: string) => string;
+    /** Line type of a set's box line («Коробка набора»). */
+    boxTypeLabel: string;
+    /** Price cell of the box row: «входит в набор». */
+    boxIncluded: string;
+    /** File cell of the box row: no file needed. */
+    boxNoFile: string;
+    /** Box row note: written off from stock, N per set. */
+    boxStockNote: string;
+    /** Dialog: section title of the box. */
+    boxSection: string;
     shortWarning: string;
     replaceFile: string;
     boardProcurement: string;

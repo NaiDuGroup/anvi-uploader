@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import type { OrderLogEntry } from "@/lib/orderLog";
 import { planOrderStatusWrite } from "@/lib/orderLineStatusSync";
+import { giftSetBoxLineStatuses } from "@/lib/giftSet/giftSet";
 import {
   canSetLineStatus,
   deriveWorkshopOrderStatus,
@@ -63,7 +64,7 @@ export interface LockedOrder {
   orderNumber: number;
   status: string;
   deletedAt: Date | null;
-  orderLines: { id: string; sortOrder: number; productionStatus: string }[];
+  orderLines: { id: string; sortOrder: number; productionStatus: string; productType?: string; setGroupId?: string | null }[];
 }
 
 /** Lock the orders (row lock, ordered by id against deadlocks) and load their lines. */
@@ -79,11 +80,30 @@ export async function lockOrders(tx: Tx, orderIds: readonly string[]): Promise<M
       deletedAt: true,
       orderLines: {
         orderBy: { sortOrder: "asc" },
-        select: { id: true, sortOrder: true, productionStatus: true },
+        select: { id: true, sortOrder: true, productionStatus: true, productType: true, setGroupId: true },
       },
     },
   });
   return new Map(orders.map((o) => [o.id, o]));
+}
+
+/**
+ * «Набор»: the box line of a set follows its set's lines (`giftSetBoxLineStatuses`);
+ * writes the box lines that change and returns the lines with their new statuses.
+ */
+async function followGiftSetBoxLines<L extends { id: string; productType?: string; setGroupId?: string | null; productionStatus: string }>(
+  tx: Tx,
+  orderId: string,
+  lines: readonly L[],
+  at: Date,
+): Promise<L[]> {
+  const next = giftSetBoxLineStatuses(lines);
+  if (next.size === 0) return [...lines];
+  for (const status of new Set(next.values())) {
+    const ids = [...next].filter(([, s]) => s === status).map(([id]) => id);
+    await tx.orderLine.updateMany({ where: { orderId, id: { in: ids } }, data: { productionStatus: status, productionStatusAt: at } });
+  }
+  return lines.map((l) => (next.has(l.id) ? { ...l, productionStatus: next.get(l.id)! } : l));
 }
 
 /**
@@ -190,10 +210,20 @@ export async function setOrderLineStatuses(
           });
         }
       }
-      const nextLines = order.orderLines.map((l) => ({
-        id: l.id,
-        productionStatus: lineIds.has(l.id) ? status : l.productionStatus,
-      }));
+      // A set's box line (never on the board) follows its set.
+      const nextLines = (
+        await followGiftSetBoxLines(
+          tx,
+          orderId,
+          order.orderLines.map((l) => ({
+            id: l.id,
+            productType: l.productType,
+            setGroupId: l.setGroupId,
+            productionStatus: lineIds.has(l.id) ? status : l.productionStatus,
+          })),
+          at,
+        )
+      ).map((l) => ({ id: l.id, productionStatus: l.productionStatus }));
       const newOrderStatus = await applyDerivedStatus(tx, order, nextLines, userId, logs);
       results.push({
         orderId,
@@ -218,7 +248,11 @@ export async function rederiveOrderStatusInTx(tx: Tx, orderId: string, userId: s
   const order = (await lockOrders(tx, [orderId])).get(orderId);
   if (!order) return "";
   const logs: OrderLogEntry[] = [];
-  const next = await applyDerivedStatus(tx, order, order.orderLines, userId, logs);
+  // A set's box line follows its set (an edit may add it to an order already printing).
+  const lines = isWorkshopPhaseStatus(order.status)
+    ? await followGiftSetBoxLines(tx, orderId, order.orderLines, new Date())
+    : order.orderLines;
+  const next = await applyDerivedStatus(tx, order, lines, userId, logs);
   if (logs.length > 0) await tx.orderLog.createMany({ data: logs });
   return next;
 }

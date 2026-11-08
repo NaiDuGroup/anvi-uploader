@@ -6,9 +6,13 @@
  *    together in-house from stock. The order gets one normal line per
  *    component (pen / notebook / mug — each with its own file, layout check,
  *    stock write-off and workshop card), linked by `OrderLine.setGroupId`.
- *    The set's fixed price is split across the lines (`splitSetUnitPrice`) so
- *    the lines add up to price × N exactly; the box is written off once per
- *    set on the group's first line.
+ *    The set's fixed price is split across the print lines
+ *    (`splitSetUnitPrice`) so they add up to price × N exactly. The box is its
+ *    own line of the set (`set_box`, role «box»: no print, no file, price 0
+ *    «входит в набор», N boxes) and is written off from stock through it
+ *    (`setData.boxSku` on the box line). Orders saved before 2026-11-08 have
+ *    no box line: the group's first line carries `boxSku` (hidden write-off),
+ *    still returned / re-taken by SKU (`giftSetExtraStockSkus`).
  *  - **ready** (C «Ручка + блокнот + термос», bought in as one product with
  *    colour variants): one order line per printed component (zone), like
  *    A/B — notebook → `notebook` line, pen → `pen` line (both «другой»
@@ -30,8 +34,16 @@ export type GiftSetKind = (typeof GIFT_SET_KINDS)[number];
 export const GIFT_SET_ROLES = ["pen", "notebook", "mug"] as const;
 export type GiftSetRole = (typeof GIFT_SET_ROLES)[number];
 
-/** Role of one order line in a set: a component line, or the one line of a ready set. */
-export type GiftSetLineRole = GiftSetRole | "ready";
+/** Role of one order line in a set: a component line, a ready set's line, or the box of an assembled set. */
+export type GiftSetLineRole = GiftSetRole | "ready" | "box";
+
+/** Order line type of the box of an assembled set (no print, no file). */
+export const GIFT_SET_BOX_LINE_TYPE = "set_box";
+
+/** True for the box line of an assembled set (`OrderLine.productType`). */
+export function isGiftSetBoxLineType(productType: string | null | undefined): boolean {
+  return productType === GIFT_SET_BOX_LINE_TYPE;
+}
 
 export const GIFT_SET_MAX_QUANTITY = 9999;
 export const GIFT_SET_MAX_TEMPLATES = 30;
@@ -293,6 +305,9 @@ export function parseGiftSetTemplates(raw: unknown): GiftSetTemplate[] {
   return kept.ok ? kept.templates : [];
 }
 
+/** Label of the box line of a set. */
+export const GIFT_SET_BOX_LABEL = "Коробка";
+
 export function defaultRoleLabel(role: GiftSetRole): string {
   return role === "pen" ? "Ручка" : role === "notebook" ? "Блокнот" : "Кружка";
 }
@@ -387,7 +402,10 @@ export interface OrderLineSetData {
   lineUnitPriceMdl: number;
   /** This line's total (share × quantity). */
   lineTotalMdl: number;
-  /** Box written off with this line (the group's first line of an assembled set), else null. */
+  /**
+   * Box written off with this line: the box line (role «box») of an assembled
+   * set; on orders before the box line, the group's first line. Else null.
+   */
   boxSku: string | null;
   /** Ready set: the set item's colour variant written off with this line (the group's first line), else null. */
   setItemSku?: string | null;
@@ -422,7 +440,8 @@ export type GiftSetPlanErrorCode =
   | "gift_set_quantity_mismatch"
   | "gift_set_line_type_mismatch"
   | "gift_set_item_mismatch"
-  | "gift_set_other_item";
+  | "gift_set_other_item"
+  | "gift_set_box_mismatch";
 
 export type GiftSetPlan =
   | { ok: true; byLine: Map<number, { groupId: string; data: OrderLineSetData }> }
@@ -524,20 +543,29 @@ export function planGiftSets(
       continue;
     }
 
-    // Assembled: one line per component, each line of its component's type.
-    const roles = idx.map((i) => lines[i]!.set!.role);
+    // Assembled: one line per component, each line of its component's type, plus
+    // the box line (when the template has a box): no print, its share is 0.
+    const boxIdx = idx.filter((i) => lines[i]!.set!.role === "box" || lines[i]!.productType === GIFT_SET_BOX_LINE_TYPE);
+    if (
+      boxIdx.length !== (template.boxSku ? 1 : 0) ||
+      boxIdx.some((i) => lines[i]!.set!.role !== "box" || lines[i]!.productType !== GIFT_SET_BOX_LINE_TYPE)
+    ) {
+      return { ok: false, code: "gift_set_box_mismatch", groupId };
+    }
+    const compIdx = idx.filter((i) => !boxIdx.includes(i));
+    const roles = compIdx.map((i) => lines[i]!.set!.role);
     const wanted = template.components.map((c) => c.role);
     if (roles.length !== wanted.length || wanted.some((r) => !roles.includes(r)) || new Set(roles).size !== roles.length) {
       return { ok: false, code: "gift_set_components_mismatch", groupId };
     }
-    for (const i of idx) {
+    for (const i of compIdx) {
       const l = lines[i]!;
       if (l.productType !== l.set!.role) return { ok: false, code: "gift_set_line_type_mismatch", groupId };
       if (l.otherItem) return { ok: false, code: "gift_set_other_item", groupId };
     }
-    const comps = idx.map((i) => template.components.find((c) => c.role === lines[i]!.set!.role)!);
+    const comps = compIdx.map((i) => template.components.find((c) => c.role === lines[i]!.set!.role)!);
     const shares = splitSetUnitPrice(price.unitPriceMdl, comps.map((c) => c.weight));
-    idx.forEach((lineIndex, k) => {
+    compIdx.forEach((lineIndex, k) => {
       byLine.set(lineIndex, {
         groupId,
         data: {
@@ -546,11 +574,24 @@ export function planGiftSets(
           roleLabel: comps[k]!.label,
           lineUnitPriceMdl: shares[k]!,
           lineTotalMdl: round2(shares[k]! * quantity),
-          // The box goes with the group's first line, once per set.
-          boxSku: k === 0 ? template.boxSku : null,
+          boxSku: null,
         },
       });
     });
+    // The box: written off through its own line, N per set; «входит в набор» (0).
+    for (const lineIndex of boxIdx) {
+      byLine.set(lineIndex, {
+        groupId,
+        data: {
+          ...base,
+          role: "box",
+          roleLabel: GIFT_SET_BOX_LABEL,
+          lineUnitPriceMdl: 0,
+          lineTotalMdl: 0,
+          boxSku: template.boxSku,
+        },
+      });
+    }
   }
   return { ok: true, byLine };
 }
@@ -573,6 +614,34 @@ export function giftSetBoxWriteOffs(
   return [...by.entries()].map(([sku, quantity]) => ({ sku, quantity }));
 }
 
+/**
+ * Production status the box line of each set should have: it is never printed
+ * (no workshop card), so it follows its set — DONE when every item line of the
+ * set is done, WAITING while none started, else PRINTING. Only box lines whose
+ * status differs are returned (line id → status). Keeps a set's box from
+ * holding the order back from «Готово в цеху».
+ */
+export function giftSetBoxLineStatuses(
+  lines: readonly { id: string; productType?: string | null; setGroupId?: string | null; productionStatus: string }[],
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const box of lines) {
+    if (!isGiftSetBoxLineType(box.productType) || !box.setGroupId) continue;
+    const items = lines.filter((l) => l.setGroupId === box.setGroupId && !isGiftSetBoxLineType(l.productType));
+    if (items.length === 0) continue;
+    const done = items.every((l) => l.productionStatus === "DONE");
+    const waiting = items.every((l) => l.productionStatus === "WAITING" || l.productionStatus === "NEEDS_LAYOUT");
+    const want = done ? "DONE" : waiting ? "WAITING" : "PRINTING";
+    if (box.productionStatus !== want) out.set(box.id, want);
+  }
+  return out;
+}
+
+/** «Коробка 30×23×8,5» of a box SKU (the box line's name). */
+export function giftSetBoxName(boxSku: string): string {
+  return `${GIFT_SET_BOX_LABEL} ${boxSizeFromSku(boxSku) ?? boxSku}`;
+}
+
 /** Legacy ready set: the whole set on one UV line (orders before 2026-11-08). */
 export function isLegacyReadySetLine(d: Pick<OrderLineSetData, "role" | "zoneId"> | null | undefined): boolean {
   return d?.role === "ready" && !d.zoneId;
@@ -586,7 +655,7 @@ export function parseOrderLineSetData(raw: unknown): OrderLineSetData | null {
   const quantity = num(o.quantity);
   if (quantity == null || quantity < 1) return null;
   const role = o.role;
-  if (role !== "ready" && !GIFT_SET_ROLES.includes(role as GiftSetRole)) return null;
+  if (role !== "ready" && role !== "box" && !GIFT_SET_ROLES.includes(role as GiftSetRole)) return null;
   return {
     version: 1,
     templateId: o.templateId,

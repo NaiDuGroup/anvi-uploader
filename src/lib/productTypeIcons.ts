@@ -9,6 +9,7 @@ import {
   Maximize,
   Newspaper,
   Notebook,
+  Package,
   PenLine,
   Shirt,
   Sparkles,
@@ -23,9 +24,10 @@ import type { ProductType } from "@/lib/validations";
 
 /**
  * A product type, UV-DTF stickers (UV print with technique «transfer») shown
- * apart, or «Набор» (a gift set: the ready-set line, the wizard menu tile, the badge).
+ * apart, «Набор» (a gift set: the ready-set line, the wizard menu tile, the badge),
+ * or the box line of a set (no print: packaging written off with the set).
  */
-export type LineTypeKey = ProductType | "uv_dtf" | "gift_set";
+export type LineTypeKey = ProductType | "uv_dtf" | "gift_set" | "set_box";
 
 /**
  * The one icon per product type, used by order line headers, the workshop
@@ -46,6 +48,7 @@ export const PRODUCT_TYPE_ICONS: Record<LineTypeKey, LucideIcon> = {
   uv_dtf: StickyNote,
   sublimation_print: Flame,
   gift_set: Gift,
+  set_box: Package,
 };
 
 /** Orders made of several product types (cabinet order header). */
@@ -82,5 +85,6 @@ export function lineTypeLabel(key: LineTypeKey, t: TranslationDictionary): strin
     case "uv_dtf": return t.uv.workshop.sectionUvDtf;
     case "sublimation_print": return t.sublimation.productType;
     case "gift_set": return t.giftSet.typeLabel;
+    case "set_box": return t.giftSet.boxTypeLabel;
   }
 }

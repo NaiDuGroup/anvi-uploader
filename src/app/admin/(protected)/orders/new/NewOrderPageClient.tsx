@@ -3,11 +3,19 @@
 import { marginPercentOnCostBasis, sellOnCostBasis } from "@/lib/accounting/vatBasis";
 import { SHOP_ORDER_EDIT_BLOCKED_MESSAGE } from "@/lib/shop/orderFlags";
 import { GIFT_SET_CATEGORY_CODE } from "@/lib/giftSet/giftSetCategory";
-import { boxSizeFromSku, giftSetPackNote, parseOrderLineSetData, readyZoneLineType, type GiftSetTemplate, type GiftSetZone } from "@/lib/giftSet/giftSet";
+import {
+  isGiftSetBoxLineType,
+  parseOrderLineSetData,
+  readyZoneLineType,
+  type GiftSetTemplate,
+  type GiftSetZone,
+} from "@/lib/giftSet/giftSet";
 import { readyZoneExpectedPx } from "@/lib/giftSet/giftSetReadyLines";
 import {
+  giftSetBoxRows,
   giftSetGroupSlotIds,
   giftSetLineInput,
+  withGiftSetBoxLines,
   giftSetReservedStock,
   giftSetSwatchHex,
   giftSetRowFromLine,
@@ -15,8 +23,10 @@ import {
   giftSetRowTotals,
   type GiftSetCatalogs,
   type GiftSetChoice,
+  type GiftSetBoxRow,
   type GiftSetRowAssign,
 } from "@/lib/giftSet/giftSetWizard";
+import { GiftSetItemThumb } from "@/components/orders/GiftSetItemThumb";
 import { readySetRowLine } from "./giftSetLines";
 import { GiftSetDialog } from "@/app/admin/_components/GiftSetDialog";
 import { GiftSetBadge } from "@/components/orders/GiftSetBadge";
@@ -174,7 +184,7 @@ import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import { UvLineEditor, UvProfitPanel } from "@/app/admin/_components/uv/UvLineEditor";
 import { buildUvLineData } from "@/lib/uv/buildUvLineData";
 import type { UvLineData } from "@/lib/uv/types";
-import type { UvCatalogJson } from "@/lib/uv/dto";
+import type { UvCatalogJson, UvStockItemJson } from "@/lib/uv/dto";
 import type { UvLineInput } from "@/lib/uv/uvLineInput";
 import { uvZoneFilePaperType, uvZoneIdFromPaperType } from "@/lib/uv/uvConstants";
 import {
@@ -1895,6 +1905,8 @@ async function buildAdminOrderUpdateLines(
   giftSetTemplates: readonly GiftSetTemplate[] = [],
   /** Product type of each stored line (a ready-set row keeps its line id only when the type matches). */
   readySetStoredType: ReadonlyMap<string, string> = new Map(),
+  /** «Набор»: stored box line id by set group (the box line keeps its id). */
+  setBoxLineIds: ReadonlyMap<string, string> = new Map(),
 ): Promise<AdminOrderUpdateLineInput[]> {
   const out: AdminOrderUpdateLineInput[] = [];
   let i = 0;
@@ -2217,7 +2229,8 @@ async function buildAdminOrderUpdateLines(
       files,
     });
   }
-  return out;
+  // «Набор»: each assembled set's box as its own line (no file), after the set's lines.
+  return withGiftSetBoxLines(out, giftSetTemplates, setBoxLineIds);
 }
 
 function NewOrderWizard(props: NewOrderPageClientProps) {
@@ -2309,6 +2322,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const [giftSetDialog, setGiftSetDialog] = useState<{ slotId: string; initial: GiftSetChoice | null } | null>(null);
   /** Edit: product type of each stored line (a ready-set row keeps its line id only on a line of its type). */
   const storedLineTypesRef = useRef<Map<string, string>>(new Map());
+  /** «Набор»: stored box line id by set group (edit: the box line is not a row; it keeps its id on save). */
+  const setBoxLineIdsRef = useRef<Map<string, string>>(new Map());
   const methodTitle = useCallback(
     (m: StockMethod): string => getProductTypeConfig(m)?.getTitle(t) ?? m,
     [t],
@@ -2666,6 +2681,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         const nextAssign: Record<string, SlotAssign> = {};
 
         for (const line of lines) {
+          // «Набор»: the box line is not a row (no file) — the wizard sends it again with its set.
+          if (isGiftSetBoxLineType(line.productType)) {
+            if (line.setGroupId) setBoxLineIdsRef.current.set(line.setGroupId, line.id);
+            storedLineTypesRef.current.set(line.id, line.productType);
+            continue;
+          }
           const lineSet = line.setGroupId ? parseOrderLineSetData(line.setData) : null;
           // A ready gift set: its files in the order of the set's print places (thermos, notebook, pen).
           const zoneRank = (f: { paperType: string | null }): number => {
@@ -3428,6 +3449,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     Boolean(editOrderId) && !editLoadError && editLoading;
 
   /** «Набор»: line total of every set row (the set price split as the server bills it). */
+  /** «Набор»: box row of each assembled set, by the slot it follows. */
+  const giftSetBoxRowsBySlot: Map<string, GiftSetBoxRow> = useMemo(
+    () => giftSetBoxRows(slots.map((x) => ({ slotId: x.id, giftSet: assignBySlot[x.id]?.giftSet })), giftSetTemplates),
+    [slots, assignBySlot, giftSetTemplates],
+  );
   const giftSetTotals: Map<string, number> = useMemo(
     () =>
       giftSetRowTotals(
@@ -3911,22 +3937,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
   /**
    * Product / item / price / quantity cells of a «Набор» row: the set badge
-   * and actions on the set's first row, the item and its colour, the row's
-   * share of the set price, N sets (changed in the set dialog only).
+   * (every row of the set), the item with its photo and colour, the row's
+   * share of the set price, N sets (changed in the set dialog only). The
+   * set's actions sit in its header row ({@link renderGiftSetHeaderRow}).
    */
   function renderGiftSetCells(s: AdminWizardSlot, a: SlotAssign, layoutCheck: SizeValidationResult | null | undefined) {
     const gs = a.giftSet!;
     const g = t.giftSet;
     const template = giftSetTemplates.find((x) => x.id === gs.templateId) ?? null;
-    const groupIds = giftSetGroupSlotIds(s.id, giftSetRows());
-    const isFirst = groupIds[0] === s.id;
     const comp = template?.components.find((c) => c.role === gs.role);
     const zone = gs.zoneId ? template?.zones.find((z) => z.id === gs.zoneId) : undefined;
     const label = zone?.label ?? comp?.label ?? (gs.role === "ready" ? "" : g.roleNames[gs.role]);
-    const variantId = gs.role === "ready" ? (gs.readyVariantId ?? null) : designerRowVariantId(a);
-    const item =
-      (variantId && (uvCatalog.items.find((i) => i.id === variantId) ?? sublimationCatalog.items.find((i) => i.id === variantId))) ||
-      null;
+    const item = giftSetRowItem(a);
     const readyType = zone ? readyZoneLineType(zone.id) : null;
     const Icon =
       gs.role === "ready"
@@ -3939,34 +3961,22 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     return (
       <>
         <td className="min-w-0 px-2.5 py-2 align-top" data-testid="gift-set-row">
-          {isFirst ? (
-            <GiftSetBadge label={g.badge(template?.name ?? gs.templateId, gs.quantity)} className="max-w-full whitespace-normal" />
-          ) : null}
+          <GiftSetBadge label={g.badge(template?.name ?? gs.templateId, gs.quantity)} className="max-w-full whitespace-normal" />
           <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-gray-900">
             <Icon className="h-4 w-4 shrink-0 text-gray-500" aria-hidden />
             {ready ? g.fileFor(label) : label}
           </p>
-          {isFirst ? (
-            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-              <button
-                type="button"
-                className="font-medium text-amber-700 hover:underline"
-                onClick={() => setGiftSetDialog({ slotId: s.id, initial: giftSetChoiceForSlot(s.id) })}
-              >
-                {g.change}
-              </button>
-              <button type="button" className="text-gray-500 hover:text-red-600" onClick={() => removeSlot(s.id)}>
-                {g.remove}
-              </button>
-            </div>
-          ) : null}
         </td>
         <td className="min-w-0 px-2.5 py-2 align-top text-xs text-gray-700">
           {item ? (
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/10" style={{ backgroundColor: giftSetSwatchHex(item) }} aria-hidden />
-              <span className="font-medium">{ready ? (item.variantLabel ?? item.itemNames.ru) : `${item.itemNames.ru}${item.variantLabel ? ` · ${item.variantLabel}` : ""}`}</span>
-              <span className="text-gray-400">{item.sku}</span>
+            <span className="flex min-w-0 items-center gap-2" data-testid="gift-set-row-item">
+              <GiftSetItemThumb imageUrl={item.imageUrl} swatch={giftSetSwatchHex(item)} alt={item.itemNames.ru ?? item.name} />
+              <span className="min-w-0">
+                <span className="block font-medium text-gray-900">
+                  {ready ? (item.variantLabel ?? item.itemNames.ru) : `${item.itemNames.ru}${item.variantLabel ? ` · ${item.variantLabel}` : ""}`}
+                </span>
+                <span className="block text-gray-400">{item.sku}</span>
+              </span>
             </span>
           ) : (
             <span className="text-amber-700">{ready ? g.readyItemMissing : g.noVariants}</span>
@@ -3982,11 +3992,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               )}
             </p>
           ) : null}
-          {isFirst ? (
-            <p className="mt-0.5 text-gray-400">
-              {ready ? g.readyLine : template?.boxSku ? g.box(boxSizeFromSku(template.boxSku) ?? template.boxSku) : g.noBox}
-            </p>
-          ) : null}
+          {ready && giftSetGroupSlotIds(s.id, giftSetRows())[0] === s.id ? <p className="mt-0.5 text-gray-400">{g.readyLine}</p> : null}
         </td>
         <td className="min-w-0 px-1 py-2 align-top text-center tabular-nums">
           <span className="py-1 text-[13px] font-medium text-gray-900" data-testid="gift-set-row-total">
@@ -4005,6 +4011,104 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           />
         </td>
       </>
+    );
+  }
+
+  /** Stock item (variant) of a «Набор» row: the component, or the ready set's colour. */
+  function giftSetRowItem(a: SlotAssign): UvStockItemJson | null {
+    const gs = a.giftSet;
+    if (!gs) return null;
+    const variantId = gs.role === "ready" ? (gs.readyVariantId ?? null) : designerRowVariantId(a);
+    if (!variantId) return null;
+    return uvCatalog.items.find((i) => i.id === variantId) ?? sublimationCatalog.items.find((i) => i.id === variantId) ?? null;
+  }
+
+  /** Header row of a «Набор» in the wizard table: the set, its price, «Изменить набор» / «Убрать набор» (once per set). */
+  function renderGiftSetHeaderRow(s: AdminWizardSlot, gs: GiftSetRowAssign) {
+    const g = t.giftSet;
+    const template = giftSetTemplates.find((x) => x.id === gs.templateId) ?? null;
+    const total = giftSetGroupSlotIds(s.id, giftSetRows()).reduce((sum, id) => sum + (giftSetTotals.get(id) ?? 0), 0);
+    return (
+      <tr className="border-b border-fuchsia-100 bg-fuchsia-50/70" data-testid="gift-set-group-header">
+        <td colSpan={6} className="border-l-4 border-l-fuchsia-400 py-1.5 pl-3 pr-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <GiftSetBadge label={g.badge(template?.name ?? gs.templateId, gs.quantity)} className="text-xs" />
+            {total > 0 ? (
+              <span className="tabular-nums text-fuchsia-900">
+                {gs.quantity > 1 ? `${formatAmountMdl(Math.round((total / gs.quantity) * 100) / 100, t.admin.currency)} × ${gs.quantity} = ` : ""}
+                <b>{formatAmountMdl(total, t.admin.currency)}</b>
+              </span>
+            ) : null}
+            {!template?.boxSku && template?.kind === "assembled" ? <span className="text-gray-500">{g.noBox}</span> : null}
+            <span className="ml-auto flex flex-wrap gap-x-3">
+              <button
+                type="button"
+                data-testid="gift-set-change"
+                className="font-medium text-amber-700 hover:underline"
+                onClick={() => setGiftSetDialog({ slotId: s.id, initial: giftSetChoiceForSlot(s.id) })}
+              >
+                {g.change}
+              </button>
+              <button type="button" data-testid="gift-set-remove" className="text-gray-500 hover:text-red-600" onClick={() => removeSlot(s.id)}>
+                {g.remove}
+              </button>
+            </span>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
+  /** The box row of an assembled set: no file, «входит в набор», N boxes off the stock. */
+  function renderGiftSetBoxRow(box: GiftSetBoxRow) {
+    const g = t.giftSet;
+    const stock = bootstrap.giftSetBoxStock?.[box.boxSku];
+    const fullName = bootstrap.giftSetBoxNames?.[box.boxSku] ?? box.name;
+    const setGs = slots.map((x) => assignBySlot[x.id]?.giftSet).find((x) => x?.groupId === box.groupId) ?? null;
+    const setTemplate = setGs ? giftSetTemplates.find((x) => x.id === setGs.templateId) : undefined;
+    const BoxIcon = PRODUCT_TYPE_ICONS.set_box;
+    return (
+      <tr className="border-b border-gray-100 bg-fuchsia-50/30" data-testid="gift-set-box-row">
+        <td className="min-w-0 border-l-4 border-l-fuchsia-300 py-2 pl-3 pr-2 align-top text-xs text-gray-500">
+          <span className="ml-7 inline-flex items-center gap-1.5">{g.boxNoFile}</span>
+        </td>
+        <td className="min-w-0 px-2.5 py-2 align-top">
+          <GiftSetBadge label={g.badge(setTemplate?.name ?? "", box.quantity)} className="max-w-full whitespace-normal" />
+          <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-gray-900">
+            <BoxIcon className="h-4 w-4 shrink-0 text-gray-500" aria-hidden />
+            {g.boxSection}
+          </p>
+        </td>
+        <td className="min-w-0 px-2.5 py-2 align-top text-xs text-gray-700">
+          <span className="flex min-w-0 items-center gap-2">
+            <GiftSetItemThumb imageUrl={null} swatch={null} alt={fullName} />
+            <span className="min-w-0">
+              <span className="block font-medium text-gray-900">{fullName}</span>
+              <span className="block text-gray-400">{box.boxSku}</span>
+            </span>
+          </span>
+          <p className="mt-0.5 text-gray-500">
+            {g.boxStockNote}
+            {stock !== undefined ? (
+              <span className={cn("ml-1", stock < box.quantity ? "text-red-600" : "text-gray-400")}>
+                · {stock > 0 ? g.stockLeft(stock) : g.variantOutOfStock}
+              </span>
+            ) : null}
+          </p>
+        </td>
+        <td className="min-w-0 px-1 py-2 align-top text-center text-[11px] leading-tight text-fuchsia-800" data-testid="gift-set-box-price">
+          {g.boxIncluded}
+        </td>
+        <td className="max-w-[4.75rem] px-1 py-2 align-top text-center">
+          <input
+            readOnly
+            aria-label={g.quantity}
+            className="mx-auto block w-full min-w-[3.75rem] max-w-[4.5rem] rounded-md border border-gray-300 bg-gray-50 px-2 py-1 text-center text-sm tabular-nums text-gray-500"
+            value={String(box.quantity)}
+          />
+        </td>
+        <td aria-hidden />
+      </tr>
     );
   }
 
@@ -4517,6 +4621,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 placeholder,
                 giftSetTemplates,
                 storedLineTypesRef.current,
+                setBoxLineIdsRef.current,
               ),
               "",
               true,
@@ -4799,7 +4904,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       }
       onSlot?.(slot.id, "done");
     }
-    return lines;
+    // «Набор»: each assembled set's box as its own line (no file), after the set's lines.
+    return withGiftSetBoxLines(lines, giftSetTemplates);
   }
 
   async function handleSubmit(): Promise<void> {
@@ -4843,6 +4949,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           undefined,
           giftSetTemplates,
           storedLineTypesRef.current,
+          setBoxLineIdsRef.current,
         );
         setUploadPhase("creating");
         const trimmedPrice = customer.priceStr.trim();
@@ -5056,15 +5163,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     t.admin.newOrderPage.stepConfirmLabel,
   ];
 
-  function lineSummaries(): Array<{
-    id: string;
-    name: string;
-    product: string;
-    copies: string;
-    set?: ConfirmSetInfo;
-  }> {
+  function lineSummaries(): ConfirmLine[] {
     const seenSetGroups = new Set<string>();
-    return slots.map((s) => {
+    return slots.flatMap((s): ConfirmLine[] => {
       const a = assignBySlot[s.id];
       const gs = a?.giftSet ?? null;
       const setTemplate = gs ? giftSetTemplates.find((x) => x.id === gs.templateId) : undefined;
@@ -5076,7 +5177,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               (gs.zoneId ? setTemplate?.zones.find((z) => z.id === gs.zoneId)?.label : undefined) ??
               setTemplate?.components.find((c) => c.role === gs.role)?.label ??
               (gs.role === "ready" ? "" : t.giftSet.roleNames[gs.role]),
-            note: setTemplate ? giftSetPackNote(setTemplate.kind, setTemplate.boxSku) : null,
+            // The box is its own row now (packing note only on the workshop board).
+            note: null,
           }
         : undefined;
       if (gs) seenSetGroups.add(gs.groupId);
@@ -5113,7 +5215,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       else if (a?.productType === "uv_print")
         product = a.uv?.source === "stickers" ? t.productPicker.uvDtfStickers : t.uv.productType;
       else if (a?.productType === "sublimation_print") product = t.sublimation.productType;
-      return {
+      const setItem = a ? giftSetRowItem(a) : null;
+      const row: ConfirmLine = {
         id: s.id,
         name:
           s.file?.name ??
@@ -5129,8 +5232,30 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 : t.uv.productType
             : product,
         copies: cop,
-        ...(setInfo ? { set: setInfo } : {}),
+        ...(setInfo
+          ? {
+              set: {
+                ...setInfo,
+                ...(setItem
+                  ? { item: `${setItem.itemNames.ru ?? setItem.name}${setItem.variantLabel ? ` · ${setItem.variantLabel}` : ""}`, imageUrl: setItem.imageUrl, swatch: giftSetSwatchHex(setItem) }
+                  : {}),
+              },
+            }
+          : {}),
       };
+      // «Набор»: the set's box row after its last item.
+      const box = giftSetBoxRowsBySlot.get(s.id);
+      if (!box || !setInfo) return [row];
+      return [
+        row,
+        {
+          id: `box-${box.groupId}`,
+          name: t.giftSet.boxNoFile,
+          product: bootstrap.giftSetBoxNames?.[box.boxSku] ?? box.name,
+          copies: String(box.quantity),
+          set: { first: false, label: setInfo.label, role: t.giftSet.boxSection, note: null, box: true, item: box.boxSku, imageUrl: null, swatch: null },
+        },
+      ];
     });
   }
 
@@ -5558,17 +5683,23 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               wizardLineKey(s) === focusOrderLineParam,
                           ) && firstSlotIdByLineKey.get(lk) === s.id;
 
+                        // «Набор»: the set's rows are one tinted group — header (once), item rows, box row.
+                        const setGs = a.giftSet ?? null;
+                        const setFirst = setGs ? giftSetGroupSlotIds(s.id, giftSetRows())[0] === s.id : false;
+                        const setBoxRow = setGs ? (giftSetBoxRowsBySlot.get(s.id) ?? null) : null;
                         return (
+                          <Fragment key={s.id}>
+                          {setGs && setFirst ? renderGiftSetHeaderRow(s, setGs) : null}
                           <tr
-                            key={s.id}
                             id={
                               layoutFocusAnchor
                                 ? "wizard-layout-focus"
                                 : undefined
                             }
-                            className="border-b border-gray-100"
+                            className={cn("border-b border-gray-100", setGs && "bg-fuchsia-50/30")}
+                            data-gift-set-group={setGs?.groupId}
                           >
-                            <td className="min-w-0 py-2 pl-3 pr-2 align-top">
+                            <td className={cn("min-w-0 py-2 pl-3 pr-2 align-top", setGs && "border-l-4 border-l-fuchsia-300")}>
                               <div className="flex min-w-0 flex-col gap-1.5">
                                 <div className="flex min-w-0 items-center gap-3">
                                   <input
@@ -6831,6 +6962,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               </Button>
                             </td>
                           </tr>
+                          {setBoxRow ? renderGiftSetBoxRow(setBoxRow) : null}
+                          </Fragment>
                         );
                       })}
                     </tbody>
@@ -7079,6 +7212,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             assignBySlot[giftSetDialog.slotId]?.giftSet?.groupId ?? null,
           )}
           boxStock={bootstrap.giftSetBoxStock}
+          boxNames={bootstrap.giftSetBoxNames}
           t={t}
           onClose={() => setGiftSetDialog(null)}
           onApply={(template, choice) => {
@@ -7154,6 +7288,21 @@ interface ConfirmSetInfo {
   label: string;
   role: string;
   note: string | null;
+  /** The set's box row (no file, «входит в набор»). */
+  box?: boolean;
+  /** Item name (or the box SKU) and its photo / colour. */
+  item?: string;
+  imageUrl?: string | null;
+  swatch?: string | null;
+}
+
+/** One row of the confirm table. */
+interface ConfirmLine {
+  id: string;
+  name: string;
+  product: string;
+  copies: string;
+  set?: ConfirmSetInfo;
 }
 
 function MultiConfirmStep({
@@ -7169,7 +7318,7 @@ function MultiConfirmStep({
   /** Edit mode: the button says «Сохранить», not «Создать заказ». */
   editing?: boolean;
   customer: CustomerFormValue;
-  lines: Array<{ id: string; name: string; product: string; copies: string; set?: ConfirmSetInfo }>;
+  lines: ConfirmLine[];
   /** Dealer mode: server price instead of the staff contact / price block. */
   dealerQuote?: DealerQuoteState | null;
   dealerUrgent?: boolean;
@@ -7210,18 +7359,34 @@ function MultiConfirmStep({
             {lines.map((row) => (
               <Fragment key={row.id}>
                 {row.set?.first ? (
-                  // «Набор»: one header row per set, its items indented under it.
-                  <tr className="border-b border-fuchsia-100 bg-fuchsia-50/40" data-testid="confirm-set-header">
-                    <td colSpan={3} className="px-3 py-1.5">
-                      <GiftSetBadge label={row.set.label} note={row.set.note} />
+                  // «Набор»: one header row per set, its items (and box) in one tinted group under it.
+                  <tr className="border-b border-fuchsia-100 bg-fuchsia-50/70" data-testid="confirm-set-header">
+                    <td colSpan={3} className="border-l-4 border-l-fuchsia-400 px-3 py-1.5">
+                      <GiftSetBadge label={row.set.label} />
                     </td>
                   </tr>
                 ) : null}
-                <tr className="border-b border-gray-100">
-                  <td className={cn("max-w-xs truncate px-3 py-2", row.set && "pl-6")}>{row.name}</td>
+                <tr className={cn("border-b border-gray-100", row.set && "bg-fuchsia-50/30")} data-testid={row.set?.box ? "confirm-set-box" : undefined}>
+                  <td className={cn("max-w-xs truncate px-3 py-2", row.set && "border-l-4 border-l-fuchsia-300 pl-4", row.set?.box && "text-gray-500")}>
+                    {row.name}
+                  </td>
                   <td className="px-3 py-2">
-                    {row.set ? <span className="text-fuchsia-800">{row.set.role} · </span> : null}
-                    {row.product}
+                    {row.set ? (
+                      <span className="flex min-w-0 items-center gap-2">
+                        <GiftSetItemThumb imageUrl={row.set.imageUrl} swatch={row.set.swatch} alt={row.set.item ?? row.set.role} size="sm" />
+                        <span className="min-w-0">
+                          <span className="block">
+                            <span className="text-fuchsia-800">{row.set.role} · </span>
+                            {row.set.box ? row.product : row.set.item ?? row.product}
+                          </span>
+                          <span className="mt-0.5 block">
+                            <GiftSetBadge label={row.set.label} className="text-[10px]" />
+                          </span>
+                        </span>
+                      </span>
+                    ) : (
+                      row.product
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 tabular-nums">{row.copies}</td>
                 </tr>

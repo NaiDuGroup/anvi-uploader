@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { AlertTriangle, Gift, X } from "lucide-react";
+import { GiftSetItemThumb } from "@/components/orders/GiftSetItemThumb";
 import { Button } from "@/components/ui/button";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { UvStockItemJson } from "@/lib/uv/dto";
 import {
-  boxSizeFromSku,
+  giftSetBoxName,
   giftSetUnitPrice,
   type GiftSetCustomerType,
   type GiftSetRole,
@@ -16,6 +17,7 @@ import {
   defaultGiftSetChoice,
   giftSetChoiceProblem,
   giftSetComponentOptions,
+  giftSetComponentTitle,
   giftSetShortNames,
   giftSetSwatchHex,
   readyGiftSetVariants,
@@ -28,7 +30,7 @@ function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100).replace(".", ",");
 }
 
-/** Colour swatches of one component (or the ready set's colours). */
+/** The variants of one component (or the ready set's colours): photo, colour name, stock. */
 function VariantPicker({
   label,
   items,
@@ -51,7 +53,7 @@ function VariantPicker({
   const names = giftSetShortNames(items);
   return (
     <div data-testid={testId}>
-      <p className="mb-1 text-xs font-medium text-gray-700">{label}</p>
+      <p className="mb-1.5 text-sm font-semibold text-gray-900" data-testid={`${testId}-title`}>{label}</p>
       {items.length === 0 ? (
         <p className="text-xs text-amber-700">{g.noVariants}</p>
       ) : (
@@ -67,18 +69,27 @@ function VariantPicker({
                 onClick={() => onChange(i.id)}
                 title={`${i.itemNames.ru ?? i.name} · ${i.sku} · ${out ? g.variantOutOfStock : g.stockLeft(left)}`}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs",
-                  selected ? "border-amber-500 bg-amber-50 font-semibold text-amber-900" : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
+                  "inline-flex items-center gap-2 rounded-lg border py-1 pl-1 pr-2 text-left text-xs",
+                  selected ? "border-amber-500 bg-amber-50 font-semibold text-amber-900 ring-1 ring-amber-400" : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
                   out && !selected && "opacity-60",
                 )}
               >
-                <span
-                  className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/10"
-                  style={{ backgroundColor: giftSetSwatchHex(i) }}
-                  aria-hidden
-                />
-                <span>{names.get(i.id)}</span>
-                <span className={cn("text-[10px]", out ? "text-red-600" : "text-gray-400")}>{out ? g.variantOutOfStock : left}</span>
+                <GiftSetItemThumb imageUrl={i.imageUrl} swatch={giftSetSwatchHex(i)} alt={i.itemNames.ru ?? i.name} size="sm" />
+                <span className="flex flex-col leading-tight">
+                  <span className="inline-flex items-center gap-1">
+                    {i.imageUrl ? (
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full border border-black/10"
+                        style={{ backgroundColor: giftSetSwatchHex(i) }}
+                        aria-hidden
+                      />
+                    ) : null}
+                    {names.get(i.id)}
+                  </span>
+                  <span className={cn("text-[10px] font-normal", out ? "text-red-600" : "text-gray-400")}>
+                    {out ? g.variantOutOfStock : g.stockLeft(left)}
+                  </span>
+                </span>
               </button>
             );
           })}
@@ -100,6 +111,7 @@ export function GiftSetDialog({
   initial,
   reserved,
   boxStock,
+  boxNames,
   t,
   onApply,
   onClose,
@@ -113,6 +125,8 @@ export function GiftSetDialog({
   reserved: ReadonlyMap<string, number>;
   /** Stock of the template boxes by SKU (staff); absent → not shown. */
   boxStock?: Readonly<Record<string, number>>;
+  /** Stock item names of the template boxes by SKU. */
+  boxNames?: Readonly<Record<string, string>>;
   t: TranslationDictionary;
   onApply: (template: GiftSetTemplate, choice: GiftSetChoice) => void;
   onClose: () => void;
@@ -241,7 +255,7 @@ export function GiftSetDialog({
                 <VariantPicker
                   key={c.role}
                   testId={`gift-set-variants-${c.role}`}
-                  label={c.label}
+                  label={giftSetComponentTitle(c.label, c.skuMatch, giftSetComponentOptions(template, c.role, catalogs))}
                   items={giftSetComponentOptions(template, c.role, catalogs)}
                   value={choice.variants[c.role]}
                   onChange={(id) => setChoice({ ...choice, variants: { ...choice.variants, [c.role as GiftSetRole]: id } })}
@@ -253,14 +267,27 @@ export function GiftSetDialog({
           ) : null}
 
           {template && boxSku ? (
-            <p className="text-xs text-gray-600" data-testid="gift-set-box">
-              {g.boxLine(boxSizeFromSku(boxSku) ?? boxSku)}
-              {boxLeft != null ? (
-                <span className={cn("ml-1", boxShort ? "text-red-600" : "text-gray-400")}>
-                  · {boxLeft > 0 ? g.stockLeft(boxLeft) : g.variantOutOfStock}
+            <div data-testid="gift-set-box">
+              <p className="mb-1.5 text-sm font-semibold text-gray-900">
+                {g.boxSection} — {boxNames?.[boxSku] ?? giftSetBoxName(boxSku)}
+              </p>
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <GiftSetItemThumb imageUrl={null} swatch={null} alt={boxSku} size="sm" />
+                <span className="flex flex-col leading-tight">
+                  <span>
+                    {giftSetBoxName(boxSku)} · {boxSku}
+                  </span>
+                  <span className="text-[10px] text-gray-500">
+                    {g.boxStockNote}
+                    {boxLeft != null ? (
+                      <span className={cn("ml-1", boxShort ? "text-red-600" : "text-gray-400")}>
+                        · {boxLeft > 0 ? g.stockLeft(boxLeft) : g.variantOutOfStock}
+                      </span>
+                    ) : null}
+                  </span>
                 </span>
-              ) : null}
-            </p>
+              </div>
+            </div>
           ) : null}
 
           {shortItems.length > 0 || boxShort ? (

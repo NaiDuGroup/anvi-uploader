@@ -13,7 +13,7 @@ import {
 import { expandToOneFilePerLine } from "@/lib/adminOrderCreateHelpers";
 import { findArtworkLargerThanOrdered } from "@/lib/files/serverArtworkCheck";
 import { resolveOrderLines } from "@/lib/orderCreate/orderLines";
-import { dealerLineTotalsMdl, dealerOrderTotalMdl } from "@/lib/orderCreate/dealerLinePrices";
+import { dealerFreeLines, dealerLineTotalsMdl, dealerOrderTotalMdl } from "@/lib/orderCreate/dealerLinePrices";
 import { serializeOrderPrice } from "@/lib/orderPriceDecimal";
 import type { AdminOrderLineInput, DealerOrderUpdateInput } from "@/lib/validations";
 import { returnMugStockForOrder } from "@/lib/mug/mugOrderStock";
@@ -212,7 +212,7 @@ export async function dealerEditOrder(params: {
 
   const { resolved, lfLineTotalsMdl } = await resolveOrderLines(lineInputs, { allowUnpricedPrint: true });
   const lineTotalsMdl = await dealerLineTotalsMdl(resolved, lfLineTotalsMdl);
-  const goodsTotalMdl = dealerOrderTotalMdl(lineTotalsMdl);
+  const goodsTotalMdl = dealerOrderTotalMdl(lineTotalsMdl, dealerFreeLines(resolved));
 
   // «Срочно»: the stored fee stays as it was (a later rate change never touches
   // it); turning it on takes the dealer's current rate from the database.

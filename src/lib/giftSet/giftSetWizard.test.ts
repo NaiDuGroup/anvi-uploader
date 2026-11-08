@@ -14,6 +14,9 @@ import {
   colourFromName,
   giftSetRowTotals,
   readyGiftSetVariants,
+  giftSetBoxRows,
+  giftSetComponentTitle,
+  withGiftSetBoxLines,
 } from "./giftSetWizard";
 
 const [A, B, C] = DEFAULT_GIFT_SET_TEMPLATES.map((t) => structuredClone(t)) as [
@@ -164,5 +167,81 @@ describe("gift set wizard", () => {
     expect([...giftSetShortNames(mugs).values()]).toEqual(["красная", "синяя"]);
     expect([...giftSetShortNames([v("p1", "Ручка белая", null), v("p2", "Ручка синяя", null)]).values()]).toEqual(["белая", "синяя"]);
     expect([...giftSetShortNames([v("s1", "Набор", null, "чёрный")]).values()]).toEqual(["чёрный"]);
+  });
+});
+
+describe("box row of a set (withGiftSetBoxLines / giftSetBoxRows)", () => {
+  const set = (groupId: string, templateId: string, role: "mug" | "notebook" | "pen" | "ready", quantity: number) => ({
+    groupId,
+    templateId,
+    role,
+    quantity,
+    manualUnitPriceMdl: null,
+  });
+  const line = (productType: string, s?: ReturnType<typeof set>) => ({
+    productType,
+    customerType: "retail" as const,
+    ...(s ? { set: s } : {}),
+    files: [{ fileName: "a.png" }],
+  });
+
+  it("adds one box line per assembled set right after its last line (A ×2, B ×1), none for C or plain lines", () => {
+    const lines = [
+      line("paper_print"),
+      line("mug", set("a", A.id, "mug", 2)),
+      line("notebook", set("a", A.id, "notebook", 2)),
+      line("pen", set("a", A.id, "pen", 2)),
+      line("notebook", set("b", B.id, "notebook", 1)),
+      line("pen", set("b", B.id, "pen", 1)),
+      line("uv_print", set("c", C.id, "ready", 1)),
+    ];
+    const out = withGiftSetBoxLines(lines, [A, B, C], new Map([["a", "line-box-a"]]));
+    expect(out.map((l) => l.productType)).toEqual(["paper_print", "mug", "notebook", "pen", "set_box", "notebook", "pen", "set_box", "uv_print"]);
+    expect(out[4]).toEqual({
+      productType: "set_box",
+      orderLineId: "line-box-a",
+      quantity: 2,
+      customerType: "retail",
+      set: { groupId: "a", templateId: A.id, quantity: 2, role: "box", manualUnitPriceMdl: null },
+      files: [],
+    });
+    expect(out[7]).toMatchObject({ quantity: 1, set: { groupId: "b", role: "box" } });
+    expect("orderLineId" in out[7]!).toBe(false);
+  });
+
+  it("rebuilds box lines instead of doubling them, and skips a template without a box", () => {
+    const once = withGiftSetBoxLines([line("notebook", set("b", B.id, "notebook", 3)), line("pen", set("b", B.id, "pen", 3))], [B]);
+    const twice = withGiftSetBoxLines(once, [B]);
+    expect(twice.filter((l) => l.productType === "set_box")).toHaveLength(1);
+    const unboxed = withGiftSetBoxLines([line("notebook", set("b", B.id, "notebook", 3))], [{ ...B, boxSku: null }]);
+    expect(unboxed.map((l) => l.productType)).toEqual(["notebook"]);
+  });
+
+  it("box rows follow the set's last row with the set's quantity", () => {
+    const rows = [
+      { slotId: "s1", giftSet: set("a", A.id, "mug", 2) },
+      { slotId: "s2", giftSet: set("a", A.id, "notebook", 2) },
+      { slotId: "s3", giftSet: null },
+      { slotId: "s4", giftSet: set("c", C.id, "ready", 1) },
+    ];
+    const boxes = giftSetBoxRows(rows, [A, B, C]);
+    expect([...boxes.keys()]).toEqual(["s2"]);
+    expect(boxes.get("s2")).toEqual({ groupId: "a", afterSlotId: "s2", boxSku: "EW-BOX-300X230X85", name: "Коробка 30×23×8,5", quantity: 2 });
+  });
+});
+
+describe("giftSetComponentTitle", () => {
+  const named = (ru: string) => ({ variantLabel: null, itemNames: { ru }, name: ru }) as unknown as UvStockItemJson;
+  it("names the product next to the component", () => {
+    expect(
+      giftSetComponentTitle("Кружка", "S3-K*-3*", [
+        named("Кружка цветная внутри и ручка 330 мл — красная"),
+        named("Кружка цветная внутри и ручка 330 мл — синяя"),
+      ]),
+    ).toBe("Кружка — Кружка цветная внутри и ручка 330 мл");
+    expect(giftSetComponentTitle("Блокнот", "S3-*-A5", [named("Блокнот Красный A5"), named("Синий Блокнот A5")])).toBe("Блокнот — Блокнот A5");
+    // Names only repeat the component: the SKU family of the template.
+    expect(giftSetComponentTitle("Ручка", "ARDENES_*", [named("Ручка чёрная"), named("Ручка синяя")])).toBe("Ручка — ARDENES");
+    expect(giftSetComponentTitle("Ручка", "", [])).toBe("Ручка");
   });
 });

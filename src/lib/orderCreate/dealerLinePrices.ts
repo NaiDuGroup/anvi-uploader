@@ -90,7 +90,10 @@ export async function dealerLineTotalsMdl(
     const pt = r.input.productType;
     const qty = lineCopies(r);
 
-    if (r.giftSetExtras) {
+    if (r.giftSetExtras?.setData.role === "box") {
+      // «Набор»: the box is part of the set price («входит в набор»), skipped by the total.
+      out.push(0);
+    } else if (r.giftSetExtras) {
       // «Набор»: the line's share of the set price (dealer price of the template).
       out.push(sellOrNull(r.giftSetExtras.setData.lineTotalMdl));
     } else if (pt === "large_format_print") {
@@ -153,11 +156,21 @@ export async function dealerLineTotalsMdl(
   return out;
 }
 
+/** Lines {@link dealerOrderTotalMdl} leaves out: the box of a «Набор» (inside the set price). */
+export function dealerFreeLines(resolved: readonly ResolvedAdminOrderLine[]): boolean[] {
+  return resolved.map((r) => r.giftSetExtras?.setData.role === "box");
+}
+
 /**
  * Order price: the sum of the line totals, or null when any line has no price
- * (a 0 line counts as no price — it is never summed as free).
+ * (a 0 line counts as no price — it is never summed as free). `freeLines`
+ * (by index, {@link dealerFreeLines}) are left out: a set's box.
  */
-export function dealerOrderTotalMdl(lineTotals: readonly (number | null)[]): number | null {
+export function dealerOrderTotalMdl(
+  allLineTotals: readonly (number | null)[],
+  freeLines?: readonly boolean[],
+): number | null {
+  const lineTotals = freeLines ? allLineTotals.filter((_, i) => !freeLines[i]) : allLineTotals;
   if (lineTotals.length === 0 || lineTotals.some((t) => t == null || !(t > 0))) return null;
   const sum = lineTotals.reduce<number>((s, t) => s + (t ?? 0), 0);
   return sum > 0 ? round2(sum) : null;

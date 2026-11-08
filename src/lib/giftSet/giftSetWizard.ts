@@ -3,7 +3,10 @@
  *
  * A set is a group of wizard rows sharing `giftSet.groupId`:
  *  - assembled: one row per component, each a normal pen / notebook / mug
- *    row with its own file; quantity = N sets on every row;
+ *    row with its own file; quantity = N sets on every row; the box is a row
+ *    of the set too, but derived (no file, no slot): shown under the set's
+ *    rows ({@link giftSetBoxRows}) and sent as its own `set_box` line
+ *    ({@link withGiftSetBoxLines});
  *  - ready: one row per printed component (thermos / notebook / pen file);
  *    on save each row becomes its own line (`readyZoneLineType`: notebook /
  *    pen / UV client item), the set item is written off once by the server.
@@ -15,6 +18,8 @@ import {
 } from "@/lib/printMethods/designerProducts";
 import type { UvStockItemJson } from "@/lib/uv/dto";
 import {
+  GIFT_SET_BOX_LINE_TYPE,
+  giftSetBoxName,
   giftSetUnitPrice,
   readyZoneLineType,
   skuMatches,
@@ -30,7 +35,8 @@ import {
 export interface GiftSetRowAssign {
   groupId: string;
   templateId: string;
-  role: GiftSetLineRole;
+  /** Never «box»: the box row is derived from the set ({@link giftSetBoxRows}). */
+  role: Exclude<GiftSetLineRole, "box">;
   /** Ready set: the zone (component) this row's file is for. */
   zoneId?: string;
   /** Ready set: the colour variant of the set item. */
@@ -110,7 +116,7 @@ export function giftSetChoiceProblem(
 
 /** One wizard row a set becomes. */
 export interface GiftSetRowPlan {
-  role: GiftSetLineRole;
+  role: Exclude<GiftSetLineRole, "box">;
   /** Component / zone label («Кружка», «Термос»). */
   label: string;
   /** Assembled: designer product + its print method + variant. */
@@ -194,7 +200,8 @@ export function giftSetRowFromLine(
   return {
     groupId: setGroupId,
     templateId: data.templateId,
-    role: data.role,
+    // A box line has no file, so it never becomes a row (callers skip it).
+    role: data.role === "box" ? "ready" : data.role,
     quantity: data.quantity,
     manualUnitPriceMdl: data.priceSource === "manual" ? data.unitPriceMdl : null,
     ...(zoneId ? { zoneId } : {}),
@@ -210,6 +217,110 @@ export function giftSetGroupSlotIds(
   const gid = rows.find((r) => r.slotId === slotId)?.giftSet?.groupId;
   if (!gid) return [slotId];
   return rows.filter((r) => r.giftSet?.groupId === gid).map((r) => r.slotId);
+}
+
+// ─── The box row ────────────────────────────────────────────────────────────────
+
+/** The box row of one assembled set, shown under the set's last row. */
+export interface GiftSetBoxRow {
+  groupId: string;
+  /** Slot of the set's last row (the box row goes right after it). */
+  afterSlotId: string;
+  boxSku: string;
+  /** «Коробка 30×23×8,5». */
+  name: string;
+  /** N sets = N boxes. */
+  quantity: number;
+}
+
+/** Box rows of the wizard's sets (assembled sets whose template has a box), by the slot they follow. */
+export function giftSetBoxRows(
+  rows: readonly { slotId: string; giftSet: GiftSetRowAssign | null | undefined }[],
+  templates: readonly GiftSetTemplate[],
+): Map<string, GiftSetBoxRow> {
+  const last = new Map<string, { slotId: string; gs: GiftSetRowAssign }>();
+  for (const r of rows) if (r.giftSet) last.set(r.giftSet.groupId, { slotId: r.slotId, gs: r.giftSet });
+  const out = new Map<string, GiftSetBoxRow>();
+  for (const [groupId, { slotId, gs }] of last) {
+    const template = templates.find((t) => t.id === gs.templateId);
+    if (!template || template.kind !== "assembled" || !template.boxSku) continue;
+    out.set(slotId, { groupId, afterSlotId: slotId, boxSku: template.boxSku, name: giftSetBoxName(template.boxSku), quantity: gs.quantity });
+  }
+  return out;
+}
+
+/** The box line of a set as the wizard sends it: no file, N boxes, `set.role` «box». */
+export interface GiftSetBoxLineInput {
+  productType: typeof GIFT_SET_BOX_LINE_TYPE;
+  orderLineId?: string;
+  quantity: number;
+  customerType?: "retail" | "dealer";
+  set: ReturnType<typeof giftSetLineInput>;
+  files: never[];
+}
+
+/**
+ * Lines with each assembled set's box line added right after the set's last
+ * line (the set's lines stay together). The box line keeps its stored id
+ * (`boxLineIdByGroup`, edit) so the edit does not recreate it.
+ */
+export function withGiftSetBoxLines<L extends { set?: { groupId: string; templateId: string; quantity: number; role: GiftSetLineRole; manualUnitPriceMdl?: number | null } | undefined; customerType?: "retail" | "dealer" }>(
+  lines: readonly L[],
+  templates: readonly GiftSetTemplate[],
+  boxLineIdByGroup: ReadonlyMap<string, string> = new Map(),
+): (L | GiftSetBoxLineInput)[] {
+  const lastIndex = new Map<string, number>();
+  lines.forEach((l, i) => {
+    if (l.set && l.set.role !== "box") lastIndex.set(l.set.groupId, i);
+  });
+  const out: (L | GiftSetBoxLineInput)[] = [];
+  lines.forEach((l, i) => {
+    if (l.set?.role === "box") return; // rebuilt below
+    out.push(l);
+    const set = l.set;
+    if (!set || lastIndex.get(set.groupId) !== i) return;
+    const template = templates.find((t) => t.id === set.templateId);
+    if (!template || template.kind !== "assembled" || !template.boxSku) return;
+    const id = boxLineIdByGroup.get(set.groupId);
+    out.push({
+      productType: GIFT_SET_BOX_LINE_TYPE,
+      ...(id ? { orderLineId: id } : {}),
+      quantity: set.quantity,
+      ...(l.customerType ? { customerType: l.customerType } : {}),
+      set: {
+        groupId: set.groupId,
+        templateId: set.templateId,
+        quantity: set.quantity,
+        role: "box",
+        manualUnitPriceMdl: set.manualUnitPriceMdl ?? null,
+      },
+      files: [],
+    });
+  });
+  return out;
+}
+
+/** «Кружка — Кружка цветная внутри и ручка 330 мл», «Ручка — ARDENES»: the component and what its options have in common. */
+export function giftSetComponentTitle(
+  label: string,
+  skuMatch: string,
+  items: readonly Pick<UvStockItemJson, "variantLabel" | "itemNames" | "name">[],
+): string {
+  const names = items.map((i) => i.itemNames.ru?.trim() || i.name);
+  const words = names.map((n) => n.split(/\s+/).filter((w) => w && !/^[—–-]$/.test(w)));
+  const common =
+    words.length > 0 ? words[0]!.filter((w) => words.every((ws) => ws.some((x) => x.toLowerCase() === w.toLowerCase()))).join(" ") : "";
+  // The SKU family of the template («ARDENES_*» → «ARDENES»), when the names add nothing.
+  const family = skuMatch.split("*")[0]!.replace(/[_\-\s]+$/, "");
+  const detail =
+    common && common.toLowerCase() !== label.toLowerCase() && items.length > 1
+      ? common
+      : family.length >= 3
+        ? family
+        : items.length === 1
+          ? names[0]!
+          : "";
+  return detail ? `${label} — ${detail}` : label;
 }
 
 /** The `set` field a set row sends with its order line. */

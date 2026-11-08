@@ -4,7 +4,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/prisma", () => ({ prisma: {} }));
 
 import type { ResolvedAdminOrderLine } from "@/lib/adminOrderCreateHelpers";
-import { dealerLineTotalsMdl, dealerOrderTotalMdl } from "./dealerLinePrices";
+import { dealerFreeLines, dealerLineTotalsMdl, dealerOrderTotalMdl } from "./dealerLinePrices";
 
 function line(productType: string, extras: Partial<ResolvedAdminOrderLine> = {}): ResolvedAdminOrderLine {
   return {
@@ -69,5 +69,19 @@ describe("dealerOrderTotalMdl", () => {
     expect(dealerOrderTotalMdl([200, null])).toBeNull();
     expect(dealerOrderTotalMdl([200, 0])).toBeNull();
     expect(dealerOrderTotalMdl([0])).toBeNull();
+  });
+});
+
+describe("«Набор» box line (dealer)", () => {
+  const setLine = (productType: string, role: string, lineTotalMdl: number) =>
+    line(productType, { giftSetExtras: { setGroupId: "g", setData: { role, lineTotalMdl } } } as unknown as Partial<ResolvedAdminOrderLine>);
+  it("the box line is 0 «входит в набор» and left out of the order total", async () => {
+    const resolved = [setLine("notebook", "notebook", 392), setLine("pen", "pen", 206), setLine("set_box", "box", 0)];
+    const totals = await dealerLineTotalsMdl(resolved, new Map());
+    expect(totals).toEqual([392, 206, 0]);
+    expect(dealerFreeLines(resolved)).toEqual([false, false, true]);
+    expect(dealerOrderTotalMdl(totals, dealerFreeLines(resolved))).toBe(598);
+    // Without the mask a 0 line is still never summed as free.
+    expect(dealerOrderTotalMdl(totals)).toBeNull();
   });
 });

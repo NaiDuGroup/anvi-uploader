@@ -81,7 +81,8 @@ export async function returnGiftSetBoxStockForOrder(
 
 /**
  * Box / ready set item of a stored set line (restore from trash: the lines are read back from
- * the database, not resolved). Only the group's first line carries `boxSku`.
+ * the database, not resolved). `boxSku` sits on the set's box line (older orders: on the
+ * group's first line), so each set's box is taken once either way.
  */
 export async function takeGiftSetBoxStockForStoredLine(
   tx: Tx,

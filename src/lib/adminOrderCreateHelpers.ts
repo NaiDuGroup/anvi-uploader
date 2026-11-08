@@ -227,12 +227,20 @@ export type ResolvedAdminOrderLine = {
     setGroupId: string;
     setData: OrderLineSetData;
   };
+  /** «Набор»: box line of an assembled set — the box's stock variant (null when the box SKU is not a stock item). */
+  setBoxExtras?: {
+    stockVariantId: string | null;
+  };
 };
 
 /** `OrderLine.stockVariantId` of a resolved line: the unified mug / pen / notebook variant, if any. */
 export function resolvedLineStockVariantId(r: ResolvedAdminOrderLine): string | null {
   return (
-    r.mugExtras?.stockVariantId ?? r.penExtras?.stockVariantId ?? r.notebookExtras?.stockVariantId ?? null
+    r.mugExtras?.stockVariantId ??
+    r.penExtras?.stockVariantId ??
+    r.notebookExtras?.stockVariantId ??
+    r.setBoxExtras?.stockVariantId ??
+    null
   );
 }
 
@@ -1078,8 +1086,9 @@ export class AdminOrderResolveError extends Error {
 export function computeOrderProductTypeForAdmin(
   resolved: ResolvedAdminOrderLine[],
 ): ProductType | "mixed" {
+  // A set's box line is packaging, not a product of its own.
   return computeOrderProductTypeFromLines(
-    resolved.map((r) => ({ productType: r.input.productType })),
+    resolved.flatMap((r) => (r.input.productType === "set_box" ? [] : [{ productType: r.input.productType }])),
   );
 }
 
@@ -1345,7 +1354,8 @@ export async function deductStockForAdminOrderLines(
     }
   }
 
-  // «Набор»: the box (A/B) / the ready set item (C), once per set, on the group's first line.
+  // «Набор»: the box (A/B) through the set's box line (older orders: the group's first
+  // line) / the ready set item (C) on the group's first line, once per set.
   for (let i = 0; i < params.resolved.length; i++) {
     const set = params.resolved[i]!.giftSetExtras?.setData;
     for (const sku of giftSetExtraStockSkus(set)) {
