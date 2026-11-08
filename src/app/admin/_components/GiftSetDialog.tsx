@@ -8,6 +8,7 @@ import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { UvStockItemJson } from "@/lib/uv/dto";
 import {
   giftSetBoxName,
+  giftSetReadyUnitLabel,
   giftSetUnitPrice,
   type GiftSetCustomerType,
   type GiftSetRole,
@@ -37,6 +38,7 @@ function VariantPicker({
   value,
   onChange,
   available,
+  procurementWhenOut = false,
   t,
   testId,
 }: {
@@ -46,6 +48,8 @@ function VariantPicker({
   onChange: (id: string) => void;
   /** Stock left for this order (stock minus what the unsaved order already takes). */
   available: (i: UvStockItemJson) => number;
+  /** Ready set colours: an empty one reads «нет на складе · Закупка» (the order still goes in). */
+  procurementWhenOut?: boolean;
   t: TranslationDictionary;
   testId: string;
 }) {
@@ -88,6 +92,7 @@ function VariantPicker({
                   </span>
                   <span className={cn("text-[10px] font-normal", out ? "text-red-600" : "text-gray-400")}>
                     {out ? g.variantOutOfStock : g.stockLeft(left)}
+                    {out && procurementWhenOut ? ` · ${g.boardProcurement}` : ""}
                   </span>
                 </span>
               </button>
@@ -163,6 +168,8 @@ export function GiftSetDialog({
   const shortItems = pickedIds
     .map((id) => allItems.find((i) => i.id === id))
     .filter((i): i is UvStockItemJson => Boolean(i) && available(i!) < want);
+  const readyItem =
+    template?.kind === "ready" && choice?.readyVariantId ? catalogs.uv.find((i) => i.id === choice.readyVariantId) : undefined;
   const boxSku = template?.boxSku ?? null;
   const boxLeft = boxSku && boxStock && boxStock[boxSku] !== undefined ? boxStock[boxSku]! - (reserved.get(`box:${boxSku}`) ?? 0) : null;
   const boxShort = boxLeft != null && boxLeft < want;
@@ -238,6 +245,7 @@ export function GiftSetDialog({
                   value={choice.readyVariantId}
                   onChange={(id) => setChoice({ ...choice, readyVariantId: id })}
                   available={available}
+                  procurementWhenOut
                   t={t}
                 />
                 {readyGiftSetVariants(template, catalogs.uv).length === 0 ? (
@@ -249,6 +257,28 @@ export function GiftSetDialog({
                 <p className="text-xs text-gray-500">
                   {template.zones.map((z) => `${z.label} ${g.zoneSize(fmt(z.widthCm), fmt(z.heightCm))}`).join(" · ")}
                 </p>
+                {readyItem ? (
+                  // The set item itself: its own stock line of the order (no file, «входит в набор»).
+                  <div data-testid="gift-set-ready-unit">
+                    <p className="mb-1.5 text-sm font-semibold text-gray-900">{g.readyUnitSection}</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <GiftSetItemThumb imageUrl={readyItem.imageUrl} swatch={giftSetSwatchHex(readyItem)} alt={readyItem.sku} size="sm" />
+                      <span className="flex flex-col leading-tight">
+                        <span>
+                          {giftSetReadyUnitLabel(template)}
+                          {readyItem.variantLabel ? ` · ${readyItem.variantLabel}` : ""} · {readyItem.sku}
+                        </span>
+                        <span className="text-[10px] text-gray-500">
+                          {g.boxStockNote}
+                          <span className={cn("ml-1", available(readyItem) < want ? "text-red-600" : "text-gray-400")}>
+                            · {available(readyItem) > 0 ? g.stockLeft(available(readyItem)) : g.variantOutOfStock}
+                            {available(readyItem) < want ? ` · ${g.boardProcurement}` : ""}
+                          </span>
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
               </>
             ) : (
               template.components.map((c) => (

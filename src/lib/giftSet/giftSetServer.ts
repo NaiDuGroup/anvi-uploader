@@ -68,7 +68,7 @@ export async function applyGiftSetsToResolved(
   const variantIds = [
     ...new Set(
       resolved
-        .map((r) => (r.input.set?.role === "ready" ? (r.input.set.readyVariantId ?? null) : null))
+        .map((r) => r.input.set?.readyVariantId ?? null)
         .filter((v): v is string => Boolean(v)),
     ),
   ];
@@ -80,7 +80,8 @@ export async function applyGiftSetsToResolved(
     : [];
   const variantById = new Map(variants.map((v) => [v.id, v]));
   const readyVariant = (r: ResolvedAdminOrderLine): ReadySetVariant & { itemSku: string } | null => {
-    const id = r.input.set?.role === "ready" ? r.input.set.readyVariantId : null;
+    // Print lines and the stock line of a ready set all name the colour variant.
+    const id = r.input.set?.readyVariantId ?? null;
     const v = id ? variantById.get(id) : undefined;
     if (!v) return null;
     const opts = (v.options ?? {}) as Record<string, unknown>;
@@ -112,7 +113,7 @@ export async function applyGiftSetsToResolved(
   const plan = planGiftSets(planLines, templates, opts);
   if (!plan.ok) throw new AdminOrderResolveError(plan.code);
 
-  // Box lines: the box's stock variant (by the template's box SKU).
+  // Stock lines: the box's / ready set item's stock variant (by its SKU).
   const boxSkus = [
     ...new Set(
       [...plan.byLine.values()].filter(({ data }) => data.role === "box" && data.boxSku).map(({ data }) => data.boxSku!),
@@ -127,7 +128,7 @@ export async function applyGiftSetsToResolved(
     const r = resolved[i]!;
     r.giftSetExtras = { setGroupId: groupId, setData: data };
     if (data.role === "box") {
-      // No print, no price of its own («входит в набор»); written off through `setData.boxSku`.
+      // A/B box / C set item: no print, no price of its own («входит в набор»); written off through `setData.boxSku`.
       r.setBoxExtras = { stockVariantId: data.boxSku ? (boxVariantBySku.get(data.boxSku) ?? null) : null };
       r.manualUnitPriceMdl = null;
     } else if (data.kind === "ready" && data.zoneId) {

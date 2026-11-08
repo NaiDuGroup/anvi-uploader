@@ -18,11 +18,16 @@
  *    A/B — notebook → `notebook` line, pen → `pen` line (both «другой»
  *    item, not our stock), anything else (thermos) → `uv_print` client-item
  *    line with one zone. Each has its own file, layout check and workshop
- *    card in its normal section. The set price is split across the lines by
- *    zone weight; the set item (one colour variant) is written off once per
- *    set on the group's first line (`setItemSku`), like the box of A/B.
- *    Orders saved before 2026-11-08 kept C as ONE `uv_print` line on the set
- *    item (role «ready», no `zoneId`): read-only compat in display.
+ *    card in its normal section. The set price is split across the print
+ *    lines by zone weight. The set item itself (one colour variant, e.g.
+ *    GIFT-SET-THERMOS-BLACK) is the set's stock line — the same `set_box`
+ *    line as the A/B box (role «box», no file, price 0, N units, written off
+ *    through it: `setData.boxSku` = the variant SKU), named «Набор с термосом
+ *    · чёрный». Compat: orders saved 2026-11-08 before the stock line wrote
+ *    the set item off on the group's first print line (`setItemSku`, v2);
+ *    orders before that kept C as ONE `uv_print` line on the set item (role
+ *    «ready», no `zoneId`, v1). Both are still returned / restored by SKU /
+ *    by their UV line, and an edit rebuilds them into the current shape.
  *
  * Templates («Шаблоны наборов») live in `AccountingSettings.giftSetTemplates`;
  * null = {@link DEFAULT_GIFT_SET_TEMPLATES}.
@@ -34,13 +39,13 @@ export type GiftSetKind = (typeof GIFT_SET_KINDS)[number];
 export const GIFT_SET_ROLES = ["pen", "notebook", "mug"] as const;
 export type GiftSetRole = (typeof GIFT_SET_ROLES)[number];
 
-/** Role of one order line in a set: a component line, a ready set's line, or the box of an assembled set. */
+/** Role of one order line in a set: a component line, a ready set's print line, or the set's stock line (A/B box, C set item). */
 export type GiftSetLineRole = GiftSetRole | "ready" | "box";
 
-/** Order line type of the box of an assembled set (no print, no file). */
+/** Order line type of a set's stock line: the box of an assembled set, the set item of a ready set (no print, no file). */
 export const GIFT_SET_BOX_LINE_TYPE = "set_box";
 
-/** True for the box line of an assembled set (`OrderLine.productType`). */
+/** True for the stock line of a set (A/B box, C set item; `OrderLine.productType`). */
 export function isGiftSetBoxLineType(productType: string | null | undefined): boolean {
   return productType === GIFT_SET_BOX_LINE_TYPE;
 }
@@ -308,6 +313,11 @@ export function parseGiftSetTemplates(raw: unknown): GiftSetTemplate[] {
 /** Label of the box line of a set. */
 export const GIFT_SET_BOX_LABEL = "Коробка";
 
+/** Name of a ready set's stock unit: «Набор с термосом» (a thermos set), else «Готовый набор». */
+export function giftSetReadyUnitLabel(template: Pick<GiftSetTemplate, "zones">): string {
+  return template.zones.some((z) => z.id === "thermos") ? "Набор с термосом" : "Готовый набор";
+}
+
 export function defaultRoleLabel(role: GiftSetRole): string {
   return role === "pen" ? "Ручка" : role === "notebook" ? "Блокнот" : "Кружка";
 }
@@ -403,11 +413,12 @@ export interface OrderLineSetData {
   /** This line's total (share × quantity). */
   lineTotalMdl: number;
   /**
-   * Box written off with this line: the box line (role «box») of an assembled
-   * set; on orders before the box line, the group's first line. Else null.
+   * Stock unit written off with this line, N per set: on the set's stock line
+   * (role «box») the A/B box or the C set item's colour variant; on A/B orders
+   * before the box line, the group's first line. Else null.
    */
   boxSku: string | null;
-  /** Ready set: the set item's colour variant written off with this line (the group's first line), else null. */
+  /** Compat (C orders of 2026-11-08 before the stock line): the set item written off on the group's first print line. Never set now. */
   setItemSku?: string | null;
   /** Ready set: the zone this line prints («thermos» / «notebook» / «pen»). */
   zoneId?: string;
@@ -492,18 +503,27 @@ export function planGiftSets(
     };
 
     if (template.kind === "ready") {
-      // One line per zone, each of its zone's line type; one colour for the set.
-      const zoneIds = idx.map((i) => lines[i]!.set!.zoneId ?? "");
+      // One print line per zone, each of its zone's line type, plus exactly one
+      // stock line (the set item's colour variant); one colour for the set.
+      const stockIdx = idx.filter((i) => lines[i]!.set!.role === "box" || lines[i]!.productType === GIFT_SET_BOX_LINE_TYPE);
+      if (
+        stockIdx.length !== 1 ||
+        stockIdx.some((i) => lines[i]!.set!.role !== "box" || lines[i]!.productType !== GIFT_SET_BOX_LINE_TYPE)
+      ) {
+        return { ok: false, code: "gift_set_box_mismatch", groupId };
+      }
+      const zoneIdx = idx.filter((i) => !stockIdx.includes(i));
+      const zoneIds = zoneIdx.map((i) => lines[i]!.set!.zoneId ?? "");
       const wantedZones = template.zones.map((z) => z.id);
       if (
         zoneIds.length !== wantedZones.length ||
         wantedZones.some((z) => !zoneIds.includes(z)) ||
         new Set(zoneIds).size !== zoneIds.length ||
-        idx.some((i) => lines[i]!.set!.role !== "ready")
+        zoneIdx.some((i) => lines[i]!.set!.role !== "ready")
       ) {
         return { ok: false, code: "gift_set_components_mismatch", groupId };
       }
-      for (const i of idx) {
+      for (const i of zoneIdx) {
         const l = lines[i]!;
         if (l.productType !== readyZoneLineType(l.set!.zoneId!)) return { ok: false, code: "gift_set_line_type_mismatch", groupId };
         // The set's components come with the set: never one of our stock items (the
@@ -511,18 +531,22 @@ export function planGiftSets(
         // top of the set item and billed at the set price).
         if (!l.otherItem) return { ok: false, code: "gift_set_item_mismatch", groupId };
       }
+      // Every line (the stock line too) names the same colour variant of the template's set item.
       const variantId = first.set!.readyVariantId ?? null;
+      const stockLine = lines[stockIdx[0]!]!;
+      const wantItem = (template.readyItemSku ?? "").toUpperCase();
       if (
         !variantId ||
         idx.some((i) => (lines[i]!.set!.readyVariantId ?? null) !== variantId) ||
-        !first.readyItemSku ||
-        first.readyItemSku.toUpperCase() !== (template.readyItemSku ?? "").toUpperCase()
+        idx.some((i) => !lines[i]!.readyItemSku || lines[i]!.readyItemSku!.toUpperCase() !== wantItem) ||
+        !stockLine.readyVariantSku
       ) {
         return { ok: false, code: "gift_set_item_mismatch", groupId };
       }
-      const zones = idx.map((i) => template.zones.find((z) => z.id === lines[i]!.set!.zoneId)!);
+      const colour = stockLine.readyColourLabel ?? null;
+      const zones = zoneIdx.map((i) => template.zones.find((z) => z.id === lines[i]!.set!.zoneId)!);
       const shares = splitSetUnitPrice(price.unitPriceMdl, zones.map((z) => z.weight));
-      idx.forEach((lineIndex, k) => {
+      zoneIdx.forEach((lineIndex, k) => {
         byLine.set(lineIndex, {
           groupId,
           data: {
@@ -531,14 +555,26 @@ export function planGiftSets(
             roleLabel: zones[k]!.label,
             lineUnitPriceMdl: shares[k]!,
             lineTotalMdl: round2(shares[k]! * quantity),
-            boxSku: k === 0 ? template.boxSku : null,
-            // The set item (one colour variant) goes with the group's first line, once per set.
-            setItemSku: k === 0 ? (first.readyVariantSku ?? null) : null,
+            boxSku: null,
             zoneId: zones[k]!.id,
             readyVariantId: variantId,
-            ...(first.readyColourLabel ? { readyColourLabel: first.readyColourLabel } : {}),
+            ...(colour ? { readyColourLabel: colour } : {}),
           },
         });
+      });
+      // The set item: written off through the stock line, N per set; «входит в набор» (0).
+      byLine.set(stockIdx[0]!, {
+        groupId,
+        data: {
+          ...base,
+          role: "box",
+          roleLabel: giftSetReadyUnitLabel(template),
+          lineUnitPriceMdl: 0,
+          lineTotalMdl: 0,
+          boxSku: stockLine.readyVariantSku,
+          readyVariantId: variantId,
+          ...(colour ? { readyColourLabel: colour } : {}),
+        },
       });
       continue;
     }
@@ -640,6 +676,19 @@ export function giftSetBoxLineStatuses(
 /** «Коробка 30×23×8,5» of a box SKU (the box line's name). */
 export function giftSetBoxName(boxSku: string): string {
   return `${GIFT_SET_BOX_LABEL} ${boxSizeFromSku(boxSku) ?? boxSku}`;
+}
+
+/**
+ * Name of a set's stock line: «Набор с термосом · чёрный» (ready set item),
+ * «Коробка 30×23×8,5» (A/B box).
+ */
+export function giftSetStockLineName(
+  d: Pick<OrderLineSetData, "kind" | "boxSku" | "roleLabel" | "readyColourLabel">,
+): string {
+  if (d.kind === "ready") {
+    return `${d.roleLabel || "Набор"}${d.readyColourLabel ? ` · ${d.readyColourLabel}` : ""}`;
+  }
+  return d.boxSku ? giftSetBoxName(d.boxSku) : GIFT_SET_BOX_LABEL;
 }
 
 /** Legacy ready set: the whole set on one UV line (orders before 2026-11-08). */

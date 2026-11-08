@@ -9,7 +9,8 @@
  *    ({@link withGiftSetBoxLines});
  *  - ready: one row per printed component (thermos / notebook / pen file);
  *    on save each row becomes its own line (`readyZoneLineType`: notebook /
- *    pen / UV client item), the set item is written off once by the server.
+ *    pen / UV client item); the set item (colour variant) is the set's
+ *    derived stock row, sent as a `set_box` line like the A/B box.
  */
 import {
   designerProductForCategory,
@@ -20,6 +21,7 @@ import type { UvStockItemJson } from "@/lib/uv/dto";
 import {
   GIFT_SET_BOX_LINE_TYPE,
   giftSetBoxName,
+  giftSetReadyUnitLabel,
   giftSetUnitPrice,
   readyZoneLineType,
   skuMatches,
@@ -221,30 +223,67 @@ export function giftSetGroupSlotIds(
 
 // ─── The box row ────────────────────────────────────────────────────────────────
 
-/** The box row of one assembled set, shown under the set's last row. */
+/** The stock row of one set (A/B box, C set item), shown under the set's last row. */
 export interface GiftSetBoxRow {
   groupId: string;
-  /** Slot of the set's last row (the box row goes right after it). */
+  /** Slot of the set's last row (the stock row goes right after it). */
   afterSlotId: string;
+  /** SKU written off: the box (A/B) / the set item's colour variant (C; "" while the colour is unknown). */
   boxSku: string;
-  /** «Коробка 30×23×8,5». */
+  /** «Коробка 30×23×8,5» / «Набор с термосом · чёрный». */
   name: string;
-  /** N sets = N boxes. */
+  /** N sets = N units. */
   quantity: number;
+  kind: "assembled" | "ready";
+  /** Ready set: the colour variant (`StockVariant.id`). */
+  variantId?: string;
 }
 
-/** Box rows of the wizard's sets (assembled sets whose template has a box), by the slot they follow. */
+/** What the wizard knows about a ready set's colour variant (UV catalog). */
+export interface GiftSetVariantInfo {
+  sku: string;
+  /** «чёрный». */
+  label: string | null;
+}
+
+/**
+ * Stock rows of the wizard's sets by the slot they follow: the box of an
+ * assembled set whose template has one, the set item of a ready set.
+ */
 export function giftSetBoxRows(
   rows: readonly { slotId: string; giftSet: GiftSetRowAssign | null | undefined }[],
   templates: readonly GiftSetTemplate[],
+  variants: ReadonlyMap<string, GiftSetVariantInfo> = new Map(),
 ): Map<string, GiftSetBoxRow> {
   const last = new Map<string, { slotId: string; gs: GiftSetRowAssign }>();
   for (const r of rows) if (r.giftSet) last.set(r.giftSet.groupId, { slotId: r.slotId, gs: r.giftSet });
   const out = new Map<string, GiftSetBoxRow>();
   for (const [groupId, { slotId, gs }] of last) {
     const template = templates.find((t) => t.id === gs.templateId);
-    if (!template || template.kind !== "assembled" || !template.boxSku) continue;
-    out.set(slotId, { groupId, afterSlotId: slotId, boxSku: template.boxSku, name: giftSetBoxName(template.boxSku), quantity: gs.quantity });
+    if (!template) continue;
+    if (template.kind === "ready") {
+      const v = gs.readyVariantId ? variants.get(gs.readyVariantId) : undefined;
+      const label = giftSetReadyUnitLabel(template);
+      out.set(slotId, {
+        groupId,
+        afterSlotId: slotId,
+        boxSku: v?.sku ?? "",
+        name: v?.label ? `${label} · ${v.label}` : label,
+        quantity: gs.quantity,
+        kind: "ready",
+        ...(gs.readyVariantId ? { variantId: gs.readyVariantId } : {}),
+      });
+      continue;
+    }
+    if (!template.boxSku) continue;
+    out.set(slotId, {
+      groupId,
+      afterSlotId: slotId,
+      boxSku: template.boxSku,
+      name: giftSetBoxName(template.boxSku),
+      quantity: gs.quantity,
+      kind: "assembled",
+    });
   }
   return out;
 }
@@ -260,11 +299,11 @@ export interface GiftSetBoxLineInput {
 }
 
 /**
- * Lines with each assembled set's box line added right after the set's last
- * line (the set's lines stay together). The box line keeps its stored id
- * (`boxLineIdByGroup`, edit) so the edit does not recreate it.
+ * Lines with each set's stock line (A/B box, C set item) added right after
+ * the set's last line (the set's lines stay together). The stock line keeps
+ * its stored id (`boxLineIdByGroup`, edit) so the edit does not recreate it.
  */
-export function withGiftSetBoxLines<L extends { set?: { groupId: string; templateId: string; quantity: number; role: GiftSetLineRole; manualUnitPriceMdl?: number | null } | undefined; customerType?: "retail" | "dealer" }>(
+export function withGiftSetBoxLines<L extends { set?: { groupId: string; templateId: string; quantity: number; role: GiftSetLineRole; manualUnitPriceMdl?: number | null; readyVariantId?: string | null } | undefined; customerType?: "retail" | "dealer" }>(
   lines: readonly L[],
   templates: readonly GiftSetTemplate[],
   boxLineIdByGroup: ReadonlyMap<string, string> = new Map(),
@@ -280,7 +319,7 @@ export function withGiftSetBoxLines<L extends { set?: { groupId: string; templat
     const set = l.set;
     if (!set || lastIndex.get(set.groupId) !== i) return;
     const template = templates.find((t) => t.id === set.templateId);
-    if (!template || template.kind !== "assembled" || !template.boxSku) return;
+    if (!template || (template.kind === "assembled" && !template.boxSku)) return;
     const id = boxLineIdByGroup.get(set.groupId);
     out.push({
       productType: GIFT_SET_BOX_LINE_TYPE,
@@ -293,6 +332,8 @@ export function withGiftSetBoxLines<L extends { set?: { groupId: string; templat
         quantity: set.quantity,
         role: "box",
         manualUnitPriceMdl: set.manualUnitPriceMdl ?? null,
+        // Ready set: the colour variant the stock line writes off.
+        ...(template.kind === "ready" && set.readyVariantId ? { readyVariantId: set.readyVariantId } : {}),
       },
       files: [],
     });

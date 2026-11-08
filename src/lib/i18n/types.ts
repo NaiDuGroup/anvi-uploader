@@ -3251,12 +3251,14 @@ export interface TranslationDictionary {
     boxStockNote: string;
     /** Dialog: section title of the box. */
     boxSection: string;
+    /** Ready set's stock line (the set item, e.g. «Набор с термосом · чёрный»): section and no-file note. */
+    readyUnitSection: string;
+    readyUnitNoFile: string;
     shortWarning: string;
     replaceFile: string;
     boardProcurement: string;
     noBox: string;
     lineShare: (amount: string) => string;
-    readyLine: string;
     pickProblem: { quantity: string; variant: string; ready_item_missing: string };
     errors: Record<string, string>;
     settingsTitle: string;

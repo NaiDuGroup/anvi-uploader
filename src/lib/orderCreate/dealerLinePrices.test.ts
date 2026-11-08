@@ -84,4 +84,18 @@ describe("«Набор» box line (dealer)", () => {
     // Without the mask a 0 line is still never summed as free.
     expect(dealerOrderTotalMdl(totals)).toBeNull();
   });
+
+  it("set C: thermos / notebook / pen carry the dealer set price, the set item's stock line is 0 and left out", async () => {
+    // Dealer price 450 × 2 sets split 233 / 142 / 75 per set.
+    const resolved = [
+      setLine("uv_print", "ready", 466),
+      setLine("notebook", "ready", 284),
+      setLine("pen", "ready", 150),
+      setLine("set_box", "box", 0),
+    ];
+    const totals = await dealerLineTotalsMdl(resolved, new Map());
+    expect(totals).toEqual([466, 284, 150, 0]);
+    expect(dealerFreeLines(resolved)).toEqual([false, false, false, true]);
+    expect(dealerOrderTotalMdl(totals, dealerFreeLines(resolved))).toBe(900);
+  });
 });

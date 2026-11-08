@@ -76,6 +76,68 @@ describe("deductStockForAdminOrderLines with a set box line", () => {
   });
 });
 
+describe("deductStockForAdminOrderLines with a ready set (C)", () => {
+  const VAR = "11111111-1111-4111-8111-111111111111";
+  const planC = () => {
+    const plan = planGiftSets(
+      [
+        ["uv_print", "thermos"],
+        ["notebook", "notebook"],
+        ["pen", "pen"],
+        ["set_box", null],
+      ].map(([productType, zoneId]) => ({
+        productType: productType!,
+        quantity: 2,
+        customerType: "retail" as const,
+        set: {
+          groupId: "g",
+          templateId: "pen_notebook_thermos",
+          quantity: 2,
+          role: zoneId ? ("ready" as const) : ("box" as const),
+          ...(zoneId ? { zoneId } : {}),
+          readyVariantId: VAR,
+        },
+        readyItemSku: "GIFT-SET-THERMOS",
+        readyVariantSku: "GIFT-SET-THERMOS-BLACK",
+        readyColourLabel: "чёрный",
+        otherItem: Boolean(zoneId),
+      })),
+      DEFAULT_GIFT_SET_TEMPLATES,
+      { allowManualPrice: false },
+    );
+    if (!plan.ok) throw new Error(plan.code);
+    return plan;
+  };
+
+  it("C ×2: the set item ×2 once — through the stock line; «другой» notebook / pen and the client thermos take nothing", async () => {
+    const plan = planC();
+    const set = (i: number) => ({ setGroupId: "g", setData: plan.byLine.get(i)!.data });
+    const resolved = [
+      { input: { productType: "uv_print", files: [file(2)] }, giftSetExtras: set(0) },
+      { input: { productType: "notebook", files: [file(2)] }, notebookExtras: { stockVariantId: null, notebookProductSnapshot: null }, giftSetExtras: set(1) },
+      { input: { productType: "pen", files: [file(2)] }, penExtras: { stockVariantId: null, penProductSnapshot: null }, giftSetExtras: set(2) },
+      { input: { productType: "set_box", quantity: 2, files: [] }, setBoxExtras: { stockVariantId: "v-set-black" }, giftSetExtras: set(3) },
+    ] as unknown as ResolvedAdminOrderLine[];
+    await deductStockForAdminOrderLines(tx(["l-th", "l-nb", "l-pen", "l-unit"]), { ...params, resolved });
+    expect(box.takeGiftSetBoxStock).toHaveBeenCalledTimes(1);
+    expect(box.takeGiftSetBoxStock.mock.calls[0]![1]).toEqual({ boxSku: "GIFT-SET-THERMOS-BLACK", quantity: 2, orderLineId: "l-unit", ...params });
+    expect(lines.consumeNotebookLineStock).not.toHaveBeenCalled();
+    expect(lines.consumePenLineStock).not.toHaveBeenCalled();
+  });
+
+  it("short set item → the order is «Закупка» with the stock line's entry", async () => {
+    box.takeGiftSetBoxStock.mockResolvedValue({ kind: "stock_variant", variantId: "v-set-black", label: "Набор / чёрный", requestedQty: 2, stockAtOrder: 0 });
+    const plan = planC();
+    const resolved = [0, 1, 2, 3].map((i) => ({
+      input: { productType: ["uv_print", "notebook", "pen", "set_box"][i], quantity: 2, files: i === 3 ? [] : [file(2)] },
+      giftSetExtras: { setGroupId: "g", setData: plan.byLine.get(i)!.data },
+    })) as unknown as ResolvedAdminOrderLine[];
+    const res = await deductStockForAdminOrderLines(tx(["l-th", "l-nb", "l-pen", "l-unit"]), { ...params, resolved });
+    expect(res.needsProcurement).toBe(true);
+    expect(box.takeGiftSetBoxStock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("order line schema: the set box line", () => {
   const boxLine = {
     productType: "set_box",
@@ -96,6 +158,11 @@ describe("order line schema: the set box line", () => {
     expect(createAdminOrderSchema.safeParse(body([mug, boxLine])).success).toBe(true);
     expect(createAdminOrderSchema.safeParse(body([mug, { ...boxLine, files: [file(1)] }])).success).toBe(false);
     expect(createAdminOrderSchema.safeParse(body([mug, { ...boxLine, set: undefined }])).success).toBe(false);
+  });
+
+  it("accepts the ready set's stock line with its colour variant", () => {
+    const unit = { ...boxLine, set: { groupId: "c", templateId: "pen_notebook_thermos", quantity: 2, role: "box", readyVariantId: "11111111-1111-4111-8111-111111111111" } };
+    expect(adminOrderLineSchema.safeParse(unit).success).toBe(true);
   });
 
   it("every other line still needs a file, and only a box line may be a set's box", () => {

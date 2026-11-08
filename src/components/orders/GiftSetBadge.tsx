@@ -1,7 +1,7 @@
 "use client";
 
 import { Gift, Package } from "lucide-react";
-import { giftSetBoxName, isLegacyReadySetLine, parseOrderLineSetData } from "@/lib/giftSet/giftSet";
+import { giftSetStockLineName, isLegacyReadySetLine, parseOrderLineSetData } from "@/lib/giftSet/giftSet";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { cn } from "@/lib/utils";
 
@@ -61,15 +61,22 @@ export function giftSetLineFrameClass(setData: unknown): string | null {
   return parseOrderLineSetData(setData) ? "border-l-4 border-l-fuchsia-300 bg-fuchsia-50/20" : null;
 }
 
-/** The box line of a set: «Коробка 30×23×8,5 × 2 · входит в набор · списывается со склада, 1 на набор». */
+/**
+ * The stock line of a set: «Коробка 30×23×8,5 × 2» (A/B box) / «Набор с
+ * термосом · чёрный × 2» (C set item) · входит в набор · списывается со склада, 1 на набор.
+ */
 export function GiftSetBoxLineSummary({ setData, t, className }: { setData: unknown; t: TranslationDictionary; className?: string }) {
   const d = parseOrderLineSetData(setData);
   if (!d || d.role !== "box" || !d.boxSku) return null;
   return (
     <p className={cn("flex flex-wrap items-center gap-x-1.5 text-xs text-gray-700", className)} data-testid="gift-set-box-line">
-      <Package className="h-3.5 w-3.5 shrink-0 text-gray-500" aria-hidden />
+      {d.kind === "ready" ? (
+        <Gift className="h-3.5 w-3.5 shrink-0 text-gray-500" aria-hidden />
+      ) : (
+        <Package className="h-3.5 w-3.5 shrink-0 text-gray-500" aria-hidden />
+      )}
       <span className="font-medium text-gray-900">
-        {giftSetBoxName(d.boxSku)} × {d.quantity}
+        {giftSetStockLineName(d)} × {d.quantity}
       </span>
       <span className="text-gray-400">{d.boxSku}</span>
       <span className="text-fuchsia-800">· {t.giftSet.boxIncluded}</span>

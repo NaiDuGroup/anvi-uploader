@@ -61,6 +61,8 @@ export const MIXED_PRODUCT_ICON: LucideIcon = Layers;
 export function lineTypeKey(productType: string, uvLineDataRaw?: unknown, setDataRaw?: unknown): LineTypeKey | null {
   // Legacy ready set (one UV line for the whole set C); new ones are one line per item.
   if (productType === "uv_print" && isLegacyReadySetLine(parseOrderLineSetData(setDataRaw))) return "gift_set";
+  // The stock line of a ready set is the set itself («Набор с термосом · чёрный»), not a box.
+  if (productType === "set_box" && parseOrderLineSetData(setDataRaw)?.kind === "ready") return "gift_set";
   if (productType === "uv_print") {
     const uv = parseUvLineData(uvLineDataRaw);
     if (uv && (uv.technique === "transfer" || uv.source === "stickers")) return "uv_dtf";

@@ -5,6 +5,7 @@ import { SHOP_ORDER_EDIT_BLOCKED_MESSAGE } from "@/lib/shop/orderFlags";
 import { GIFT_SET_CATEGORY_CODE } from "@/lib/giftSet/giftSetCategory";
 import {
   isGiftSetBoxLineType,
+  isLegacyReadySetLine,
   parseOrderLineSetData,
   readyZoneLineType,
   type GiftSetTemplate,
@@ -27,6 +28,7 @@ import {
   type GiftSetRowAssign,
 } from "@/lib/giftSet/giftSetWizard";
 import { GiftSetItemThumb } from "@/components/orders/GiftSetItemThumb";
+import { procurementVariantIds } from "@/lib/giftSet/giftSetBoard";
 import { readySetRowLine } from "./giftSetLines";
 import { GiftSetDialog } from "@/app/admin/_components/GiftSetDialog";
 import { GiftSetBadge } from "@/components/orders/GiftSetBadge";
@@ -2324,6 +2326,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const storedLineTypesRef = useRef<Map<string, string>>(new Map());
   /** «Набор»: stored box line id by set group (edit: the box line is not a row; it keeps its id on save). */
   const setBoxLineIdsRef = useRef<Map<string, string>>(new Map());
+  /** «Набор»: stock unit the saved order already holds per set group (box / set item SKU × N): the stock row counts it as available. */
+  const savedSetUnitRef = useRef<Map<string, { sku: string | null; variantId: string | null; quantity: number }>>(new Map());
   const methodTitle = useCallback(
     (m: StockMethod): string => getProductTypeConfig(m)?.getTitle(t) ?? m,
     [t],
@@ -2680,8 +2684,24 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         const nextSlots: AdminWizardSlot[] = [];
         const nextAssign: Record<string, SlotAssign> = {};
 
+        // «Набор»: units the saved order could not take (short → «Закупка»): not held.
+        const shortVariantIds = procurementVariantIds(
+          Boolean((order as { needsProcurement?: boolean }).needsProcurement),
+          (order as { procurementMeta?: unknown }).procurementMeta,
+        );
         for (const line of lines) {
-          // «Набор»: the box line is not a row (no file) — the wizard sends it again with its set.
+          // «Набор»: what this set already took from stock (stock line; older orders: the first line).
+          const heldSet = line.setGroupId ? parseOrderLineSetData(line.setData) : null;
+          const heldSku = heldSet ? (heldSet.boxSku ?? heldSet.setItemSku ?? null) : null;
+          // One-line ready set (v1): the set item is the UV line's own stock item.
+          const legacyVariantId =
+            heldSet && isLegacyReadySetLine(heldSet) ? (parseUvLineData(line.uvLineData)?.item?.variantId ?? null) : null;
+          const heldVariantId = line.stockVariantId ?? legacyVariantId;
+          const heldShort = Boolean(heldVariantId && shortVariantIds.has(heldVariantId));
+          if (line.setGroupId && heldSet && (heldSku || legacyVariantId) && !heldShort) {
+            savedSetUnitRef.current.set(line.setGroupId, { sku: heldSku, variantId: heldVariantId, quantity: heldSet.quantity });
+          }
+          // «Набор»: the stock line is not a row (no file) — the wizard sends it again with its set.
           if (isGiftSetBoxLineType(line.productType)) {
             if (line.setGroupId) setBoxLineIdsRef.current.set(line.setGroupId, line.id);
             storedLineTypesRef.current.set(line.id, line.productType);
@@ -3449,10 +3469,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     Boolean(editOrderId) && !editLoadError && editLoading;
 
   /** «Набор»: line total of every set row (the set price split as the server bills it). */
-  /** «Набор»: box row of each assembled set, by the slot it follows. */
+  /** «Набор»: stock row of each set (A/B box, C set item), by the slot it follows. */
+  const giftSetVariantInfo = useMemo(
+    () => new Map(uvCatalog.items.map((i) => [i.id, { sku: i.sku, label: i.variantLabel?.trim() || null }])),
+    [uvCatalog],
+  );
   const giftSetBoxRowsBySlot: Map<string, GiftSetBoxRow> = useMemo(
-    () => giftSetBoxRows(slots.map((x) => ({ slotId: x.id, giftSet: assignBySlot[x.id]?.giftSet })), giftSetTemplates),
-    [slots, assignBySlot, giftSetTemplates],
+    () =>
+      giftSetBoxRows(
+        slots.map((x) => ({ slotId: x.id, giftSet: assignBySlot[x.id]?.giftSet })),
+        giftSetTemplates,
+        giftSetVariantInfo,
+      ),
+    [slots, assignBySlot, giftSetTemplates, giftSetVariantInfo],
   );
   const giftSetTotals: Map<string, number> = useMemo(
     () =>
@@ -3992,7 +4021,6 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               )}
             </p>
           ) : null}
-          {ready && giftSetGroupSlotIds(s.id, giftSetRows())[0] === s.id ? <p className="mt-0.5 text-gray-400">{g.readyLine}</p> : null}
         </td>
         <td className="min-w-0 px-1 py-2 align-top text-center tabular-nums">
           <span className="py-1 text-[13px] font-medium text-gray-900" data-testid="gift-set-row-total">
@@ -4059,29 +4087,42 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     );
   }
 
-  /** The box row of an assembled set: no file, «входит в набор», N boxes off the stock. */
+  /**
+   * The stock row of a set: the box of an assembled set / the set item of a
+   * ready set (its colour variant). No file, «входит в набор», N units off the stock.
+   */
   function renderGiftSetBoxRow(box: GiftSetBoxRow) {
     const g = t.giftSet;
-    const stock = bootstrap.giftSetBoxStock?.[box.boxSku];
-    const fullName = bootstrap.giftSetBoxNames?.[box.boxSku] ?? box.name;
+    const ready = box.kind === "ready";
+    const variantItem = ready && box.variantId ? uvCatalog.items.find((i) => i.id === box.variantId) : undefined;
+    const onHand = ready ? variantItem?.stockQuantity : bootstrap.giftSetBoxStock?.[box.boxSku];
+    // Edit: what the saved set already holds of this unit comes back before it is taken again.
+    const saved = savedSetUnitRef.current.get(box.groupId);
+    const savedSame = Boolean(saved && ((saved.sku && saved.sku === box.boxSku) || (saved.variantId && saved.variantId === box.variantId)));
+    const stock = onHand === undefined ? undefined : onHand + (savedSame ? saved!.quantity : 0);
+    const fullName = ready ? box.name : (bootstrap.giftSetBoxNames?.[box.boxSku] ?? box.name);
     const setGs = slots.map((x) => assignBySlot[x.id]?.giftSet).find((x) => x?.groupId === box.groupId) ?? null;
     const setTemplate = setGs ? giftSetTemplates.find((x) => x.id === setGs.templateId) : undefined;
-    const BoxIcon = PRODUCT_TYPE_ICONS.set_box;
+    const BoxIcon = ready ? PRODUCT_TYPE_ICONS.gift_set : PRODUCT_TYPE_ICONS.set_box;
     return (
       <tr className="border-b border-gray-100 bg-fuchsia-50/30" data-testid="gift-set-box-row">
         <td className="min-w-0 border-l-4 border-l-fuchsia-300 py-2 pl-3 pr-2 align-top text-xs text-gray-500">
-          <span className="ml-7 inline-flex items-center gap-1.5">{g.boxNoFile}</span>
+          <span className="ml-7 inline-flex items-center gap-1.5">{ready ? g.readyUnitNoFile : g.boxNoFile}</span>
         </td>
         <td className="min-w-0 px-2.5 py-2 align-top">
           <GiftSetBadge label={g.badge(setTemplate?.name ?? "", box.quantity)} className="max-w-full whitespace-normal" />
           <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-gray-900">
             <BoxIcon className="h-4 w-4 shrink-0 text-gray-500" aria-hidden />
-            {g.boxSection}
+            {ready ? g.readyUnitSection : g.boxSection}
           </p>
         </td>
         <td className="min-w-0 px-2.5 py-2 align-top text-xs text-gray-700">
           <span className="flex min-w-0 items-center gap-2">
-            <GiftSetItemThumb imageUrl={null} swatch={null} alt={fullName} />
+            <GiftSetItemThumb
+              imageUrl={variantItem?.imageUrl ?? null}
+              swatch={variantItem ? giftSetSwatchHex(variantItem) : null}
+              alt={fullName}
+            />
             <span className="min-w-0">
               <span className="block font-medium text-gray-900">{fullName}</span>
               <span className="block text-gray-400">{box.boxSku}</span>
@@ -4092,6 +4133,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             {stock !== undefined ? (
               <span className={cn("ml-1", stock < box.quantity ? "text-red-600" : "text-gray-400")}>
                 · {stock > 0 ? g.stockLeft(stock) : g.variantOutOfStock}
+                {stock < box.quantity ? ` · ${g.boardProcurement}` : ""}
               </span>
             ) : null}
           </p>
@@ -5246,14 +5288,25 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       // «Набор»: the set's box row after its last item.
       const box = giftSetBoxRowsBySlot.get(s.id);
       if (!box || !setInfo) return [row];
+      const ready = box.kind === "ready";
+      const variantItem = ready && box.variantId ? uvCatalog.items.find((i) => i.id === box.variantId) : undefined;
       return [
         row,
         {
           id: `box-${box.groupId}`,
-          name: t.giftSet.boxNoFile,
-          product: bootstrap.giftSetBoxNames?.[box.boxSku] ?? box.name,
+          name: ready ? t.giftSet.readyUnitNoFile : t.giftSet.boxNoFile,
+          product: ready ? box.name : (bootstrap.giftSetBoxNames?.[box.boxSku] ?? box.name),
           copies: String(box.quantity),
-          set: { first: false, label: setInfo.label, role: t.giftSet.boxSection, note: null, box: true, item: box.boxSku, imageUrl: null, swatch: null },
+          set: {
+            first: false,
+            label: setInfo.label,
+            role: ready ? t.giftSet.readyUnitSection : t.giftSet.boxSection,
+            note: null,
+            box: true,
+            item: box.boxSku,
+            imageUrl: variantItem?.imageUrl ?? null,
+            swatch: variantItem ? giftSetSwatchHex(variantItem) : null,
+          },
         },
       ];
     });

@@ -5,6 +5,7 @@ import {
   giftSetBoxLineStatuses,
   giftSetBoxWriteOffs,
   giftSetPackNote,
+  giftSetStockLineName,
   giftSetUnitPrice,
   isLegacyReadySetLine,
   parseGiftSetTemplates,
@@ -239,7 +240,7 @@ describe("planGiftSets", () => {
     expect(unknown).toMatchObject({ ok: false, code: "gift_set_template_unknown" });
   });
 
-  it("splits a ready set (C) into thermos / notebook / pen lines; the set item once, on the first line", () => {
+  it("splits a ready set (C) into thermos / notebook / pen lines; the set item once, through its stock line", () => {
     const VAR = "11111111-1111-4111-8111-111111111111";
     const c = (productType: string, zoneId: string, extra: Partial<GiftSetPlanLine> = {}): GiftSetPlanLine => ({
       productType,
@@ -252,7 +253,17 @@ describe("planGiftSets", () => {
       otherItem: true,
       ...extra,
     });
-    const ok = planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook"), c("pen", "pen")], templates, {
+    const unit = (extra: Partial<GiftSetPlanLine> = {}, variantId: string = VAR): GiftSetPlanLine => ({
+      productType: "set_box",
+      quantity: 4,
+      customerType: "retail",
+      set: { groupId: "g1", templateId: "pen_notebook_thermos", quantity: 4, role: "box", readyVariantId: variantId },
+      readyItemSku: "GIFT-SET-THERMOS",
+      readyVariantSku: "GIFT-SET-THERMOS-BLACK",
+      readyColourLabel: "чёрный",
+      ...extra,
+    });
+    const ok = planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook"), c("pen", "pen"), unit()], templates, {
       allowManualPrice: false,
     });
     expect(ok.ok).toBe(true);
@@ -260,44 +271,95 @@ describe("planGiftSets", () => {
     const d = [0, 1, 2].map((i) => ok.byLine.get(i)!.data);
     expect(d.map((x) => x.lineUnitPriceMdl)).toEqual([311, 189, 100]);
     expect(d.reduce((sum, x) => sum + x.lineTotalMdl, 0)).toBe(2400);
-    expect(d.map((x) => x.setItemSku ?? null)).toEqual(["GIFT-SET-THERMOS-BLACK", null, null]);
+    // No hidden write-off on a print line any more.
+    expect(d.map((x) => x.setItemSku ?? null)).toEqual([null, null, null]);
+    expect(d.map((x) => x.boxSku)).toEqual([null, null, null]);
     expect(d.map((x) => x.zoneId)).toEqual(["thermos", "notebook", "pen"]);
     expect(d.map((x) => x.roleLabel)).toEqual(["Термос", "Блокнот", "Ручка"]);
-    expect(giftSetBoxWriteOffs(d)).toEqual([{ sku: "GIFT-SET-THERMOS-BLACK", quantity: 4 }]);
-    // Odd manual price: still exact.
+    // The stock line: the set item's colour variant, 0 lei, N units.
+    const u = ok.byLine.get(3)!.data;
+    expect(u).toMatchObject({
+      role: "box",
+      kind: "ready",
+      boxSku: "GIFT-SET-THERMOS-BLACK",
+      lineUnitPriceMdl: 0,
+      lineTotalMdl: 0,
+      quantity: 4,
+      readyVariantId: VAR,
+      readyColourLabel: "чёрный",
+    });
+    expect(giftSetStockLineName(u)).toBe("Набор с термосом · чёрный");
+    expect(giftSetBoxWriteOffs([...d, u])).toEqual([{ sku: "GIFT-SET-THERMOS-BLACK", quantity: 4 }]);
+    expect(parseOrderLineSetData(JSON.parse(JSON.stringify(u)))).toEqual(u);
+    // Odd manual price: still exact across the print lines.
     const manual = planGiftSets(
-      [c("uv_print", "thermos", { set: { ...c("uv_print", "thermos").set!, manualUnitPriceMdl: 555 } }), c("notebook", "notebook"), c("pen", "pen")],
+      [c("uv_print", "thermos", { set: { ...c("uv_print", "thermos").set!, manualUnitPriceMdl: 555 } }), c("notebook", "notebook"), c("pen", "pen"), unit()],
       templates,
       { allowManualPrice: true },
     );
     expect(manual.ok && [0, 1, 2].reduce((sum, i) => sum + manual.byLine.get(i)!.data.lineUnitPriceMdl, 0)).toBe(555);
+    expect(manual.ok && manual.byLine.get(3)!.data.lineTotalMdl).toBe(0);
 
-    expect(planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook")], templates, { allowManualPrice: false })).toMatchObject({
+    expect(planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook"), unit()], templates, { allowManualPrice: false })).toMatchObject({
       ok: false,
       code: "gift_set_components_mismatch",
     });
     expect(
-      planGiftSets([c("uv_print", "thermos"), c("uv_print", "notebook"), c("pen", "pen")], templates, { allowManualPrice: false }),
+      planGiftSets([c("uv_print", "thermos"), c("uv_print", "notebook"), c("pen", "pen"), unit()], templates, { allowManualPrice: false }),
     ).toMatchObject({ ok: false, code: "gift_set_line_type_mismatch" });
     // A stock UV item as the thermos line: written off on top of the set item, billed at the set price.
     expect(
-      planGiftSets([c("uv_print", "thermos", { otherItem: false }), c("notebook", "notebook"), c("pen", "pen")], templates, {
+      planGiftSets([c("uv_print", "thermos", { otherItem: false }), c("notebook", "notebook"), c("pen", "pen"), unit()], templates, {
         allowManualPrice: false,
       }),
     ).toMatchObject({ ok: false, code: "gift_set_item_mismatch" });
     // Our stock notebook in a ready set would be written off twice.
     expect(
-      planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook", { otherItem: false }), c("pen", "pen")], templates, {
+      planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook", { otherItem: false }), c("pen", "pen"), unit()], templates, {
         allowManualPrice: false,
       }),
     ).toMatchObject({ ok: false, code: "gift_set_item_mismatch" });
     expect(
       planGiftSets(
-        [c("uv_print", "thermos", { readyItemSku: "ARDENES" }), c("notebook", "notebook"), c("pen", "pen")],
+        [c("uv_print", "thermos", { readyItemSku: "ARDENES" }), c("notebook", "notebook"), c("pen", "pen"), unit()],
         templates,
         { allowManualPrice: false },
       ),
     ).toMatchObject({ ok: false, code: "gift_set_item_mismatch" });
+    // The stock line must be the template's set item, in the set's colour.
+    expect(
+      planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook"), c("pen", "pen"), unit({ readyItemSku: "EW-BOX-300X230X85" })], templates, {
+        allowManualPrice: false,
+      }),
+    ).toMatchObject({ ok: false, code: "gift_set_item_mismatch" });
+    expect(
+      planGiftSets(
+        [c("uv_print", "thermos"), c("notebook", "notebook"), c("pen", "pen"), unit({}, "22222222-2222-4222-8222-222222222222")],
+        templates,
+        { allowManualPrice: false },
+      ),
+    ).toMatchObject({ ok: false, code: "gift_set_item_mismatch" });
+    expect(
+      planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook"), c("pen", "pen"), unit({ readyVariantSku: null })], templates, {
+        allowManualPrice: false,
+      }),
+    ).toMatchObject({ ok: false, code: "gift_set_item_mismatch" });
+    // Exactly one stock line: none (the v2 3-line shape) or two are refused.
+    expect(planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook"), c("pen", "pen")], templates, { allowManualPrice: false })).toMatchObject({
+      ok: false,
+      code: "gift_set_box_mismatch",
+    });
+    expect(
+      planGiftSets([c("uv_print", "thermos"), c("notebook", "notebook"), c("pen", "pen"), unit(), unit()], templates, { allowManualPrice: false }),
+    ).toMatchObject({ ok: false, code: "gift_set_box_mismatch" });
+    // A box role on a print line type is not a stock line.
+    expect(
+      planGiftSets(
+        [c("uv_print", "thermos"), c("notebook", "notebook"), c("pen", "pen"), unit({ productType: "uv_print" })],
+        templates,
+        { allowManualPrice: false },
+      ),
+    ).toMatchObject({ ok: false, code: "gift_set_box_mismatch" });
     // The old one-line format is no longer accepted.
     expect(
       planGiftSets([setLine("uv_print", "ready", 4, { readyItemSku: "GIFT-SET-THERMOS" }, "pen_notebook_thermos")], templates, {
@@ -306,6 +368,31 @@ describe("planGiftSets", () => {
     ).toMatchObject({ ok: false });
     expect(isLegacyReadySetLine({ role: "ready" })).toBe(true);
     expect(isLegacyReadySetLine(d[0])).toBe(false);
+  });
+
+  it("dealer price of a ready set: split over the print lines, the stock line 0", () => {
+    const t = templates.map((x) => (x.id === "pen_notebook_thermos" ? { ...x, dealerPriceMdl: 450 } : x));
+    const VAR = "11111111-1111-4111-8111-111111111111";
+    const line = (productType: string, role: "ready" | "box", zoneId?: string): GiftSetPlanLine => ({
+      productType,
+      quantity: 2,
+      customerType: "dealer",
+      set: { groupId: "g", templateId: "pen_notebook_thermos", quantity: 2, role, ...(zoneId ? { zoneId } : {}), readyVariantId: VAR, manualUnitPriceMdl: 999 },
+      readyItemSku: "GIFT-SET-THERMOS",
+      readyVariantSku: "GIFT-SET-THERMOS-RED",
+      readyColourLabel: "красный",
+      otherItem: role === "ready",
+    });
+    const plan = planGiftSets([line("uv_print", "ready", "thermos"), line("notebook", "ready", "notebook"), line("pen", "ready", "pen"), line("set_box", "box")], t, {
+      allowManualPrice: false,
+    });
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) return;
+    const d = [0, 1, 2, 3].map((i) => plan.byLine.get(i)!.data);
+    expect(d.map((x) => x.priceSource)).toEqual(["dealer", "dealer", "dealer", "dealer"]);
+    expect(sum(d.map((x) => x.lineTotalMdl))).toBe(900);
+    expect(d[3]!.lineTotalMdl).toBe(0);
+    expect(d[3]!.boxSku).toBe("GIFT-SET-THERMOS-RED");
   });
 
   it("zone weights default by id; pack notes and box sizes", () => {
@@ -342,5 +429,17 @@ describe("box line production status (follows its set)", () => {
     expect(giftSetBoxLineStatuses([l("m", "mug", "DONE"), l("b", "set_box", "DONE"), l("x", "paper_print", "WAITING", null)]).size).toBe(0);
     // Another set's lines do not count.
     expect(giftSetBoxLineStatuses([l("m", "mug", "DONE"), l("p2", "pen", "WAITING", "h"), l("b", "set_box", "WAITING")])).toEqual(new Map([["b", "DONE"]]));
+  });
+
+  it("a ready set's stock line follows its thermos / notebook / pen lines the same way", () => {
+    const set = [l("th", "uv_print", "DONE"), l("nb", "notebook", "PRINTING"), l("pen", "pen", "WAITING")];
+    expect(giftSetBoxLineStatuses([...set, l("u", "set_box", "WAITING")])).toEqual(new Map([["u", "PRINTING"]]));
+    expect(giftSetBoxLineStatuses([l("th", "uv_print", "DONE"), l("nb", "notebook", "DONE"), l("pen", "pen", "DONE"), l("u", "set_box", "PRINTING")])).toEqual(
+      new Map([["u", "DONE"]]),
+    );
+    // «Нужен макет» on the thermos: back to waiting.
+    expect(giftSetBoxLineStatuses([l("th", "uv_print", "NEEDS_LAYOUT"), l("nb", "notebook", "WAITING"), l("pen", "pen", "WAITING"), l("u", "set_box", "PRINTING")])).toEqual(
+      new Map([["u", "WAITING"]]),
+    );
   });
 });

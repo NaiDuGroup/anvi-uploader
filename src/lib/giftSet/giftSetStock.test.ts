@@ -115,3 +115,76 @@ describe("box line of a set (from 2026-11-08) and older orders without one", () 
     ]);
   });
 });
+
+describe("ready set (C): stock line from 2026-11-08 evening, and the v2 hidden write-off", () => {
+  beforeEach(() => {
+    consume.mockReset();
+    consume.mockResolvedValue({ consumed: true, costMdl: null });
+    returnToStock.mockReset();
+  });
+
+  const ready = (extra: Record<string, unknown>) => ({
+    version: 1,
+    templateId: "pen_notebook_thermos",
+    name: "Ручка + блокнот + термос",
+    kind: "ready",
+    role: "ready",
+    roleLabel: "Термос",
+    quantity: 3,
+    boxSku: null,
+    readyVariantId: "11111111-1111-4111-8111-111111111111",
+    ...extra,
+  });
+  const unitLine = ready({ role: "box", roleLabel: "Набор с термосом", boxSku: "GIFT-SET-THERMOS-BLACK", lineTotalMdl: 0 });
+
+  it("restore of a new C set takes the set item once, on its stock line (print lines carry nothing)", async () => {
+    const lines = [
+      { id: "l-th", setGroupId: "g", setData: ready({ zoneId: "thermos" }) },
+      { id: "l-nb", setGroupId: "g", setData: ready({ zoneId: "notebook", roleLabel: "Блокнот" }) },
+      { id: "l-pen", setGroupId: "g", setData: ready({ zoneId: "pen", roleLabel: "Ручка" }) },
+      { id: "l-unit", setGroupId: "g", setData: unitLine },
+    ];
+    for (const l of lines) await takeGiftSetBoxStockForStoredLine(tx, l, ref);
+    expect(consume).toHaveBeenCalledTimes(1);
+    expect(consume.mock.calls[0]![1]).toMatchObject({ quantity: 3, orderLineId: "l-unit" });
+  });
+
+  it("restore of a v2 C set (set item hidden on the first print line) still takes it once", async () => {
+    const lines = [
+      { id: "l-th", setGroupId: "g", setData: ready({ zoneId: "thermos", setItemSku: "GIFT-SET-THERMOS-BLACK" }) },
+      { id: "l-nb", setGroupId: "g", setData: ready({ zoneId: "notebook" }) },
+      { id: "l-pen", setGroupId: "g", setData: ready({ zoneId: "pen" }) },
+    ];
+    for (const l of lines) await takeGiftSetBoxStockForStoredLine(tx, l, ref);
+    expect(consume).toHaveBeenCalledTimes(1);
+    expect(consume.mock.calls[0]![1]).toMatchObject({ quantity: 3, orderLineId: "l-th" });
+  });
+
+  it("edit / delete of a v2 C set returns exactly what it holds (by SKU, net), so the rebuilt stock line takes it once", async () => {
+    const findMany = vi.fn(async () => [
+      { setData: ready({ zoneId: "thermos", setItemSku: "GIFT-SET-THERMOS-BLACK" }) },
+      { setData: ready({ zoneId: "notebook" }) },
+      { setData: ready({ zoneId: "pen" }) },
+    ]);
+    const groupBy = vi.fn(async () => [{ variantId: "v-set-black", orderLineId: "l-th", _sum: { delta: { toString: () => "-3" } } }]);
+    const db = { orderLine: { findMany }, stockMovement: { groupBy } } as never;
+    await returnGiftSetBoxStockForOrder(db, ref);
+    const where = (groupBy.mock.calls[0] as unknown as [{ where: { variant: { sku: { in: string[] } } } }])[0].where;
+    expect(where.variant.sku.in).toEqual(["GIFT-SET-THERMOS-BLACK"]);
+    expect(returnToStock).toHaveBeenCalledTimes(1);
+    expect(returnToStock.mock.calls[0]![1]).toMatchObject({ variantId: "v-set-black", quantity: 3, orderLineId: "l-th" });
+  });
+
+  it("delete of a new C set returns the set item from its stock line; nothing when already returned", async () => {
+    const findMany = vi.fn(async () => [{ setData: ready({ zoneId: "thermos" }) }, { setData: unitLine }]);
+    const groupBy = vi
+      .fn()
+      .mockResolvedValueOnce([{ variantId: "v-set-black", orderLineId: "l-unit", _sum: { delta: { toString: () => "-3" } } }])
+      .mockResolvedValueOnce([{ variantId: "v-set-black", orderLineId: "l-unit", _sum: { delta: { toString: () => "0" } } }]);
+    const db = { orderLine: { findMany }, stockMovement: { groupBy } } as never;
+    await returnGiftSetBoxStockForOrder(db, ref);
+    await returnGiftSetBoxStockForOrder(db, ref);
+    expect(returnToStock).toHaveBeenCalledTimes(1);
+    expect(returnToStock.mock.calls[0]![1]).toMatchObject({ quantity: 3, orderLineId: "l-unit" });
+  });
+});

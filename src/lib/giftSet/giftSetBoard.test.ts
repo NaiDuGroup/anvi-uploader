@@ -38,4 +38,19 @@ describe("gift set board flags", () => {
     // Order no longer in procurement: nothing.
     expect(procurementVariantIds(false, [{ kind: "stock_variant", variantId: "set-v" }]).size).toBe(0);
   });
+
+  it("new C set: «Закупка» from its stock line (set item short), «в коробке набора» on every card", () => {
+    const c = [
+      { id: "t", setGroupId: "N", setData: set({ kind: "ready", role: "ready", zoneId: "thermos", boxSku: null }), stockVariantId: null },
+      { id: "n", setGroupId: "N", setData: set({ kind: "ready", role: "ready", zoneId: "notebook", boxSku: null }), stockVariantId: null },
+      { id: "u", setGroupId: "N", setData: set({ kind: "ready", role: "box", boxSku: "GIFT-SET-THERMOS-RED" }), stockVariantId: "set-red" },
+    ];
+    expect(giftSetBoardSkus(c)).toEqual(["GIFT-SET-THERMOS-RED"]);
+    const short = procurementVariantIds(true, [{ kind: "stock_variant", variantId: "set-red", label: "", requestedQty: 2, stockAtOrder: 0 }]);
+    const f = giftSetBoardFlags(c, short, new Map([["GIFT-SET-THERMOS-RED", "set-red"]]));
+    expect(f.get("t")).toEqual({ packNote: "в коробке набора", procurement: true });
+    expect(f.get("n")).toEqual({ packNote: "в коробке набора", procurement: true });
+    const enough = giftSetBoardFlags(c, new Set(), new Map([["GIFT-SET-THERMOS-RED", "set-red"]]));
+    expect(enough.get("t")!.procurement).toBe(false);
+  });
 });

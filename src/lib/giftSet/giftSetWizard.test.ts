@@ -171,12 +171,14 @@ describe("gift set wizard", () => {
 });
 
 describe("box row of a set (withGiftSetBoxLines / giftSetBoxRows)", () => {
-  const set = (groupId: string, templateId: string, role: "mug" | "notebook" | "pen" | "ready", quantity: number) => ({
+  const VAR = "11111111-1111-4111-8111-111111111111";
+  const set = (groupId: string, templateId: string, role: "mug" | "notebook" | "pen" | "ready", quantity: number, zoneId?: string) => ({
     groupId,
     templateId,
     role,
     quantity,
     manualUnitPriceMdl: null,
+    ...(role === "ready" ? { readyVariantId: VAR, zoneId: zoneId ?? "thermos" } : {}),
   });
   const line = (productType: string, s?: ReturnType<typeof set>) => ({
     productType,
@@ -185,7 +187,7 @@ describe("box row of a set (withGiftSetBoxLines / giftSetBoxRows)", () => {
     files: [{ fileName: "a.png" }],
   });
 
-  it("adds one box line per assembled set right after its last line (A ×2, B ×1), none for C or plain lines", () => {
+  it("adds one stock line per set right after its last line (A ×2 box, B ×1 box, C set item), none for plain lines", () => {
     const lines = [
       line("paper_print"),
       line("mug", set("a", A.id, "mug", 2)),
@@ -193,10 +195,14 @@ describe("box row of a set (withGiftSetBoxLines / giftSetBoxRows)", () => {
       line("pen", set("a", A.id, "pen", 2)),
       line("notebook", set("b", B.id, "notebook", 1)),
       line("pen", set("b", B.id, "pen", 1)),
-      line("uv_print", set("c", C.id, "ready", 1)),
+      line("uv_print", set("c", C.id, "ready", 1, "thermos")),
+      line("notebook", set("c", C.id, "ready", 1, "notebook")),
+      line("pen", set("c", C.id, "ready", 1, "pen")),
     ];
-    const out = withGiftSetBoxLines(lines, [A, B, C], new Map([["a", "line-box-a"]]));
-    expect(out.map((l) => l.productType)).toEqual(["paper_print", "mug", "notebook", "pen", "set_box", "notebook", "pen", "set_box", "uv_print"]);
+    const out = withGiftSetBoxLines(lines, [A, B, C], new Map([["a", "line-box-a"], ["c", "line-unit-c"]]));
+    expect(out.map((l) => l.productType)).toEqual([
+      "paper_print", "mug", "notebook", "pen", "set_box", "notebook", "pen", "set_box", "uv_print", "notebook", "pen", "set_box",
+    ]);
     expect(out[4]).toEqual({
       productType: "set_box",
       orderLineId: "line-box-a",
@@ -207,6 +213,16 @@ describe("box row of a set (withGiftSetBoxLines / giftSetBoxRows)", () => {
     });
     expect(out[7]).toMatchObject({ quantity: 1, set: { groupId: "b", role: "box" } });
     expect("orderLineId" in out[7]!).toBe(false);
+    expect("readyVariantId" in (out[7] as { set: object }).set).toBe(false);
+    // C: the set item's stock line names the set's colour variant (the server resolves its SKU).
+    expect(out[11]).toEqual({
+      productType: "set_box",
+      orderLineId: "line-unit-c",
+      quantity: 1,
+      customerType: "retail",
+      set: { groupId: "c", templateId: C.id, quantity: 1, role: "box", manualUnitPriceMdl: null, readyVariantId: VAR },
+      files: [],
+    });
   });
 
   it("rebuilds box lines instead of doubling them, and skips a template without a box", () => {
@@ -224,9 +240,27 @@ describe("box row of a set (withGiftSetBoxLines / giftSetBoxRows)", () => {
       { slotId: "s3", giftSet: null },
       { slotId: "s4", giftSet: set("c", C.id, "ready", 1) },
     ];
-    const boxes = giftSetBoxRows(rows, [A, B, C]);
-    expect([...boxes.keys()]).toEqual(["s2"]);
-    expect(boxes.get("s2")).toEqual({ groupId: "a", afterSlotId: "s2", boxSku: "EW-BOX-300X230X85", name: "Коробка 30×23×8,5", quantity: 2 });
+    const boxes = giftSetBoxRows(rows, [A, B, C], new Map([[VAR, { sku: "GIFT-SET-THERMOS-BLACK", label: "чёрный" }]]));
+    expect([...boxes.keys()]).toEqual(["s2", "s4"]);
+    expect(boxes.get("s2")).toEqual({
+      groupId: "a",
+      afterSlotId: "s2",
+      boxSku: "EW-BOX-300X230X85",
+      name: "Коробка 30×23×8,5",
+      quantity: 2,
+      kind: "assembled",
+    });
+    expect(boxes.get("s4")).toEqual({
+      groupId: "c",
+      afterSlotId: "s4",
+      boxSku: "GIFT-SET-THERMOS-BLACK",
+      name: "Набор с термосом · чёрный",
+      quantity: 1,
+      kind: "ready",
+      variantId: VAR,
+    });
+    // Colour not in the catalog: still a row (the server checks the variant).
+    expect(giftSetBoxRows(rows, [A, B, C]).get("s4")).toMatchObject({ boxSku: "", name: "Набор с термосом" });
   });
 });
 
