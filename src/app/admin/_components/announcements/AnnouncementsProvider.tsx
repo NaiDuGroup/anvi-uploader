@@ -131,17 +131,3 @@ export function useAnnouncementHint(id: AnnouncementId, hint: string): { visible
   }, [visible, markSeen, id, hint]);
   return { visible, markUsed };
 }
-
-/** Small pulsing amber dot for the top-right corner of a `relative` icon button. */
-export function HintDot({ title, className }: { title?: string; className?: string }) {
-  return (
-    <span
-      className={`pointer-events-none absolute right-0.5 top-0.5 flex h-2.5 w-2.5 ${className ?? ""}`}
-      title={title}
-      data-testid="announcement-hint-dot"
-    >
-      <span className="absolute inline-flex h-full w-full animate-ping rounded-full [animation-duration:2s] bg-amber-400 opacity-60" />
-      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white" />
-    </span>
-  );
-}

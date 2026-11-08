@@ -9,7 +9,6 @@ import { libraryFetch, type LibraryItem } from "./libraryClient";
 import { SaveToLibraryDialog } from "./SaveToLibraryDialog";
 import type { LibraryOwner } from "./LibraryOwnerField";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import { HintDot, useAnnouncementHint } from "../announcements/AnnouncementsProvider";
 
 /** «В библиотеке» badge for an order file (saved from it, or reused from the library). */
 export function InLibraryBadge({
@@ -104,8 +103,6 @@ export function SaveFileToLibraryButton({
   const libId = useInLibrary(fileId);
   const archivedId = useArchivedInLibrary(fileId);
   const [open, setOpen] = useState(false);
-  // «Что нового»: dot until this user has opened a save-to-library dialog once (marked there).
-  const hint = useAnnouncementHint("library-2026-11", "save-hint");
   // The dialog stays mounted after a save (its «done» screen) although the button hides.
   const showButton = !libId && libId !== undefined && !archivedId && !isLibraryKey(fileUrl);
   if (!showButton && !open) return null;
@@ -121,7 +118,6 @@ export function SaveFileToLibraryButton({
           data-testid="save-file-to-library"
         >
           <BookmarkPlus className="h-4 w-4 shrink-0" aria-hidden />
-          {hint.visible ? <HintDot /> : null}
         </button>
       ) : null}
       {open ? (
