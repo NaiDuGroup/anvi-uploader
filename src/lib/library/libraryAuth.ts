@@ -12,7 +12,7 @@ export async function requireLibraryStaff(): Promise<{ user: User; denied: null 
   return { user, denied: null };
 }
 
-/** Edit / archive / restore / delete: admin and superadmin only (not the workshop). */
+/** Edit / archive / restore / delete: staff allowed by canManageLibrary (currently all staff). */
 export async function requireLibraryManager(): Promise<{ user: User; denied: null } | { user: null; denied: NextResponse }> {
   const res = await requireLibraryStaff();
   if (res.denied) return res;

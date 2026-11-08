@@ -52,10 +52,10 @@ export function isWorkshopOnly(role: string): boolean {
 
 /**
  * «Библиотека макетов»: edit title / tags / owner, archive, restore, delete.
- * The workshop only views, downloads and saves order files to the library.
+ * All staff (admin, superadmin, workshop) — the owner wants the workshop to edit too.
  */
 export function canManageLibrary(role: string): boolean {
-  return role === "admin" || role === "superadmin";
+  return isAdmin(role);
 }
 
 /** Customer-portal account (role lives on the same `users` table). */

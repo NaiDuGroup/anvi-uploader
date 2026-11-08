@@ -34,7 +34,7 @@ export default function LibraryPageClient({
   canManage,
 }: {
   focusItemId: string | null;
-  /** Admin / superadmin: edit, archive, restore, delete. The workshop only views and downloads. */
+  /** Edit, archive, restore, delete (see canManageLibrary). */
   canManage: boolean;
 }) {
   const { t } = useLanguageStore();
