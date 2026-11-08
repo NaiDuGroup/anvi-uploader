@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { createClientBodySchema } from "@/lib/validations";
 import { normalizedPhoneForDb } from "@/lib/studioClient";
+import { phoneSearchDigitVariants } from "@/lib/phoneNormalize";
 import { serializeOrderPrice } from "@/lib/orderPriceDecimal";
 import {
   EMPTY_CLIENT_DEBT,
@@ -46,6 +47,8 @@ export async function GET(request: NextRequest) {
           { companyName: { contains: search, mode: "insensitive" } },
           { phone: { contains: search, mode: "insensitive" } },
           { companyIdno: { contains: search, mode: "insensitive" } },
+          // Phones are stored as typed («+37369…» / «069…»): match the digits with or without the 373 / 0 prefix.
+          ...phoneSearchDigitVariants(search).map((d) => ({ phoneNormalized: { contains: d } })),
         ],
       });
     }
