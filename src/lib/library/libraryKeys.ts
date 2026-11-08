@@ -120,3 +120,15 @@ export function libraryKeysOf(fileUrls: Iterable<string>): string[] {
   for (const u of fileUrls) if (isLibraryKey(u)) out.add(normaliseKey(u));
   return [...out];
 }
+
+/**
+ * Digit variants of a search query for matching client phones, which are
+ * stored inconsistently (`+37369…`, `069…`, `69…`): the plain digits and the
+ * local part without a leading `373` / `0`. Empty when fewer than 3 digits.
+ */
+export function libraryPhoneSearchDigits(query: string): string[] {
+  const digits = query.replace(/\D/g, "");
+  if (digits.length < 3) return [];
+  const local = digits.replace(/^(?:373|0)+/, "");
+  return local.length >= 3 && local !== digits ? [digits, local] : [digits];
+}

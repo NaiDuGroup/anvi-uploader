@@ -6,6 +6,7 @@ import { LIBRARY_TAGS_MAX, LIBRARY_TITLE_MAX, normalizeLibraryTags } from "@/lib
 import {
   LIBRARY_CLIENT_SELECT,
   hardDeleteLibraryFile,
+  librarySourceOrderNumber,
   serializeLibraryFile,
 } from "@/lib/library/libraryService";
 
@@ -26,7 +27,7 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
   const { id } = await params;
   const row = await prisma.libraryFile.findUnique({ where: { id }, include: { client: { select: LIBRARY_CLIENT_SELECT } } });
   if (!row) return NextResponse.json({ error: "Не найдено" }, { status: 404 });
-  return NextResponse.json({ item: serializeLibraryFile(row) });
+  return NextResponse.json({ item: serializeLibraryFile(row, await librarySourceOrderNumber(row.sourceOrderId)) });
 }
 
 /** Edit title / tags / owner, archive or restore. */
@@ -57,7 +58,8 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
     },
     include: { client: { select: LIBRARY_CLIENT_SELECT } },
   });
-  return NextResponse.json({ item: serializeLibraryFile(row) });
+  // Keep «из заказа #…» on the card after an edit.
+  return NextResponse.json({ item: serializeLibraryFile(row, await librarySourceOrderNumber(row.sourceOrderId)) });
 }
 
 /**

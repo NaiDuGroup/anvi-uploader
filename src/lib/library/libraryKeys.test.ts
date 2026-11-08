@@ -7,6 +7,7 @@ import {
   isLibraryKey,
   isStaffOrderFileUrl,
   libraryKeysOf,
+  libraryPhoneSearchDigits,
   normalizeLibraryTags,
   orderFileUrlIssues,
 } from "./libraryKeys";
@@ -120,5 +121,17 @@ describe("libraryKeysOf", () => {
         "https://example.com/library/a",
       ]),
     ).toEqual(["library/common/x-a.pdf"]);
+  });
+});
+
+describe("libraryPhoneSearchDigits", () => {
+  it("adds the local part so 069… and +373 69… find the same client", () => {
+    expect(libraryPhoneSearchDigits("069000101")).toEqual(["069000101", "69000101"]);
+    expect(libraryPhoneSearchDigits("+373 69 000 101")).toEqual(["37369000101", "69000101"]);
+    expect(libraryPhoneSearchDigits("69000101")).toEqual(["69000101"]);
+  });
+  it("ignores queries with fewer than 3 digits", () => {
+    expect(libraryPhoneSearchDigits("логотип A4")).toEqual([]);
+    expect(libraryPhoneSearchDigits("0")).toEqual([]);
   });
 });

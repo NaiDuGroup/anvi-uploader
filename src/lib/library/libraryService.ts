@@ -8,6 +8,7 @@ import {
   buildLibraryKey,
   defaultLibraryTitle,
   isLibraryKey,
+  libraryPhoneSearchDigits,
   normalizeLibraryTags,
 } from "./libraryKeys";
 import { copyStoredObject, deleteLibraryObject, storedObjectSize } from "./libraryStorage";
@@ -90,6 +91,13 @@ export function serializeLibraryFile(
     createdAt: row.createdAt.toISOString(),
     archivedAt: row.archivedAt?.toISOString() ?? null,
   };
+}
+
+/** Order number of the order an item was saved from (null when none / purged). */
+export async function librarySourceOrderNumber(sourceOrderId: string | null): Promise<number | null> {
+  if (!sourceOrderId) return null;
+  const order = await prisma.order.findUnique({ where: { id: sourceOrderId }, select: { orderNumber: true } });
+  return order?.orderNumber ?? null;
 }
 
 export type SaveToLibraryError =
@@ -221,7 +229,7 @@ export async function saveOrderFileToLibrary(input: {
     },
     include: { client: { select: LIBRARY_CLIENT_SELECT } },
   });
-  return { ok: true, item: serializeLibraryFile(row) };
+  return { ok: true, item: serializeLibraryFile(row, await librarySourceOrderNumber(file.orderId)) };
 }
 
 /** Order files a library key is used by (any order, trash included). */
@@ -250,7 +258,6 @@ export function librarySearchWhere(search: string): Prisma.LibraryFileWhereInput
   const q = search.trim();
   if (!q) return null;
   const tag = q.replace(/^#+/, "").toLowerCase();
-  const digits = q.replace(/\D/g, "");
   return {
     OR: [
       { title: { contains: q, mode: "insensitive" } },
@@ -259,7 +266,10 @@ export function librarySearchWhere(search: string): Prisma.LibraryFileWhereInput
       { client: { personName: { contains: q, mode: "insensitive" } } },
       { client: { companyName: { contains: q, mode: "insensitive" } } },
       { client: { phone: { contains: q, mode: "insensitive" } } },
-      ...(digits.length >= 3 ? [{ client: { phoneNormalized: { contains: digits } } }] : []),
+      ...libraryPhoneSearchDigits(q).flatMap((d) => [
+        { client: { phoneNormalized: { contains: d } } },
+        { client: { phone: { contains: d } } },
+      ]),
     ],
   };
 }
