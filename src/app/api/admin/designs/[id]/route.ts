@@ -9,6 +9,8 @@ import {
   updateDesignSchema,
 } from "@/lib/design/designJson";
 import { withDesignProduct } from "@/lib/design/designProduct";
+import { supersededDesignRenderKeys } from "@/lib/design/renderCleanup";
+import { deleteUnusedDesignRenders } from "@/lib/design/renderCleanupServer";
 
 export async function GET(
   _request: NextRequest,
@@ -50,7 +52,7 @@ export async function PATCH(
 
     const existing = await prisma.design.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true },
+      select: { id: true, renderKey: true, thumbKey: true },
     });
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -82,6 +84,11 @@ export async function PATCH(
         updatedBy: user.id,
       },
     });
+    if (body.renderKey) {
+      await deleteUnusedDesignRenders(
+        supersededDesignRenderKeys(existing, { renderKey: body.renderKey, thumbKey: body.thumbKey }),
+      );
+    }
 
     return NextResponse.json({ item: toDesignDetailJson(await withDesignProduct(prisma, updated)) });
   } catch (e) {
