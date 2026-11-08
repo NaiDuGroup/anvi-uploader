@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
  * Modal for the library dialogs: a bottom sheet on phones, a centred card on
  * desktop (same look as the other admin dialogs). Escape / backdrop close it
- * unless `busy`.
+ * unless `busy`. Portaled to `<body>`: the triggers sit inside table cells and
+ * the phone card list, which may be hidden or transformed.
  */
 export function LibrarySheet({
   title,
@@ -36,10 +38,14 @@ export function LibrarySheet({
     return () => document.removeEventListener("keydown", onKey);
   }, [busy, onClose]);
 
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
-      onClick={() => !busy && onClose()}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!busy) onClose();
+      }}
     >
       <div
         role="dialog"
@@ -74,7 +80,8 @@ export function LibrarySheet({
           </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
