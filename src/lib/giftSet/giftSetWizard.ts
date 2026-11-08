@@ -404,34 +404,92 @@ export interface GiftSetStockRow {
  * and per box SKU (`box:<SKU>`), apart from the set being edited
  * (`excludeGroupId`): the set dialog subtracts them from the stock it shows.
  * New rows count; rows of the saved order are already off the stock, except
- * the edited set's own saved rows, which come back (negative). A ready set
- * takes one set item per set, a set's box one per set (once per group).
+ * the edited set's own saved rows, which come back (negative) — only what the
+ * set actually holds on the ledger (`savedHeld`: group id → variant id /
+ * `box:<SKU>` → units; a set saved short → «Закупка» holds 0). Without
+ * `savedHeld` the ordered quantity comes back. A ready set takes one set item
+ * per set, a set's box one per set (once per group).
  */
 export function giftSetReservedStock(
   rows: readonly GiftSetStockRow[],
   templates: readonly GiftSetTemplate[],
   excludeGroupId: string | null,
+  savedHeld?: ReadonlyMap<string, ReadonlyMap<string, number>>,
 ): Map<string, number> {
   const out = new Map<string, number>();
   const add = (key: string, n: number): void => {
     if (n !== 0) out.set(key, (out.get(key) ?? 0) + n);
+  };
+  // Held units of the edited set still to give back (each unit once across its rows).
+  const heldLeft = new Map<string, number>(excludeGroupId ? (savedHeld?.get(excludeGroupId) ?? []) : []);
+  const giveBack = (key: string, n: number): void => {
+    if (!savedHeld) return add(key, -n);
+    const left = heldLeft.get(key) ?? 0;
+    const k = Math.min(n, left);
+    if (k > 0) {
+      heldLeft.set(key, left - k);
+      add(key, -k);
+    }
   };
   const seenGroups = new Set<string>();
   for (const r of rows) {
     const gs = r.giftSet;
     const edited = Boolean(gs && gs.groupId === excludeGroupId);
     // Saved rows: already off the stock; the edited set's own come back.
-    const sign = edited ? (r.saved ? -1 : 0) : r.saved ? 0 : 1;
-    if (sign === 0) continue;
-    if (gs?.role !== "ready" && r.variantId) add(r.variantId, sign * r.quantity);
+    if (edited ? !r.saved : r.saved) continue;
+    const take = (key: string, n: number): void => (edited ? giveBack(key, n) : add(key, n));
+    if (gs?.role !== "ready" && r.variantId) take(r.variantId, r.quantity);
     if (gs && !seenGroups.has(gs.groupId)) {
       seenGroups.add(gs.groupId);
-      if (gs.role === "ready" && gs.readyVariantId) add(gs.readyVariantId, sign * gs.quantity);
+      if (gs.role === "ready" && gs.readyVariantId) take(gs.readyVariantId, gs.quantity);
       const box = templates.find((t) => t.id === gs.templateId)?.boxSku;
-      if (box) add(`box:${box}`, sign * gs.quantity);
+      if (box) take(`box:${box}`, gs.quantity);
     }
   }
   return out;
+}
+
+/**
+ * Wizard rows after a set is applied: the set's rows replace its old rows
+ * (`oldIds`). An edited set stays where it was; a new set (picked on a plain
+ * row) goes after every other line — the picked row moves down with it, so
+ * sets read in the order they were added (A, B, C), not newest first.
+ */
+export function placeGiftSetRows<T extends { id: string }>(
+  prev: readonly T[],
+  oldIds: readonly string[],
+  groupRows: readonly T[],
+  keptLeftovers: readonly T[],
+  opts: { firstOld: number; isNewSet: boolean },
+): T[] {
+  const rest = prev.filter((x) => !oldIds.includes(x.id));
+  if (opts.isNewSet) return [...rest, ...groupRows, ...keptLeftovers];
+  const at = Math.max(0, Math.min(opts.firstOld, rest.length));
+  return [...rest.slice(0, at), ...groupRows, ...keptLeftovers, ...rest.slice(at)];
+}
+
+/** Edit mode: the ledger's held units per set group (`GiftSetStockHeld` rows) → `savedHeld` of {@link giftSetReservedStock}. */
+export function giftSetSavedHeldMap(
+  held: ReadonlyArray<{ setGroupId: string; variantId: string; sku: string; quantity: number }>,
+): Map<string, Map<string, number>> {
+  const out = new Map<string, Map<string, number>>();
+  for (const h of held) {
+    const m = out.get(h.setGroupId) ?? new Map<string, number>();
+    m.set(h.variantId, (m.get(h.variantId) ?? 0) + h.quantity);
+    if (h.sku) m.set(`box:${h.sku}`, (m.get(`box:${h.sku}`) ?? 0) + h.quantity);
+    out.set(h.setGroupId, m);
+  }
+  return out;
+}
+
+/** Alt text of a set item photo: the item with its colour («Набор: ручка + блокнот + термос · красный»), so the colour variants differ. */
+export function giftSetItemAlt(
+  i: { name: string; itemNames?: { ru?: string | null } | null; variantLabel?: string | null },
+  colour?: string | null,
+): string {
+  const name = i.itemNames?.ru ?? i.name;
+  const c = i.variantLabel ?? colour ?? null;
+  return c && c !== name ? `${name} · ${c}` : name;
 }
 
 // ─── Swatches and short names ───────────────────────────────────────────────────

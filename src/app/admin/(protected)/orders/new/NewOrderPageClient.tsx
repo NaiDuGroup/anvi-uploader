@@ -18,6 +18,9 @@ import {
   giftSetLineInput,
   withGiftSetBoxLines,
   giftSetReservedStock,
+  giftSetSavedHeldMap,
+  giftSetItemAlt,
+  placeGiftSetRows,
   giftSetSwatchHex,
   giftSetRowFromLine,
   giftSetRowPlans,
@@ -2397,6 +2400,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const setBoxLineIdsRef = useRef<Map<string, string>>(new Map());
   /** «Набор»: stock unit the saved order already holds per set group (box / set item SKU × N): the stock row counts it as available. */
   const savedSetUnitRef = useRef<Map<string, { sku: string | null; variantId: string | null; quantity: number }>>(new Map());
+  /** Edit mode: what each saved set actually holds on the stock ledger (group id → variant id / `box:<SKU>` → units). */
+  const savedSetHeldRef = useRef<Map<string, Map<string, number>> | null>(null);
   const methodTitle = useCallback(
     (m: StockMethod): string => getProductTypeConfig(m)?.getTitle(t) ?? m,
     [t],
@@ -2706,6 +2711,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           /** Staff GET only: dealer urgency fee still charged (inside `price`). */
           dealerUrgencyFeeMdl?: number;
           studioClient: CustomerFormValue["selectedClient"];
+          /** «Набор»: units each saved set holds on the stock ledger. */
+          giftSetStockHeld?: Array<{ setGroupId: string; variantId: string; sku: string; quantity: number }>;
           orderLines: Array<{
             id: string;
             sortOrder: number;
@@ -2771,6 +2778,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           Boolean((order as { needsProcurement?: boolean }).needsProcurement),
           (order as { procurementMeta?: unknown }).procurementMeta,
         );
+        // «Набор»: the ledger says what each saved set holds (short → nothing to add back).
+        if (editOrderId) savedSetHeldRef.current = giftSetSavedHeldMap(order.giftSetStockHeld ?? []);
         for (const line of lines) {
           // «Набор»: what this set already took from stock (stock line; older orders: the first line).
           const heldSet = line.setGroupId ? parseOrderLineSetData(line.setData) : null;
@@ -4123,7 +4132,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         <td className="min-w-0 px-2.5 py-2 align-top text-xs text-gray-700">
           {item ? (
             <span className="flex min-w-0 items-center gap-2" data-testid="gift-set-row-item">
-              <GiftSetItemThumb imageUrl={item.imageUrl} swatch={giftSetSwatchHex(item)} alt={item.itemNames.ru ?? item.name} />
+              {/* A ready set's notebook / pen row: the type icon with the colour dot (the set photo shows the whole set). */}
+              <GiftSetItemThumb
+                imageUrl={ready && (readyType === "notebook" || readyType === "pen") ? null : item.imageUrl}
+                swatch={giftSetSwatchHex(item)}
+                alt={giftSetItemAlt(item)}
+                icon={ready && (readyType === "notebook" || readyType === "pen") ? readyType : undefined}
+              />
               <span className="min-w-0">
                 <span className="block font-medium text-gray-900">
                   {ready
@@ -4231,7 +4246,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     // Edit: what the saved set already holds of this unit comes back before it is taken again.
     const saved = savedSetUnitRef.current.get(box.groupId);
     const savedSame = Boolean(saved && ((saved.sku && saved.sku === box.boxSku) || (saved.variantId && saved.variantId === box.variantId)));
-    const stock = onHand === undefined ? undefined : onHand + (savedSame ? saved!.quantity : 0);
+    // The ledger's held units when known (a set saved short holds 0), else the saved quantity.
+    const ledgerHeld = savedSetHeldRef.current ? (savedSetHeldRef.current.get(box.groupId) ?? new Map<string, number>()) : null;
+    const heldBack = ledgerHeld
+      ? Math.min(saved?.quantity ?? 0, ready ? (box.variantId ? (ledgerHeld.get(box.variantId) ?? 0) : 0) : (ledgerHeld.get(`box:${box.boxSku}`) ?? 0))
+      : saved?.quantity ?? 0;
+    const stock = onHand === undefined ? undefined : onHand + (savedSame ? heldBack : 0);
     // Item column: the stock item's own name («Коробка 30×23×8,5 см (набор с кружкой)» / «Набор: ручка + блокнот + термос · чёрный»).
     const fullName = ready
       ? variantItem
@@ -4363,13 +4383,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     // Rows of the old set nothing maps to: dropped when empty, else kept as plain rows.
     const leftovers = free;
     const firstOld = slots.findIndex((x) => oldIds.includes(x.id));
+    // A new set goes after the lines already there (sets read A, B, C in the order added); an edited set stays put.
+    const isNewSet = !assignBySlot[slotId]?.giftSet;
     setSlots((prev) => {
       const byId = new Map(prev.map((x) => [x.id, x]));
       const groupRows: AdminWizardSlot[] = planned.map(({ id }) => byId.get(id) ?? { id, sourceOrderLineId: null });
       const keptLeftovers = leftovers.map((id) => byId.get(id)!).filter((x) => x && slotHasArtwork(x));
-      const rest = prev.filter((x) => !oldIds.includes(x.id));
-      const at = Math.max(0, Math.min(firstOld, rest.length));
-      return [...rest.slice(0, at), ...groupRows, ...keptLeftovers, ...rest.slice(at)];
+      return placeGiftSetRows(prev, oldIds, groupRows, keptLeftovers, { firstOld, isNewSet });
     });
     setAssignBySlot((prev) => {
       const next = { ...prev };
@@ -5461,7 +5481,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                         gs?.role === "ready" && readyZone
                           ? readySetUvDescription(readyZone, setItem.variantLabel ?? null)
                           : `${setItem.itemNames.ru ?? setItem.name}${setItem.variantLabel ? ` · ${setItem.variantLabel}` : ""}`,
-                      imageUrl: setItem.imageUrl,
+                      // A ready set's notebook / pen: the type icon, not the whole-set photo.
+                      ...(gs?.role === "ready" && gs.zoneId && (readyZoneLineType(gs.zoneId) === "notebook" || readyZoneLineType(gs.zoneId) === "pen")
+                        ? { imageUrl: null, icon: readyZoneLineType(gs.zoneId) as "notebook" | "pen" }
+                        : { imageUrl: setItem.imageUrl }),
                       swatch: giftSetSwatchHex(setItem),
                     }
                   : {}),
@@ -7511,6 +7534,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             }),
             giftSetTemplates,
             assignBySlot[giftSetDialog.slotId]?.giftSet?.groupId ?? null,
+            savedSetHeldRef.current ?? undefined,
           )}
           boxStock={bootstrap.giftSetBoxStock}
           boxNames={bootstrap.giftSetBoxNames}
@@ -7596,8 +7620,8 @@ interface ConfirmSetInfo {
   item?: string;
   imageUrl?: string | null;
   swatch?: string | null;
-  /** Stock row without a photo: box / gift icon instead of the colour dot. */
-  icon?: "box" | "gift";
+  /** No photo: box / gift icon (stock row) or notebook / pen icon (ready set row) instead of the colour dot. */
+  icon?: "box" | "gift" | "notebook" | "pen";
 }
 
 /** One row of the confirm table. */

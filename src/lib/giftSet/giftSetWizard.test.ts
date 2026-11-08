@@ -8,6 +8,9 @@ import {
   giftSetGroupSlotIds,
   giftSetLineInput,
   giftSetReservedStock,
+  giftSetSavedHeldMap,
+  giftSetItemAlt,
+  placeGiftSetRows,
   giftSetRowPlans,
   giftSetShortNames,
   giftSetSwatchHex,
@@ -132,6 +135,73 @@ describe("gift set wizard", () => {
     const back = giftSetReservedStock(saved, [A, B, C], "A1");
     expect(back.get("mug-red")).toBe(-2);
     expect(back.get(`box:${A.boxSku}`)).toBe(-2);
+  });
+
+  it("edit mode adds back only what the saved set holds on the ledger (short → «Закупка» holds 0)", () => {
+    const gs = (groupId: string, templateId: string, role: string, quantity: number, readyVariantId?: string) => ({
+      groupId,
+      templateId,
+      role: role as "pen",
+      quantity,
+      manualUnitPriceMdl: null,
+      ...(readyVariantId ? { zoneId: role, readyVariantId } : {}),
+    });
+    const rows = [
+      // Saved set C ×2, red: the set item was short → nothing written off.
+      { slotId: "1", giftSet: gs("C1", C.id, "ready", 2, "set-red"), variantId: null, quantity: 2, saved: true },
+      { slotId: "2", giftSet: gs("C1", C.id, "ready", 2, "set-red"), variantId: null, quantity: 2, saved: true },
+      // Saved set A ×3: pen taken in full, notebook short, mug 1 of 3 (older partial), box taken.
+      { slotId: "3", giftSet: gs("A1", A.id, "mug", 3), variantId: "mug-red", quantity: 3, saved: true },
+      { slotId: "4", giftSet: gs("A1", A.id, "notebook", 3), variantId: "nb-blue", quantity: 3, saved: true },
+      { slotId: "5", giftSet: gs("A1", A.id, "pen", 3), variantId: "pen-blue", quantity: 3, saved: true },
+      // Saved set B ×1 with the same pen: its unit is not set A's to give back.
+      { slotId: "6", giftSet: gs("B1", B.id, "pen", 1), variantId: "pen-blue", quantity: 1, saved: true },
+    ];
+    const held = giftSetSavedHeldMap([
+      { setGroupId: "A1", variantId: "mug-red", sku: "MUG-RED", quantity: 1 },
+      { setGroupId: "A1", variantId: "pen-blue", sku: "PEN-BLUE", quantity: 3 },
+      { setGroupId: "A1", variantId: "box-a", sku: A.boxSku!, quantity: 3 },
+      { setGroupId: "B1", variantId: "pen-blue", sku: "PEN-BLUE", quantity: 1 },
+    ]);
+    const editC = giftSetReservedStock(rows, [A, B, C], "C1", held);
+    expect(editC.get("set-red")).toBeUndefined();
+    expect(editC.size).toBe(0);
+    const editA = giftSetReservedStock(rows, [A, B, C], "A1", held);
+    expect(editA.get("mug-red")).toBe(-1);
+    expect(editA.get("nb-blue")).toBeUndefined();
+    expect(editA.get("pen-blue")).toBe(-3);
+    expect(editA.get(`box:${A.boxSku}`)).toBe(-3);
+    // Held set item of a ready set comes back once, not per row.
+    const heldC = giftSetSavedHeldMap([{ setGroupId: "C1", variantId: "set-red", sku: "GIFT-SET-THERMOS-RED", quantity: 2 }]);
+    expect(giftSetReservedStock(rows, [A, B, C], "C1", heldC).get("set-red")).toBe(-2);
+    // Without ledger data: the ordered quantity (old behaviour).
+    expect(giftSetReservedStock(rows, [A, B, C], "C1").get("set-red")).toBe(-2);
+  });
+
+  it("photo alt names the colour so the set's variants differ", () => {
+    const set = { name: "GIFT", itemNames: { ru: "Набор: ручка + блокнот + термос" } };
+    expect(giftSetItemAlt({ ...set, variantLabel: "красный" })).toBe("Набор: ручка + блокнот + термос · красный");
+    expect(giftSetItemAlt({ ...set, variantLabel: null }, "синий")).toBe("Набор: ручка + блокнот + термос · синий");
+    expect(giftSetItemAlt({ ...set, variantLabel: null })).toBe("Набор: ручка + блокнот + термос");
+  });
+
+  it("a new set goes after the existing lines; an edited set stays in place", () => {
+    const r = (id: string) => ({ id });
+    // Lines: A set (a1, a2), B set (b1), and the new row «n» added on top, picked as set C.
+    const prev = [r("n"), r("a1"), r("a2"), r("b1")];
+    const ids = (xs: { id: string }[]) => xs.map((x) => x.id);
+    expect(ids(placeGiftSetRows(prev, ["n"], [r("n"), r("c2"), r("c3")], [], { firstOld: 0, isNewSet: true }))).toEqual([
+      "a1", "a2", "b1", "n", "c2", "c3",
+    ]);
+    // Editing set A (now 3 rows) keeps it first.
+    const after = [r("a1"), r("a2"), r("b1"), r("n"), r("c2")];
+    expect(ids(placeGiftSetRows(after, ["a1", "a2"], [r("a1"), r("a2"), r("a3")], [], { firstOld: 0, isNewSet: false }))).toEqual([
+      "a1", "a2", "a3", "b1", "n", "c2",
+    ]);
+    // Editing set B in the middle, a leftover row kept right after it.
+    expect(ids(placeGiftSetRows(after, ["b1"], [r("b9")], [r("b1")], { firstOld: 2, isNewSet: false }))).toEqual([
+      "a1", "a2", "b9", "b1", "n", "c2",
+    ]);
   });
 
   it("swatch colours from hex / name; short option names", () => {

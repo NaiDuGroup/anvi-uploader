@@ -6,6 +6,7 @@ import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
 import { serializeOrderPrice } from "@/lib/orderPriceDecimal";
 import { dealerModifyBlockReason } from "@/lib/dealerOrderModify";
 import { toDealerEditLine } from "@/lib/dealerOrderEditView";
+import { giftSetStockHeldForOrder } from "@/lib/giftSet/giftSetStock";
 
 /**
  * The dealer wizard's edit-mode prefill for an own order: positions, their
@@ -95,5 +96,7 @@ export async function GET(
     notes: order.notes,
     price: serializeOrderPrice(order.price),
     orderLines: order.orderLines.map(toDealerEditLine),
+    // «Набор»: what each set actually holds of the stock (edit mode adds back only that).
+    giftSetStockHeld: await giftSetStockHeldForOrder(prisma, order.id),
   });
 }

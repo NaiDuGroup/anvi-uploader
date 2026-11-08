@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { giftSetStockHeldForOrder } from "@/lib/giftSet/giftSetStock";
 import { isStaffOrderFileUrl, orderFileUrlIssues } from "@/lib/library/libraryKeys";
 import { chargedUrgencyFeeMdl, staffPriceToStored } from "@/lib/dealerUrgency";
 import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
@@ -77,6 +78,7 @@ export async function GET(
   return NextResponse.json({
     ...serializeOrderWithPrice(rest),
     dealerUrgencyFeeMdl: chargedUrgencyFeeMdl(order),
+    giftSetStockHeld: await giftSetStockHeldForOrder(prisma, order.id),
   });
 }
 

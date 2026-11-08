@@ -106,3 +106,60 @@ export async function takeGiftSetBoxStockForStoredLine(
   }
   return issues;
 }
+
+/** What one set of a saved order holds of one stock variant (ledger, net of returns). */
+export interface GiftSetStockHeld {
+  setGroupId: string;
+  variantId: string;
+  sku: string;
+  quantity: number;
+}
+
+/**
+ * Units each set of the order actually holds, per stock variant, from the
+ * ledger (write-offs net of returns): the wizard's edit mode adds back only
+ * these, not the ordered quantity (a set saved short → «Закупка» holds 0).
+ */
+export async function giftSetStockHeldForOrder(
+  db: Pick<Prisma.TransactionClient, "orderLine" | "stockMovement" | "stockVariant">,
+  orderId: string,
+): Promise<GiftSetStockHeld[]> {
+  const lines = await db.orderLine.findMany({
+    where: { orderId, setGroupId: { not: null } },
+    select: { id: true, setGroupId: true, stockVariantId: true, setData: true },
+  });
+  if (lines.length === 0) return [];
+  const groupByLine = new Map(lines.map((l) => [l.id, l.setGroupId!]));
+  // Only the set's items (components, box, set item) — not the inks the print lines use.
+  const variantIds = lines.map((l) => l.stockVariantId).filter((x): x is string => Boolean(x));
+  const skus = [...new Set(lines.flatMap((l) => giftSetExtraStockSkus(parseOrderLineSetData(l.setData))))];
+  const rows = await db.stockMovement.groupBy({
+    by: ["variantId", "orderLineId"],
+    where: {
+      orderId,
+      orderLineId: { in: [...groupByLine.keys()] },
+      kind: { in: [...ORDER_HOLDING_KINDS] },
+      OR: [{ variantId: { in: variantIds } }, { variant: { sku: { in: skus } } }],
+    },
+    _sum: { delta: true },
+  });
+  const sums = new Map<string, GiftSetStockHeld>();
+  for (const r of rows) {
+    const groupId = r.orderLineId ? groupByLine.get(r.orderLineId) : undefined;
+    if (!groupId) continue;
+    const held: number = -Number(r._sum.delta?.toString() ?? "0");
+    const key = `${groupId}\u0000${r.variantId}`;
+    const prev = sums.get(key);
+    if (prev) prev.quantity += held;
+    else sums.set(key, { setGroupId: groupId, variantId: r.variantId, sku: "", quantity: held });
+  }
+  const out = [...sums.values()].filter((x) => x.quantity > 1e-6);
+  if (out.length === 0) return [];
+  const variants = await db.stockVariant.findMany({
+    where: { id: { in: [...new Set(out.map((x) => x.variantId))] } },
+    select: { id: true, sku: true },
+  });
+  const skuById = new Map(variants.map((v) => [v.id, v.sku]));
+  for (const x of out) x.sku = skuById.get(x.variantId) ?? "";
+  return out;
+}

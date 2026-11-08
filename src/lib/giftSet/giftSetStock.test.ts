@@ -7,7 +7,7 @@ vi.mock("@/lib/stock/unified/ledger", () => ({
   returnToStock: (...args: unknown[]) => returnToStock(...args),
 }));
 
-import { returnGiftSetBoxStockForOrder, takeGiftSetBoxStockForStoredLine } from "./giftSetStock";
+import { giftSetStockHeldForOrder, returnGiftSetBoxStockForOrder, takeGiftSetBoxStockForStoredLine } from "./giftSetStock";
 
 const tx = {
   stockVariant: {
@@ -186,5 +186,43 @@ describe("ready set (C): stock line from 2026-11-08 evening, and the v2 hidden w
     await returnGiftSetBoxStockForOrder(db, ref);
     expect(returnToStock).toHaveBeenCalledTimes(1);
     expect(returnToStock.mock.calls[0]![1]).toMatchObject({ quantity: 3, orderLineId: "l-unit" });
+  });
+});
+
+describe("giftSetStockHeldForOrder (edit mode: what each set really holds)", () => {
+  it("sums the ledger per set and variant; a short set (no write-off) holds nothing", async () => {
+    const groupBy = vi.fn(async () => [
+      // Set C black ×3: taken 3, returned 3 on an edit, taken 3 again.
+      { variantId: "v-black", orderLineId: "box-c1", _sum: { delta: { toString: () => "-3" } } },
+      // Set A pen: taken and returned (net 0) → not held.
+      { variantId: "v-pen", orderLineId: "pen-a", _sum: { delta: { toString: () => "0" } } },
+      { variantId: "v-mug", orderLineId: "mug-a", _sum: { delta: { toString: () => "-1" } } },
+    ]);
+    const db = {
+      orderLine: {
+        findMany: vi.fn(async () => [
+          { id: "box-c1", setGroupId: "C1", stockVariantId: "v-black", setData: null },
+          { id: "box-c2", setGroupId: "C2", stockVariantId: "v-red", setData: null },
+          { id: "pen-a", setGroupId: "A1", stockVariantId: "v-pen", setData: null },
+          { id: "mug-a", setGroupId: "A1", stockVariantId: "v-mug", setData: null },
+        ]),
+      },
+      stockMovement: { groupBy },
+      stockVariant: {
+        findMany: vi.fn(async () => [
+          { id: "v-black", sku: "GIFT-SET-THERMOS-BLACK" },
+          { id: "v-mug", sku: "S3-KJRJ-320" },
+        ]),
+      },
+    } as never;
+    const held = await giftSetStockHeldForOrder(db, "o-1");
+    expect(held).toEqual([
+      { setGroupId: "C1", variantId: "v-black", sku: "GIFT-SET-THERMOS-BLACK", quantity: 3 },
+      { setGroupId: "A1", variantId: "v-mug", sku: "S3-KJRJ-320", quantity: 1 },
+    ]);
+    // Only the set's own items are read (not the inks of the print lines).
+    expect((groupBy.mock.calls[0] as unknown as [{ where: { OR: unknown[] } }])[0].where.OR[0]).toEqual({
+      variantId: { in: ["v-black", "v-red", "v-pen", "v-mug"] },
+    });
   });
 });
