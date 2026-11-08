@@ -16,7 +16,7 @@ export const printMethodsRo: PrintMethodsDictionary = {
   presetInvalid: "Indicați denumirea, lățimea, înălțimea și prețul formatului",
   addPreset: "Adaugă format",
   deletePreset: "Șterge",
-  confirmDeletePreset: (label) => `Ștergeți formatul «${label}»? Comenzile vechi nu se schimbă.`,
+  confirmDeletePreset: (label) => `Formatul «${label}» va fi șters. Comenzile vechi nu se schimbă.`,
   confirmDeletePresetTitle: "Ștergeți formatul?",
   fieldInvalid: (label) => `Verificați câmpul «${label}»`,
   units: {

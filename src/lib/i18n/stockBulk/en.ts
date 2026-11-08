@@ -38,7 +38,7 @@ export const stockBulkEn: StockBulkDictionary = {
   toolDealerFromRetail: "Dealer = retail minus",
   toolDealerDiscount: "Dealer discount, %",
   toolsHint: "Changes show in the table first — they are written after «Save».",
-  unsavedLeave: "There are unsaved prices. Leave the page?",
+  unsavedLeave: "If you leave now, the changed prices will be lost.",
   unsavedLeaveTitle: "Prices not saved",
   unsavedLeaveConfirm: "Leave without saving",
   unsavedStay: "Stay",

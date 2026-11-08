@@ -2523,7 +2523,7 @@ export const ru: TranslationDictionary = {
     historyDownload: "Скачать",
     historyDelete: "Удалить",
     historyDeleteConfirm:
-      "Убрать этот макет из истории? Файл всё равно удалится автоматически через 7 дней.",
+      "Макет пропадёт из истории. Сам файл и так удалится автоматически через 7 дней.",
     historyDeleteTitle: "Убрать из истории?",
     historyDeleteError: "Не получилось удалить. Попробуйте ещё раз.",
     historyLoadError: "Не удалось загрузить историю",
@@ -2741,7 +2741,7 @@ export const ru: TranslationDictionary = {
     autoOff: "Выкл",
     save: "Сохранить",
     delete: "Удалить",
-    confirmDelete: "Удалить правило? Уже проведённые приходы не изменятся.",
+    confirmDelete: "Уже проведённые приходы не изменятся.",
     confirmDeleteTitle: "Удалить правило?",
   },
   stock: {

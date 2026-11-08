@@ -2365,7 +2365,7 @@ export const en: TranslationDictionary = {
     historyDownload: "Download",
     historyDelete: "Delete",
     historyDeleteConfirm:
-      "Remove this layout from history? The file will still auto-delete after 7 days.",
+      "The layout disappears from history. The file auto-deletes after 7 days anyway.",
     historyDeleteTitle: "Remove from history?",
     historyDeleteError: "Could not delete. Please try again.",
     historyLoadError: "Could not load history",
@@ -2571,7 +2571,7 @@ export const en: TranslationDictionary = {
     autoOff: "Off",
     save: "Save",
     delete: "Delete",
-    confirmDelete: "Delete this rule? Receipts already posted stay unchanged.",
+    confirmDelete: "Receipts already posted stay unchanged.",
     confirmDeleteTitle: "Delete this rule?",
   },
   stock: {

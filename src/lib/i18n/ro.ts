@@ -2374,7 +2374,7 @@ export const ro: TranslationDictionary = {
     historyDownload: "Descarcă",
     historyDelete: "Șterge",
     historyDeleteConfirm:
-      "Elimini macheta din istoric? Fișierul se șterge oricum automat după 7 zile.",
+      "Macheta dispare din istoric. Fișierul se șterge oricum automat după 7 zile.",
     historyDeleteTitle: "Elimini din istoric?",
     historyDeleteError: "Nu s-a putut șterge. Încercați din nou.",
     historyLoadError: "Nu s-a putut încărca istoricul",
@@ -2580,7 +2580,7 @@ export const ro: TranslationDictionary = {
     autoOff: "Oprit",
     save: "Salvează",
     delete: "Șterge",
-    confirmDelete: "Ștergeți regula? Intrările deja înregistrate nu se schimbă.",
+    confirmDelete: "Intrările deja înregistrate nu se schimbă.",
     confirmDeleteTitle: "Ștergeți regula?",
   },
   stock: {

@@ -16,7 +16,7 @@ export const printMethodsEn: PrintMethodsDictionary = {
   presetInvalid: "Enter the format's name, width, height and price",
   addPreset: "Add format",
   deletePreset: "Delete",
-  confirmDeletePreset: (label) => `Delete format «${label}»? Existing orders stay unchanged.`,
+  confirmDeletePreset: (label) => `Format «${label}» will be deleted. Existing orders stay unchanged.`,
   confirmDeletePresetTitle: "Delete the format?",
   fieldInvalid: (label) => `Check the «${label}» field`,
   units: {
