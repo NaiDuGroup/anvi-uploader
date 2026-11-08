@@ -1,5 +1,6 @@
 "use client";
 
+import type { WizardReusedFile } from "@/app/admin/_components/library/wizardReuse";
 import type { ReactElement, ReactNode } from "react";
 import { useMemo } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Upload, X } from "lucide-react";
@@ -34,6 +35,8 @@ export interface AdminBusinessCardRowAssign {
   bcBackFile: File | null;
   /** Reverse already stored on the order; replaced as soon as `bcBackFile` is set. */
   bcBackExistingFile: { id: string; fileName: string } | null;
+  /** «Повторить заказ»: reverse reused from storage / the library (no upload). */
+  bcBackReuse?: WizardReusedFile | null;
 }
 
 export interface AdminBusinessCardRowPricing {
@@ -131,7 +134,7 @@ export function AdminBusinessCardRowFields({
   const paper = papers.find((p) => p.id === assign.bcSheetPaperId) ?? null;
   /** A fresh upload wins over the stored reverse it is meant to replace. */
   const backArtworkName =
-    assign.bcBackFile?.name ?? assign.bcBackExistingFile?.fileName ?? null;
+    assign.bcBackFile?.name ?? assign.bcBackExistingFile?.fileName ?? assign.bcBackReuse?.fileName ?? null;
 
   const paperOptions = useMemo(
     (): MenuSelectOption<string>[] =>
@@ -269,6 +272,7 @@ export function AdminBusinessCardRowFields({
                   bcBackFile: side === "one" ? null : assign.bcBackFile,
                   bcBackExistingFile:
                     side === "one" ? null : assign.bcBackExistingFile,
+                  bcBackReuse: side === "one" ? null : (assign.bcBackReuse ?? null),
                 })
               }
               className={cn(
@@ -297,7 +301,7 @@ export function AdminBusinessCardRowFields({
               <button
                 type="button"
                 onClick={() =>
-                  onChange({ bcBackFile: null, bcBackExistingFile: null })
+                  onChange({ bcBackFile: null, bcBackExistingFile: null, bcBackReuse: null })
                 }
                 aria-label={t.admin.sheetPaperCatalogCancel}
                 className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
