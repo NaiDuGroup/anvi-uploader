@@ -25,7 +25,14 @@ const PAGE_SIZE = 48;
  * live under `library/` (not deleted after 7 days like `uploads/`) and new
  * orders reuse them from the wizard («Из библиотеки»).
  */
-export default function LibraryPageClient({ focusItemId }: { focusItemId: string | null }) {
+export default function LibraryPageClient({
+  focusItemId,
+  canManage,
+}: {
+  focusItemId: string | null;
+  /** Admin / superadmin: edit, archive, restore, delete. The workshop only views and downloads. */
+  canManage: boolean;
+}) {
   const { t } = useLanguageStore();
   const d = t.library;
   const [query, setQuery] = useState("");
@@ -86,9 +93,12 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
     if (!focusItemId || focusDone.current) return;
     focusDone.current = true;
     void libraryFetch<{ item: LibraryItem }>(`/api/admin/library/${focusItemId}`).then((res) => {
-      if (res.ok) setEditing(res.data.item);
+      if (!res.ok) return;
+      // The workshop cannot edit: find the item in the list instead.
+      if (canManage) setEditing(res.data.item);
+      else setQuery(res.data.item.title);
     });
-  }, [focusItemId]);
+  }, [focusItemId, canManage]);
 
   const replaceItem = (next: LibraryItem) =>
     setItems((prev) => prev.map((i) => (i.id === next.id ? next : i)));
@@ -150,10 +160,16 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-gray-500">{d.pageIntro}</p>
         </div>
-        <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" className="size-4 accent-amber-600" checked={archived} onChange={(e) => setArchived(e.target.checked)} />
-          {d.archiveToggle}
-        </label>
+        {canManage ? (
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="size-4 accent-amber-600" checked={archived} onChange={(e) => setArchived(e.target.checked)} />
+            {d.archiveToggle}
+          </label>
+        ) : (
+          <p className="max-w-sm text-xs text-gray-500" data-testid="library-read-only">
+            {d.readOnlyHint}
+          </p>
+        )}
       </div>
 
       <div className="mb-4 space-y-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
@@ -265,6 +281,8 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
                     >
                       <Download className="h-4 w-4" />
                     </a>
+                    {canManage ? (
+                    <>
                     <button
                       type="button"
                       onClick={() => setEditing(item)}
@@ -300,6 +318,8 @@ export default function LibraryPageClient({ focusItemId }: { focusItemId: string
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
+                    ) : null}
+                    </>
                     ) : null}
                   </div>
                 </div>

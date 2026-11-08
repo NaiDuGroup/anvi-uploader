@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireLibraryStaff } from "@/lib/library/libraryAuth";
+import { requireLibraryManager, requireLibraryStaff } from "@/lib/library/libraryAuth";
 import { LIBRARY_TAGS_MAX, LIBRARY_TITLE_MAX, normalizeLibraryTags } from "@/lib/library/libraryKeys";
 import {
   LIBRARY_CLIENT_SELECT,
@@ -32,7 +32,7 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
 
 /** Edit title / tags / owner, archive or restore. */
 export async function PATCH(request: NextRequest, { params }: Ctx) {
-  const { denied } = await requireLibraryStaff();
+  const { denied } = await requireLibraryManager();
   if (denied) return denied;
   const { id } = await params;
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
@@ -67,7 +67,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
  * order made from it still needs the file, so the UI offers «В архив» instead.
  */
 export async function DELETE(_request: NextRequest, { params }: Ctx) {
-  const { denied } = await requireLibraryStaff();
+  const { denied } = await requireLibraryManager();
   if (denied) return denied;
   const { id } = await params;
   try {
