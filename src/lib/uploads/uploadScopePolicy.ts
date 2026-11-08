@@ -17,6 +17,11 @@ import { CORPORATE_FILE_MAX_BYTES, checkCorporateFile } from "@/lib/corporate/fi
  * - `stockCatalog`    → catalog bucket, `catalog/stock/...` (staff only).
  * - `corporate`       → main bucket, `uploads/...` like `order`, but only the
  *                       «Pentru companii» logo / brief types (`corporate/fileTypes.ts`).
+ * - `designRender`    → main bucket, `designs/...` (staff only): Design Studio
+ *                       print renders + previews (`Design.renderKey/thumbKey`).
+ *                       Outside the 7-day `uploads/` lifecycle rule, so a saved
+ *                       design keeps its render. Older designs keep their
+ *                       `uploads/...` keys (read as before; those may be gone).
  */
 export type UploadScope =
   | "order"
@@ -25,7 +30,8 @@ export type UploadScope =
   | "notebookCatalog"
   | "penCatalog"
   | "designAsset"
-  | "stockCatalog";
+  | "stockCatalog"
+  | "designRender";
 
 /** `public`: anyone, no session. `staff`: admin/superadmin/workshop session. */
 export type UploadAuth = "public" | "staff";
@@ -67,6 +73,7 @@ export const UPLOAD_SCOPES: Record<UploadScope, UploadScopeConfig> = {
   penCatalog: { prefix: "catalog/pens", bucket: "catalog", auth: "staff", maxBytes: CATALOG_IMAGE_MAX_BYTES, imagesOnly: true },
   designAsset: { prefix: "catalog/design-assets", bucket: "catalog", auth: "staff", maxBytes: CATALOG_IMAGE_MAX_BYTES, imagesOnly: true },
   stockCatalog: { prefix: "catalog/stock", bucket: "catalog", auth: "staff", maxBytes: CATALOG_IMAGE_MAX_BYTES, imagesOnly: true },
+  designRender: { prefix: "designs", bucket: "uploads", auth: "staff", maxBytes: ORDER_FILE_MAX_BYTES, imagesOnly: true },
 };
 
 export function isUploadScope(value: unknown): value is UploadScope {

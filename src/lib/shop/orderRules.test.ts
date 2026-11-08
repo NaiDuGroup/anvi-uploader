@@ -85,4 +85,13 @@ describe("storefront order files", () => {
   it("an object still used by a kept order (repeated order, same key) is not deleted", () => {
     expect(shopKeysSafeToDelete(["shop-orders/a", "shop-orders/b", "shop-orders/a"], new Set(["shop-orders/b"]))).toEqual(["shop-orders/a"]);
   });
+
+  it("never returns a library/ (or any non-storefront) key, even unreferenced", () => {
+    expect(
+      shopKeysSafeToDelete(
+        ["library/common/abcDEF1234-logo.pdf", "uploads/1700000000000-abcdefgh-a.pdf", "designs/x.png", "shop-orders/a"],
+        new Set(),
+      ),
+    ).toEqual(["shop-orders/a"]);
+  });
 });

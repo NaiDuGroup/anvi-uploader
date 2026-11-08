@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isStaffOrderFileUrl, orderFileUrlIssues } from "@/lib/library/libraryKeys";
 import { chargedUrgencyFeeMdl, staffPriceToStored } from "@/lib/dealerUrgency";
 import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
 import { SHOP_ORDER_EDIT_BLOCKED_MESSAGE } from "@/lib/shop/orderFlags";
@@ -132,6 +133,13 @@ export async function PATCH(
       );
     }
     const validated = updateAdminOrderSchema.parse(body);
+    const badFileUrls = orderFileUrlIssues(validated.lines, isStaffOrderFileUrl);
+    if (badFileUrls.length > 0) {
+      return NextResponse.json(
+        { error: "Invalid file key", code: "invalid_file_url", fields: badFileUrls },
+        { status: 400 },
+      );
+    }
 
     let nextClientId: string | null =
       validated.clientId !== undefined

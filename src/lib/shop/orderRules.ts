@@ -74,7 +74,9 @@ export function isShopOrderFileKey(key: string): boolean {
  * Storage keys that may really be deleted: a repeated account order reuses
  * the same `shop-orders/…` object, so a key still referenced by a File row
  * of an order that keeps its files stays (only the released rows are marked).
+ * Keys outside `shop-orders/` are never returned.
  */
 export function shopKeysSafeToDelete(keys: readonly string[], stillReferenced: ReadonlySet<string>): string[] {
-  return [...new Set(keys)].filter((k) => !stillReferenced.has(k));
+  // Only storefront copies: never a `library/` key («Библиотека макетов») or anything else.
+  return [...new Set(keys)].filter((k) => isShopOrderFileKey(k) && !stillReferenced.has(k));
 }

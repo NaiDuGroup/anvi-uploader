@@ -1,0 +1,122 @@
+/**
+ * «Библиотека макетов» storage keys and the order-file key rules around them.
+ * Pure (no DB, no storage) — client-safe and unit-tested.
+ *
+ * Order uploads live under `uploads/…`, which an R2 lifecycle rule deletes
+ * after 7 days (`ORDER_FILE_LIFECYCLE_DAYS`). Saving a file to the library
+ * copies it server-side to `library/<clientId|common>/<id>-<name>` in the same
+ * bucket: no lifecycle rule covers that prefix, so the copy stays until staff
+ * delete it. Nothing in the code deletes `library/` keys except the library's
+ * own hard delete (only when no order file uses the key).
+ */
+import { sanitizeUploadFileName } from "@/lib/uploads/uploadScopePolicy";
+
+export const LIBRARY_PREFIX = "library/";
+/** Folder of the studio-wide («Общий») items. */
+export const LIBRARY_COMMON_FOLDER = "common";
+
+export const LIBRARY_TITLE_MAX = 200;
+export const LIBRARY_TAG_MAX = 40;
+export const LIBRARY_TAGS_MAX = 20;
+
+function normaliseKey(key: string): string {
+  return key.replace(/^\/+/, "");
+}
+
+export function isLibraryKey(key: string | null | undefined): boolean {
+  return typeof key === "string" && normaliseKey(key).startsWith(LIBRARY_PREFIX);
+}
+
+/** An order upload (`uploads/…`): the only source a library copy is made from besides storefront copies. */
+export function isUploadsKey(key: string | null | undefined): boolean {
+  return typeof key === "string" && normaliseKey(key).startsWith("uploads/");
+}
+
+/**
+ * Storage key of a new library copy. The client id is a uuid (checked by the
+ * caller); anything else would be unsafe in a path, so it falls back to the
+ * common folder only when null.
+ */
+export function buildLibraryKey(clientId: string | null, fileName: string, id: string): string {
+  if (clientId !== null && !/^[0-9a-f-]{36}$/i.test(clientId)) {
+    throw new Error("Invalid client id for a library key");
+  }
+  if (!/^[A-Za-z0-9_-]{6,32}$/.test(id)) throw new Error("Invalid library key id");
+  const folder = clientId ?? LIBRARY_COMMON_FOLDER;
+  return `${LIBRARY_PREFIX}${folder}/${id}-${sanitizeUploadFileName(fileName)}`;
+}
+
+/** Default title: the file name without its extension. */
+export function defaultLibraryTitle(fileName: string): string {
+  const name = fileName.trim();
+  const dot = name.lastIndexOf(".");
+  const base = dot > 0 ? name.slice(0, dot) : name;
+  return (base.trim() || name || "Макет").slice(0, LIBRARY_TITLE_MAX);
+}
+
+/** Tags: trimmed, lower-cased, no `#`, unique, capped (input as array or a comma list). */
+export function normalizeLibraryTags(input: readonly string[] | string | null | undefined): string[] {
+  const raw = typeof input === "string" ? input.split(/[,;\n]/) : (input ?? []);
+  const out: string[] = [];
+  for (const t of raw) {
+    const tag = String(t).trim().replace(/^#+/, "").trim().toLowerCase().slice(0, LIBRARY_TAG_MAX);
+    if (tag && !out.includes(tag)) out.push(tag);
+    if (out.length >= LIBRARY_TAGS_MAX) break;
+  }
+  return out;
+}
+
+const HTTP_LINK_RE = /^https?:\/\//i;
+
+/**
+ * Storage prefixes a staff-created order file may point at:
+ * - `uploads/`     — fresh uploads (admin wizard, Design Studio renders re-uploaded as order files);
+ * - `library/`     — «Из библиотеки» (reused, not copied);
+ * - `shop-orders/` — «Повторить заказ» of a storefront order whose copy still exists;
+ * - an absolute http(s) link («Вставьте ссылку»).
+ */
+export const STAFF_ORDER_FILE_PREFIXES = ["uploads/", LIBRARY_PREFIX, "shop-orders/"] as const;
+
+function hasSafePath(key: string): boolean {
+  return !key.includes("..") && !key.includes("\\") && !/[\u0000-\u001f\u007f]/.test(key);
+}
+
+export function isStaffOrderFileUrl(value: string): boolean {
+  if (HTTP_LINK_RE.test(value)) return true;
+  return hasSafePath(value) && STAFF_ORDER_FILE_PREFIXES.some((p) => value.startsWith(p) && value.length > p.length);
+}
+
+/**
+ * Dealer cabinet order files: own uploads and links only. Library and
+ * storefront keys belong to the studio / other customers, so they are refused
+ * (a dealer could otherwise reference and then download someone else's file).
+ * `pending-upload` is the dry-run price preview placeholder (nothing is saved).
+ */
+export function isDealerOrderFileUrl(value: string, opts: { dryRun?: boolean } = {}): boolean {
+  if (opts.dryRun && value === "pending-upload") return true;
+  if (HTTP_LINK_RE.test(value)) return true;
+  return hasSafePath(value) && value.startsWith("uploads/") && value.length > "uploads/".length;
+}
+
+/** Field paths (`lines.0.files.1.fileUrl`) of new files whose `fileUrl` fails `accept`. */
+export function orderFileUrlIssues(
+  lines: ReadonlyArray<{ files?: ReadonlyArray<unknown> }>,
+  accept: (fileUrl: string) => boolean,
+): string[] {
+  const issues: string[] = [];
+  lines.forEach((line, li) => {
+    (line.files ?? []).forEach((f, fi) => {
+      if (!f || typeof f !== "object" || !("fileUrl" in f)) return; // existing file kept by id
+      const url = (f as { fileUrl: unknown }).fileUrl;
+      if (typeof url !== "string" || !accept(url)) issues.push(`lines.${li}.files.${fi}.fileUrl`);
+    });
+  });
+  return issues;
+}
+
+/** Distinct library keys among order files (for the use counter). */
+export function libraryKeysOf(fileUrls: Iterable<string>): string[] {
+  const out = new Set<string>();
+  for (const u of fileUrls) if (isLibraryKey(u)) out.add(normaliseKey(u));
+  return [...out];
+}

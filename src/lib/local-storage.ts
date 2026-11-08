@@ -25,3 +25,13 @@ export async function deleteLocalFile(key: string): Promise<void> {
     // already gone
   }
 }
+
+/** Size of a stored local file, or null when it does not exist. */
+export async function statLocalFile(key: string): Promise<{ size: number } | null> {
+  try {
+    const st = await fs.stat(path.join(STORAGE_DIR, key));
+    return st.isFile() ? { size: st.size } : null;
+  } catch {
+    return null;
+  }
+}
