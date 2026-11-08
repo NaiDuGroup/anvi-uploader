@@ -20,11 +20,14 @@ import { effectiveUnitCost } from "@/lib/stock/effectiveUnitCost";
 import { giftSetExtraStockSkus, parseOrderLineSetData } from "@/lib/giftSet/giftSet";
 import type { ExpenseForAccrual } from "@/lib/accounting/expenseAccrual";
 import { expenseTotalInPeriod } from "@/lib/accounting/expenseAccrual";
+import { chisinauDayEndExclusive, chisinauDayStart } from "@/lib/chisinauDay";
+import { dayKeyOf } from "@/lib/shop/report/period";
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-function defaultTodayUtc(): string {
-  return new Date().toISOString().slice(0, 10);
+/** Today as a Chișinău calendar day (orders are counted by the studio's day). */
+function defaultToday(): string {
+  return dayKeyOf(new Date());
 }
 
 function parseRange(
@@ -32,7 +35,7 @@ function parseRange(
 ): { from: string; to: string } | { error: string } {
   const fromRaw = req.nextUrl.searchParams.get("from")?.trim() ?? "";
   const toRaw = req.nextUrl.searchParams.get("to")?.trim() ?? "";
-  const from = fromRaw || defaultTodayUtc();
+  const from = fromRaw || defaultToday();
   const to = toRaw || from;
   if (!ISO_DAY.test(from) || !ISO_DAY.test(to)) {
     return { error: "invalid_date" };
@@ -87,14 +90,18 @@ export async function GET(request: NextRequest) {
   }
   const { from, to } = range;
 
-  const start = new Date(`${from}T00:00:00.000Z`);
-  const end = new Date(`${to}T23:59:59.999Z`);
+  // Chișinău calendar days: [00:00 of `from`, 00:00 of the day after `to`).
+  const start = chisinauDayStart(from);
+  const endExclusive = chisinauDayEndExclusive(to);
+  if (!start || !endExclusive) {
+    return NextResponse.json({ error: "invalid_date" }, { status: 400 });
+  }
 
   const [orders, expenseRows, settingsRow, company] = await Promise.all([
     prisma.order.findMany({
       where: {
         deletedAt: null,
-        createdAt: { gte: start, lte: end },
+        createdAt: { gte: start, lt: endExclusive },
       },
       include: {
         orderLines: {

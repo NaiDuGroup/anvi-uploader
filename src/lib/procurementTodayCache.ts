@@ -1,4 +1,6 @@
 import { prisma } from "./prisma";
+import { chisinauDayStart } from "./chisinauDay";
+import { dayKeyOf } from "./shop/report/period";
 
 /**
  * In-process TTL cache for the "needs procurement, created today" counter.
@@ -28,8 +30,8 @@ function cacheKey(role: string): string {
 }
 
 async function loadCount(role: string): Promise<number> {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  // «Today» is the Chișinău day (the server runs in UTC).
+  const startOfDay = chisinauDayStart(dayKeyOf(new Date()))!;
   return prisma.order.count({
     where: {
       deletedAt: null,

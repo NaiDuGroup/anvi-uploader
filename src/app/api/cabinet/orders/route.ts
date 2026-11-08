@@ -42,6 +42,7 @@ import { createOrderWithResolvedLines, resolveOrderLines } from "@/lib/orderCrea
 import { cabinetLinesDoneSummary } from "@/lib/ownerLineFileReplace";
 import { dealerFreeLines, dealerLineTotalsMdl, dealerOrderTotalMdl } from "@/lib/orderCreate/dealerLinePrices";
 import { loadDealerUrgencyOffer } from "@/lib/dealerUrgencyServer";
+import { chisinauDayEndExclusive, chisinauDayStart } from "@/lib/chisinauDay";
 import {
   chargedUrgencyFeeMdl,
   dealerUrgencyOnColumns,
@@ -81,8 +82,9 @@ export async function GET(request: NextRequest) {
   const search = (sp.get("search") ?? "").trim().slice(0, 200);
   const statusParam = sp.get("status") ?? "";
   const statusMembers = cabinetStatusFilterMembers(statusParam);
-  const dateFrom = parseDay(sp.get("dateFrom"));
-  const dateTo = parseDay(sp.get("dateTo"));
+  // Chișinău calendar days: [start of dateFrom, start of the day after dateTo).
+  const dateFrom = chisinauDayStart(sp.get("dateFrom"));
+  const dateToEnd = chisinauDayEndExclusive(sp.get("dateTo"));
   const sortParam = sp.get("sort");
   const sort: CabinetOrderSort = (CABINET_ORDER_SORTS as readonly string[]).includes(sortParam ?? "")
     ? (sortParam as CabinetOrderSort)
@@ -141,7 +143,7 @@ export async function GET(request: NextRequest) {
   }
 
   const fromMs = dateFrom ? dateFrom.getTime() : null;
-  const toMs = dateTo ? dateTo.getTime() + 86_400_000 : null;
+  const toMs = dateToEnd ? dateToEnd.getTime() : null;
   const filtered = all.filter((o) => {
     if (statusParam === CABINET_NEEDS_LAYOUT_FILTER) {
       if (!needsLayout(o)) return false;
@@ -285,12 +287,6 @@ export async function GET(request: NextRequest) {
       needsLayoutCount: all.filter(needsLayout).length,
     },
   });
-}
-
-function parseDay(raw: string | null): Date | null {
-  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-  const d = new Date(`${raw}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 /**

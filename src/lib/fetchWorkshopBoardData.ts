@@ -1,5 +1,6 @@
 import { giftSetBoardFlags, giftSetBoardSkus, procurementVariantIds, type GiftSetBoardFlags } from "@/lib/giftSet/giftSetBoard";
 import { Prisma } from "@prisma/client";
+import { chisinauDayEndExclusive, chisinauDayStart } from "@/lib/chisinauDay";
 import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
 import { prisma } from "./prisma";
 import { fillDtfGarmentNames } from "./dtf/dtfGarmentNames";
@@ -141,11 +142,14 @@ export async function fetchWorkshopBoardData(
       : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
     : Prisma.sql``;
 
-  const dateFromFilter = dateFrom
-    ? Prisma.sql`AND created_at >= ${new Date(dateFrom + "T00:00:00")}`
+  // Days are Chișinău calendar days, not UTC ones.
+  const dateFromStart = chisinauDayStart(dateFrom);
+  const dateToEnd = chisinauDayEndExclusive(dateTo);
+  const dateFromFilter = dateFromStart
+    ? Prisma.sql`AND created_at >= ${dateFromStart}`
     : Prisma.sql``;
-  const dateToFilter = dateTo
-    ? Prisma.sql`AND created_at < ${new Date(new Date(dateTo + "T00:00:00").getTime() + 86_400_000)}`
+  const dateToFilter = dateToEnd
+    ? Prisma.sql`AND created_at < ${dateToEnd}`
     : Prisma.sql``;
 
   // Workshop role: sees all workshop orders (no `onlyMine` filter on board).

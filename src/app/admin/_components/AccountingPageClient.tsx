@@ -18,8 +18,9 @@ import {
 } from "@/lib/accounting/types";
 import { useAccountingReport, type AccountingReportOrder, type AccountingExpenseRow } from "@/lib/swr";
 
-function utcTodayKey(): string {
-  return new Date().toISOString().slice(0, 10);
+/** Today as a Chișinău calendar day (the report counts orders by the studio's day). */
+function chisinauTodayKey(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Chisinau", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
 function addUtcDays(isoDay: string, delta: number): string {
@@ -43,8 +44,8 @@ type ExpenseRow = AccountingExpenseRow;
 
 export default function AccountingPageClient() {
   const { t, locale } = useLanguageStore();
-  const [dateFrom, setDateFrom] = useState(utcTodayKey);
-  const [dateTo, setDateTo] = useState(utcTodayKey);
+  const [dateFrom, setDateFrom] = useState(chisinauTodayKey);
+  const [dateTo, setDateTo] = useState(chisinauTodayKey);
 
   const {
     currency,
@@ -82,7 +83,7 @@ export default function AccountingPageClient() {
 
   const applyPreset = useCallback(
     (preset: "today" | "yesterday" | "week" | "month") => {
-      const today = utcTodayKey();
+      const today = chisinauTodayKey();
       if (preset === "today") {
         setDateFilter(today, today);
         return;
@@ -140,7 +141,7 @@ export default function AccountingPageClient() {
     setEType("other");
     setEAmount("");
     setEPeriod("monthly");
-    setEStart(dateFrom || utcTodayKey());
+    setEStart(dateFrom || chisinauTodayKey());
     setEEnd("");
     setEActive(true);
     setENotes("");

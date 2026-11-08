@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { chisinauDayEndExclusive, chisinauDayStart } from "@/lib/chisinauDay";
 import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
 import { uniqueByInvoice } from "@/lib/invoice/invoiceLinks";
 import { fillDtfGarmentNames } from "@/lib/dtf/dtfGarmentNames";
@@ -205,11 +206,14 @@ export async function fetchOrdersData(
     selectedStatuses.length > 0
       ? Prisma.sql`AND status = ANY(${selectedStatuses})`
       : Prisma.sql``;
-  const dateFromFilter = dateFrom
-    ? Prisma.sql`AND created_at >= ${new Date(dateFrom + "T00:00:00")}`
+  // Days are Chișinău calendar days, not UTC ones.
+  const dateFromStart = chisinauDayStart(dateFrom);
+  const dateToEnd = chisinauDayEndExclusive(dateTo);
+  const dateFromFilter = dateFromStart
+    ? Prisma.sql`AND created_at >= ${dateFromStart}`
     : Prisma.sql``;
-  const dateToFilter = dateTo
-    ? Prisma.sql`AND created_at < ${new Date(new Date(dateTo + "T00:00:00").getTime() + 86_400_000)}`
+  const dateToFilter = dateToEnd
+    ? Prisma.sql`AND created_at < ${dateToEnd}`
     : Prisma.sql``;
   const needsProcurementFilter = needsProcurementOnly
     ? Prisma.sql`AND needs_procurement = true`
