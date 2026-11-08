@@ -79,5 +79,7 @@ export function toDealerWizardBootstrap(data: WizardBootstrapData): WizardBootst
     },
     stickerSheetSettings: data.stickerSheetSettings,
     postcardSettings: data.postcardSettings,
+    // Set prices only (retail + dealer), no costs.
+    giftSetTemplates: data.giftSetTemplates,
   };
 }

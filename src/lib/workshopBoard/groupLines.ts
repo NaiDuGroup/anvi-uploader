@@ -43,6 +43,7 @@ import type {
   SublimationLineFacts,
 } from "./types";
 import { SECTION_ORDER } from "./types";
+import { giftSetBadgeLabel, parseOrderLineSetData } from "@/lib/giftSet/giftSet";
 import { paperLineLabelRu } from "./paperLineLabel";
 import { lineStatusForOrderStatus } from "@/lib/orderLineProductionStatus";
 import { boardLineStatus } from "@/lib/orderStatusFromLines";
@@ -66,6 +67,8 @@ export interface RawOrderLine {
   sublimationLineData?: unknown;
   /** Storefront cart line (`OrderLine.shopLineData`): names a print-shop paper product. */
   shopLineData?: unknown;
+  /** «Набор» (`OrderLine.setData`): badge on the card. */
+  setData?: unknown;
   /** `OrderLine.productionStatus`; absent → the order status's line status (legacy rows). */
   productionStatus?: string;
   /** «Нужен макет» details (`src/lib/layoutIssue.ts`). */
@@ -105,6 +108,12 @@ export interface RawOrder {
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
+
+/** «Набор: Ручка + блокнот + кружка ×3» + the component («Ручка») of a set line; null outside a set. */
+function giftSetBoardBadge(raw: unknown): WorkshopBoardLine["giftSet"] {
+  const d = parseOrderLineSetData(raw);
+  return d ? { label: giftSetBadgeLabel(d), role: d.roleLabel, quantity: d.quantity } : null;
+}
 
 function isValidProductType(value: string): value is ProductType {
   return (PRODUCT_TYPES as readonly string[]).includes(value);
@@ -644,6 +653,7 @@ export function groupLines(
         facts,
         files: rawLine.files,
         notes: order.notes,
+        giftSet: giftSetBoardBadge(rawLine.setData),
         createdByName: order.createdByName,
         sentToWorkshopByName: order.sentToWorkshopByName,
       };

@@ -14,6 +14,7 @@ function bundle(): WizardBootstrapData {
   return {
     stickerSheetSettings: STICKER_SHEET_DEFAULTS,
     postcardSettings: POSTCARD_DEFAULTS,
+    giftSetTemplates: [],
     mugProducts: [
       {
         id: "m1",

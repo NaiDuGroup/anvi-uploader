@@ -14,6 +14,7 @@ import type {
 import type { MugLayoutData, NotebookLayoutData, PenLayoutData } from "@/lib/validations";
 import { returnMugStockForOrder } from "@/lib/mug/mugOrderStock";
 import { returnMaterialStockForOrder } from "@/lib/stock/unified/materialOrderStock";
+import { applyGiftSetsToResolved } from "@/lib/giftSet/giftSetServer";
 import { returnNotebookStockForOrder } from "@/lib/notebook/notebookOrderStock";
 import { returnPenStockForOrder } from "@/lib/pen/penOrderStock";
 import {
@@ -252,6 +253,8 @@ export function buildAdminOrderUpdateLineInputs(
           ? (pl.sublimation ??
             sublimationInputFromLineData(parseSublimationLineData(dbLine?.sublimationLineData)))
           : undefined,
+      // «Набор»: sent with every line of a set; absent = the line is not (or no longer) in a set.
+      set: pl.set,
       files: mergedFiles,
     };
 
@@ -353,6 +356,9 @@ export async function resolveLinesForAdminOrderUpdate(
     applyManualLinePriceToResolved(r, pl, dbLine ?? null);
   });
 
+  // «Набор»: the set price wins over a line's manual price (staff may set the price of one set).
+  await applyGiftSetsToResolved(resolved, { allowManualPrice: true });
+
   return resolved;
 }
 
@@ -428,6 +434,10 @@ function orderLinePersistFields(
         ? (r.sublimationExtras.sublimationLineData as unknown as Prisma.InputJsonValue)
         : PrismaNs.JsonNull,
     manualUnitPriceMdl: r.manualUnitPriceMdl ?? null,
+    setGroupId: r.giftSetExtras?.setGroupId ?? null,
+    setData: r.giftSetExtras
+      ? (r.giftSetExtras.setData as unknown as Prisma.InputJsonValue)
+      : PrismaNs.JsonNull,
   };
 }
 

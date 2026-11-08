@@ -246,6 +246,8 @@ export interface WorkshopBoardLine {
   commentCount: number;
   createdAt: string;
   productType: ProductType;
+  /** «Набор»: badge «Набор: … ×N» and the component of this line (null outside a set). */
+  giftSet?: { label: string; role: string | null; quantity: number } | null;
   facts: LineFacts;
   files: WorkshopBoardFile[];
   notes: string | null;

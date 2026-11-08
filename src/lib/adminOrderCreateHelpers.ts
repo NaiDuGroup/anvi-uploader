@@ -102,7 +102,11 @@ import { dtfLayoutRunQuantities } from "@/lib/dtf/dtfLayoutRuns";
 import type { DtfLineData } from "@/lib/dtf/types";
 import { UvLineError } from "@/lib/uv/uvLineCalc";
 import { deductUvLineStock } from "@/lib/uv/uvOrderStock";
-import { resolveUvLine } from "@/lib/uv/resolveUvLine";
+import { loadUvInkCosts, loadUvSettings, loadUvStockItem, resolveUvLine } from "@/lib/uv/resolveUvLine";
+import { buildUvLineData } from "@/lib/uv/buildUvLineData";
+import type { UvLineInput } from "@/lib/uv/uvLineInput";
+import type { OrderLineSetData } from "@/lib/giftSet/giftSet";
+import { takeGiftSetBoxStock } from "@/lib/giftSet/giftSetStock";
 import type { UvLineData } from "@/lib/uv/types";
 import { SublimationLineError } from "@/lib/sublimation/sublimationLineCalc";
 import { consumeMugPrintStock, deductSublimationLineStock } from "@/lib/sublimation/sublimationOrderStock";
@@ -218,6 +222,11 @@ export type ResolvedAdminOrderLine = {
   };
   /** Paper / mug / notebook / pen: staff «ручная цена» per piece (`OrderLine.manualUnitPriceMdl`; `orderLines/manualLinePrice.ts`). */
   manualUnitPriceMdl?: number | null;
+  /** «Набор»: the set group and set data of the line (`giftSet/giftSetServer.ts` → `applyGiftSetsToResolved`). */
+  giftSetExtras?: {
+    setGroupId: string;
+    setData: OrderLineSetData;
+  };
 };
 
 /** `OrderLine.stockVariantId` of a resolved line: the unified mug / pen / notebook variant, if any. */
@@ -433,9 +442,14 @@ export async function resolveAdminOrderLineProducts(
     }
     try {
       uvExtras = {
-        uvLineData: await resolveUvLine(line.uv, line.customerType ?? "retail", {
-          allowUnpriced: opts?.allowUnpricedPrint,
-        }),
+        // A ready gift set is billed at the set price later (`applyGiftSetsToResolved`):
+        // the set item needs no price of its own here.
+        uvLineData:
+          line.set?.role === "ready"
+            ? await resolveReadyGiftSetUvLine(line.uv, line.customerType ?? "retail")
+            : await resolveUvLine(line.uv, line.customerType ?? "retail", {
+                allowUnpriced: opts?.allowUnpricedPrint,
+              }),
       };
     } catch (e) {
       if (e instanceof UvLineError) throw new AdminOrderResolveError(e.code);
@@ -470,6 +484,17 @@ export async function resolveAdminOrderLineProducts(
     uvExtras,
     sublimationExtras,
   };
+}
+
+/**
+ * UV line of a ready gift set (C): the set item's variant with the template's
+ * zones. The item may have no price of its own (the set price bills the line),
+ * so a placeholder 1-piece tier stands in; the total is replaced later.
+ */
+async function resolveReadyGiftSetUvLine(input: UvLineInput, customerType: "retail" | "dealer"): Promise<UvLineData> {
+  const [settings, inkCosts, item] = await Promise.all([loadUvSettings(), loadUvInkCosts(), loadUvStockItem(input.variantId)]);
+  const priced = item && item.priceTiers.length === 0 ? { ...item, priceTiers: [{ minQty: 1, priceMdl: 1 }] } : item;
+  return buildUvLineData(input, customerType, { item: priced, settings, inkCosts, allowUnpriced: true });
 }
 
 /**
@@ -1318,6 +1343,21 @@ export async function deductStockForAdminOrderLines(
         createdById: params.createdById,
       });
     }
+  }
+
+  // «Набор»: the box, once per set, on the group's first line.
+  for (let i = 0; i < params.resolved.length; i++) {
+    const set = params.resolved[i]!.giftSetExtras?.setData;
+    if (!set?.boxSku) continue;
+    const boxIssue = await takeGiftSetBoxStock(tx, {
+      boxSku: set.boxSku,
+      quantity: set.quantity,
+      orderId: params.orderId,
+      orderNumber: params.orderNumber,
+      orderLineId: dbLines[i]!.id,
+      createdById: params.createdById,
+    });
+    if (boxIssue) procurementIssues.push(boxIssue);
   }
 
   const procurementMeta =

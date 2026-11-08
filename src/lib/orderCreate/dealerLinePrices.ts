@@ -90,7 +90,10 @@ export async function dealerLineTotalsMdl(
     const pt = r.input.productType;
     const qty = lineCopies(r);
 
-    if (pt === "large_format_print") {
+    if (r.giftSetExtras) {
+      // «Набор»: the line's share of the set price (dealer price of the template).
+      out.push(sellOrNull(r.giftSetExtras.setData.lineTotalMdl));
+    } else if (pt === "large_format_print") {
       // Grouped lines carry the group share; a line resolved on its own (one
       // roll, size preset) has its total in the line snapshot.
       const own = (r.largeFormatExtras?.largeFormatLineData as unknown as LargeFormatLineData | undefined)

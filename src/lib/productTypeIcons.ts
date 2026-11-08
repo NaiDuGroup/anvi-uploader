@@ -3,6 +3,7 @@ import {
   Contact,
   FileText,
   Flame,
+  Gift,
   Layers,
   Mail,
   Maximize,
@@ -16,11 +17,15 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { parseUvLineData } from "@/lib/uv/parseUvLineData";
+import { parseOrderLineSetData } from "@/lib/giftSet/giftSet";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { ProductType } from "@/lib/validations";
 
-/** A product type, or UV-DTF stickers (UV print with technique «transfer») shown apart. */
-export type LineTypeKey = ProductType | "uv_dtf";
+/**
+ * A product type, UV-DTF stickers (UV print with technique «transfer») shown
+ * apart, or «Набор» (a gift set: the ready-set line, the wizard menu tile, the badge).
+ */
+export type LineTypeKey = ProductType | "uv_dtf" | "gift_set";
 
 /**
  * The one icon per product type, used by order line headers, the workshop
@@ -40,13 +45,18 @@ export const PRODUCT_TYPE_ICONS: Record<LineTypeKey, LucideIcon> = {
   uv_print: Sparkles,
   uv_dtf: StickyNote,
   sublimation_print: Flame,
+  gift_set: Gift,
 };
 
 /** Orders made of several product types (cabinet order header). */
 export const MIXED_PRODUCT_ICON: LucideIcon = Layers;
 
-/** UV-DTF stickers are UV lines with the transfer technique (or the sticker source). */
-export function lineTypeKey(productType: string, uvLineDataRaw?: unknown): LineTypeKey | null {
+/**
+ * UV-DTF stickers are UV lines with the transfer technique (or the sticker
+ * source); a ready gift set (one UV line on the set item) is «Набор».
+ */
+export function lineTypeKey(productType: string, uvLineDataRaw?: unknown, setDataRaw?: unknown): LineTypeKey | null {
+  if (productType === "uv_print" && parseOrderLineSetData(setDataRaw)?.kind === "ready") return "gift_set";
   if (productType === "uv_print") {
     const uv = parseUvLineData(uvLineDataRaw);
     if (uv && (uv.technique === "transfer" || uv.source === "stickers")) return "uv_dtf";
@@ -70,5 +80,6 @@ export function lineTypeLabel(key: LineTypeKey, t: TranslationDictionary): strin
     case "uv_print": return t.uv.productType;
     case "uv_dtf": return t.uv.workshop.sectionUvDtf;
     case "sublimation_print": return t.sublimation.productType;
+    case "gift_set": return t.giftSet.typeLabel;
   }
 }

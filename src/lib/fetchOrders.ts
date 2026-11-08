@@ -107,6 +107,8 @@ const ORDER_LINE_LIST_SELECT = {
   sublimationLineData: true,
   /** Storefront cart-line snapshot (photo / document print options per file). */
   shopLineData: true,
+  /** «Набор»: badge «Набор: … ×N» on the line card. */
+  setData: true,
   /** Per-line production status: badge next to the line code, «готово 1 из 3» in the list. */
   productionStatus: true,
   /** «Нужен макет»: reason, workshop comment, since when (red line card). */

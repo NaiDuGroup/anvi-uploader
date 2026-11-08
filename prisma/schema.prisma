@@ -912,6 +912,10 @@ model OrderLine {
   /// Staff «ручная цена» per piece of a paper_print / mug / notebook / pen line (MDL; null = catalog price).
   /// Other line types keep their manual line total inside their JSON snapshot (`src/lib/orderLines/manualLinePrice.ts`).
   manualUnitPriceMdl       Float?                    @map("manual_unit_price_mdl")
+  /// «Набор» (gift set): lines of one set share this id (null = not in a set); `src/lib/giftSet/`.
+  setGroupId               String?                   @map("set_group_id")
+  /// Set metadata of the line (template, N sets, price per set, this line's share, box); `OrderLineSetData`.
+  setData                  Json?                     @map("set_data")
   /// Production status of this line: WAITING / NEEDS_LAYOUT / PRINTING / DONE (`src/lib/orderLineProductionStatus.ts`).
   /// Step 1: mirrors `Order.status` (synced on every status write, ISSUE keeps it); nothing reads it yet.
   productionStatus         String                    @default("WAITING") @map("production_status")
@@ -955,6 +959,7 @@ model OrderLine {
   @@index([largeFormatMaterialId])
   @@index([sheetPaperId])
   @@index([designId])
+  @@index([setGroupId])
   @@map("order_lines")
 }
 
@@ -1351,6 +1356,8 @@ model AccountingSettings {
   vatCutoverAt            DateTime? @map("vat_cutover_at")
   /// DTF production norms and fees (film width, gap, powder, pressing); see `src/lib/dtf/dtfSettings.ts`.
   dtfSettings             Json      @default("{}") @map("dtf_settings")
+  /// «Шаблоны наборов» (gift set templates); null = defaults in code (`src/lib/giftSet/giftSet.ts`).
+  giftSetTemplates        Json?     @map("gift_set_templates")
   createdAt               DateTime  @default(now()) @map("created_at")
   updatedAt               DateTime  @updatedAt @map("updated_at")
 
