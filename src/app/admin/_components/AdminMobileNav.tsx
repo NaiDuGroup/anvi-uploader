@@ -3,10 +3,12 @@
 import type { MouseEvent } from "react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
-import { LogOut, Menu, Plus, X, type LucideIcon } from "lucide-react";
+import { LogOut, Menu, Plus, Sparkles, X, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
+import { useWhatsNew } from "./announcements/AnnouncementsProvider";
+import { WhatsNewUnreadDot } from "./announcements/WhatsNewButton";
 
 export type AdminMobileNavEntry = {
   href: string;
@@ -63,6 +65,7 @@ export function AdminMobileNav({
   roleIsWorkshop: boolean;
 }) {
   const { t } = useLanguageStore();
+  const whatsNew = useWhatsNew();
   const menuActive = menuItems.some((m) => m.active) && !tabs.some((m) => m.active) && !newOrder?.active;
   const leftTabs = tabs.slice(0, Math.ceil(tabs.length / 2));
   const rightTabs = tabs.slice(Math.ceil(tabs.length / 2));
@@ -238,6 +241,23 @@ export function AdminMobileNav({
             </ul>
           </nav>
           <div className="border-t border-gray-100 px-2 py-2">
+            {whatsNew ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onMenuOpenChange(false);
+                  whatsNew.open();
+                }}
+                className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                data-testid="whats-new-menu-item"
+              >
+                <span className="relative">
+                  <Sparkles className="h-5 w-5 shrink-0 text-gray-400" aria-hidden />
+                  {whatsNew.unread ? <WhatsNewUnreadDot className="-right-1 -top-1" /> : null}
+                </span>
+                {t.announcements.menuLabel}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={onLogout}

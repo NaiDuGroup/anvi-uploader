@@ -1131,6 +1131,8 @@ model User {
   studioCustomerId                String?                   @unique @map("studio_customer_id")
   // Denormalized normalized phone for fast customer login lookups without a join.
   phoneNormalized                 String?                   @unique @map("phone_normalized")
+  /// «Что нового»: announcement ids (src/lib/announcements.ts) and hint keys (`<id>:<hint>`) this user has seen.
+  seenAnnouncements               String[]                  @default([]) @map("seen_announcements")
   sessions                        Session[]
   comments                        Comment[]
   clientMessages                  ClientMessage[]

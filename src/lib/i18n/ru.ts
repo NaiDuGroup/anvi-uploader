@@ -13,6 +13,7 @@ import { shopReportRu } from "./shopReport/ru";
 import { shopFunnelRu } from "./shopFunnel/ru";
 import { shopPromoRu } from "./shopPromo/ru";
 import { libraryRu } from "./library/ru";
+import { announcementsRu } from "./announcements/ru";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ru: TranslationDictionary = {
@@ -3124,6 +3125,7 @@ export const ru: TranslationDictionary = {
     historyDerived: "(по позициям)",
   },
   library: libraryRu,
+  announcements: announcementsRu,
   giftSet: {
     typeLabel: "Набор",
     typeHint: "Ручка + блокнот (+ кружка) в коробке или готовый набор с термосом",

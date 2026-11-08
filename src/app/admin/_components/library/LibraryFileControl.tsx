@@ -9,6 +9,7 @@ import { libraryFetch, type LibraryItem } from "./libraryClient";
 import { SaveToLibraryDialog } from "./SaveToLibraryDialog";
 import type { LibraryOwner } from "./LibraryOwnerField";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { HintDot, useAnnouncementHint } from "../announcements/AnnouncementsProvider";
 
 /** «В библиотеке» badge for an order file (saved from it, or reused from the library). */
 export function InLibraryBadge({
@@ -103,6 +104,8 @@ export function SaveFileToLibraryButton({
   const libId = useInLibrary(fileId);
   const archivedId = useArchivedInLibrary(fileId);
   const [open, setOpen] = useState(false);
+  // «Что нового»: dot until this user has opened a save-to-library dialog once (marked there).
+  const hint = useAnnouncementHint("library-2026-11", "save-hint");
   // The dialog stays mounted after a save (its «done» screen) although the button hides.
   const showButton = !libId && libId !== undefined && !archivedId && !isLibraryKey(fileUrl);
   if (!showButton && !open) return null;
@@ -112,12 +115,13 @@ export function SaveFileToLibraryButton({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-amber-50 hover:text-amber-700"
+          className="relative inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-amber-50 hover:text-amber-700"
           title={d.saveToLibraryTitle}
           aria-label={d.saveToLibrary}
           data-testid="save-file-to-library"
         >
           <BookmarkPlus className="h-4 w-4 shrink-0" aria-hidden />
+          {hint.visible ? <HintDot /> : null}
         </button>
       ) : null}
       {open ? (

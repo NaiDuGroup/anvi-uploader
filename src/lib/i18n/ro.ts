@@ -13,6 +13,7 @@ import { shopReportRo } from "./shopReport/ro";
 import { shopFunnelRo } from "./shopFunnel/ro";
 import { shopPromoRo } from "./shopPromo/ro";
 import { libraryRo } from "./library/ro";
+import { announcementsRo } from "./announcements/ro";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ro: TranslationDictionary = {
@@ -2961,6 +2962,7 @@ export const ro: TranslationDictionary = {
     historyDerived: "(după poziții)",
   },
   library: libraryRo,
+  announcements: announcementsRo,
   giftSet: {
     typeLabel: "Set cadou",
     typeHint: "Pix + agendă (+ cană) în cutie sau set gata cu termos",
