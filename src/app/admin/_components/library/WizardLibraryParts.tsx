@@ -76,3 +76,14 @@ export function WizardMissingFileNote({ fileName }: { fileName: string }) {
     </p>
   );
 }
+
+/** «Повторить заказ» of a mug / notebook / pen line whose layout photos are gone from storage. */
+export function WizardExpiredPhotosNote({ count }: { count: number }) {
+  const d = useLanguageStore((s) => s.t.library);
+  return (
+    <p className="ml-7 flex items-start gap-1 text-[11px] font-medium text-amber-800" data-testid="wizard-expired-photos">
+      <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span className="min-w-0">{d.expiredPhotos(count)}</span>
+    </p>
+  );
+}

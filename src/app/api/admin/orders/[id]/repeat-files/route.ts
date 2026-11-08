@@ -28,6 +28,8 @@ export interface RepeatFileJson {
 }
 
 const PARALLEL = 6;
+/** Layout photos checked per line (the editors place a handful at most). */
+const MAX_PHOTOS_PER_LINE = 20;
 
 /**
  * «Повторить заказ»: for each file of the order, what the new order can reuse.
@@ -35,6 +37,8 @@ const PARALLEL = 6;
  * - otherwise the stored object while it still exists (`uploads/…` may expire soon);
  * - http(s) links as they are.
  * `files[fileId] = null` → the file is gone: «файл нужно загрузить заново».
+ * `missingPhotos[lineId]`: mug / notebook / pen layout photos no longer stored
+ * (the wizard drops them and warns instead of keeping dead keys).
  */
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { denied } = await requireLibraryStaff();
@@ -43,7 +47,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   const order = await prisma.order.findUnique({
     where: { id },
-    select: { id: true, files: { select: { id: true, fileUrl: true, fileName: true } } },
+    select: {
+      id: true,
+      files: { select: { id: true, fileUrl: true, fileName: true } },
+      orderLines: { select: { id: true, mugLayoutData: true, notebookLayoutData: true, penLayoutData: true } },
+    },
   });
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
@@ -105,5 +113,31 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       }),
     );
   }
-  return NextResponse.json({ files });
+
+  // Layout photos of designer lines (`uploads/…`, expire like order files).
+  const photoKeys = new Map<string, string[]>();
+  for (const line of order.orderLines) {
+    for (const raw of [line.mugLayoutData, line.notebookLayoutData, line.penLayoutData]) {
+      const urls = (raw as { photoUrls?: unknown } | null)?.photoUrls;
+      if (!Array.isArray(urls)) continue;
+      const keys = urls.filter((u): u is string => typeof u === "string" && u.length > 0 && !/^(https?:|data:|blob:)/i.test(u));
+      if (keys.length) photoKeys.set(line.id, [...(photoKeys.get(line.id) ?? []), ...keys].slice(0, MAX_PHOTOS_PER_LINE));
+    }
+  }
+  const missingPhotos: Record<string, string[]> = {};
+  const checks = [...photoKeys.entries()].flatMap(([lineId, keys]) => keys.map((key) => ({ lineId, key })));
+  for (let i = 0; i < checks.length; i += PARALLEL) {
+    await Promise.all(
+      checks.slice(i, i + PARALLEL).map(async ({ lineId, key }) => {
+        let size: number | null = 0;
+        try {
+          size = await storedObjectSize(key);
+        } catch (error) {
+          console.error("repeat-files: photo HEAD failed", key, error);
+        }
+        if (size === null) (missingPhotos[lineId] ??= []).push(key);
+      }),
+    );
+  }
+  return NextResponse.json({ files, missingPhotos });
 }

@@ -123,6 +123,8 @@ export interface LibraryDictionary {
   missingFile: string;
   missingFileGone: string;
   expiredPhotos: (n: number) => string;
+  /** Rows of one multi-file line of the repeated order: «одна позиция · файл 2 из 3». */
+  repeatLineFiles: (index: number, count: number) => string;
   repeatOrder: string;
   repeatLoading: string;
   repeatMissing: string;

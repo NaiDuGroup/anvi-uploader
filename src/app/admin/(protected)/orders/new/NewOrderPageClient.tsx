@@ -43,7 +43,7 @@ import {
   type CustomerFormValue,
 } from "@/app/admin/_components/orderForms";
 import { resolveR2Key, uploadFile, type UploadResult } from "@/app/admin/_components/orderForms/uploadHelpers";
-import { WizardLibraryPickButton, WizardReuseInfo, WizardMissingFileNote } from "@/app/admin/_components/library/WizardLibraryParts";
+import { WizardLibraryPickButton, WizardReuseInfo, WizardMissingFileNote, WizardExpiredPhotosNote } from "@/app/admin/_components/library/WizardLibraryParts";
 import { LibraryPickerDialog } from "@/app/admin/_components/library/LibraryPickerDialog";
 import type { LibraryItem } from "@/app/admin/_components/library/libraryClient";
 import {
@@ -52,6 +52,7 @@ import {
   type WizardReusedFile,
 } from "@/app/admin/_components/library/wizardReuse";
 import { buildDesignFileName } from "@/lib/design/fileName";
+import { canJoinRepeatLine, keepsRepeatLineTogether, repeatLineRuns, withoutMissingLayoutPhotos, type RepeatLineJoinKey } from "./repeatOrder";
 import type { DesignListItemJson } from "@/lib/design/designJson";
 import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
 import type { NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
@@ -509,6 +510,13 @@ export interface AdminWizardSlot {
   reuse?: WizardReusedFile;
   /** «Повторить заказ»: the original file is gone — shown until a file is attached. */
   missingFileName?: string;
+  /**
+   * «Повторить заказ» of a multi-file paper line: the original line id. Adjacent
+   * rows with the same key become one line again (see `canJoinRepeatLine`).
+   */
+  repeatLineKey?: string;
+  /** «Повторить заказ»: layout photos dropped because they are gone from storage. */
+  expiredPhotoCount?: number;
 }
 
 /** Text the «подсказка типа» reads for a row: the order comment and the row's file name / link. */
@@ -2646,9 +2654,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
     // «Повторить заказ»: which of the order's files can be reused (library / storage).
     let repeatFiles: Record<string, WizardReusedFile | null> | null = null;
+    let repeatMissingPhotos: Record<string, string[]> = {};
     const repeatFilesPromise = repeatOrderId
       ? loadRepeatOrderFiles(repeatOrderId).then((m) => {
-          repeatFiles = m;
+          repeatFiles = m.files;
+          repeatMissingPhotos = m.missingPhotos;
         })
       : Promise.resolve();
 
@@ -2736,6 +2746,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         );
         const nextSlots: AdminWizardSlot[] = [];
         const nextAssign: Record<string, SlotAssign> = {};
+        /** Row → line of the hydrated order it came from. */
+        const slotRepeatSourceLine = new Map<string, string>();
 
         for (const line of lines) {
           const lineSet = line.setGroupId ? parseOrderLineSetData(line.setData) : null;
@@ -2753,14 +2765,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           );
           for (const [rowIdx, f] of rowFiles.entries()) {
             const sid = newSlotId();
+            slotRepeatSourceLine.set(sid, line.id);
             if (repeatFiles) {
-              // A new order: reuse what is still stored, flag the rest.
+              // A new order: reuse what is still stored, flag the rest. Files of
+              // one paper line stay one line (`repeatLineKey`).
               const reused: WizardReusedFile | null = repeatFiles[f.id] ?? null;
               nextSlots.push({
                 id: sid,
                 reuse: reused ?? undefined,
                 missingFileName: reused ? undefined : f.fileName,
                 sourceOrderLineId: null,
+                repeatLineKey:
+                  rowFiles.length > 1 && keepsRepeatLineTogether(line.productType) ? line.id : undefined,
               });
             } else {
               nextSlots.push({
@@ -2973,7 +2989,27 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         }
 
         // A repeated order is priced at today's rates: drop the sold-price snapshots.
+        // Layout photos gone from storage leave the mug / notebook / pen layout (with a warning).
         if (repeatFiles) {
+          for (const sl of nextSlots) {
+            const lineId = slotRepeatSourceLine.get(sl.id);
+            const missing = lineId ? repeatMissingPhotos[lineId] : undefined;
+            const a = nextAssign[sl.id];
+            if (!missing?.length || !a) continue;
+            const gone = new Set(missing);
+            const mug = withoutMissingLayoutPhotos(a.mugLayoutData ?? undefined, gone);
+            const nb = withoutMissingLayoutPhotos(a.notebookLayoutData ?? undefined, gone);
+            const pen = withoutMissingLayoutPhotos(a.penLayoutData ?? undefined, gone);
+            const removed = mug.removed + nb.removed + pen.removed;
+            if (removed === 0) continue;
+            nextAssign[sl.id] = {
+              ...a,
+              mugLayoutData: mug.layout ?? a.mugLayoutData,
+              notebookLayoutData: nb.layout ?? a.notebookLayoutData,
+              penLayoutData: pen.layout ?? a.penLayoutData,
+            };
+            sl.expiredPhotoCount = removed;
+          }
           for (const sid of Object.keys(nextAssign)) nextAssign[sid] = { ...nextAssign[sid]!, bcStored: null };
         }
 
@@ -4625,6 +4661,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   ): Promise<AdminOrderLineInput[]> {
     const lines: AdminOrderLineInput[] = [];
     const readySetLines = new Map<string, AdminOrderLineInput>();
+    /** Paper line the previous row created («Повторить заказ»: the next file of the same line joins it). */
+    let lastPaper: { key: RepeatLineJoinKey; line: AdminOrderLineInput } | null = null;
     for (const slot of slots) {
       const a = assignBySlot[slot.id];
       if (!a) throw new Error("Missing row config");
@@ -4677,20 +4715,33 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         const pp = a.paperPrint;
         if (!pp) throw new Error("Paper options missing");
         const { fileName, fileUrl } = await upload(localFile);
-        lines.push({
+        const paperFile = {
+          fileName,
+          fileUrl,
+          copies: paperCopies,
+          color: pp.color,
+          paperType: resolvedPaperStorageValue(pp),
+          pageCount: pp.pageCount,
+        };
+        const joinKey: RepeatLineJoinKey = {
+          repeatLineKey: slot.repeatLineKey,
+          productType: "paper_print",
+          designId: a.designId,
+          manualUnitPriceMdl: dealerMode ? null : manualPriceLineFields("paper_print", a.linePriceStr).manualUnitPriceMdl,
+        };
+        if (lastPaper && lastPaper.line === lines[lines.length - 1] && canJoinRepeatLine(lastPaper.key, joinKey)) {
+          // Same line of the repeated order: one line with several files, like the original.
+          lastPaper.line.files.push(paperFile);
+          onSlot?.(slot.id, "done");
+          continue;
+        }
+        const paperLine: AdminOrderLineInput = {
           productType: "paper_print",
           designId: a.designId ?? undefined,
-          files: [
-            {
-              fileName,
-              fileUrl,
-              copies: paperCopies,
-              color: pp.color,
-              paperType: resolvedPaperStorageValue(pp),
-              pageCount: pp.pageCount,
-            },
-          ],
-        });
+          files: [paperFile],
+        };
+        lines.push(paperLine);
+        lastPaper = { key: joinKey, line: paperLine };
       } else if (isDesignerProductType(a.productType)) {
         // Mug / notebook / pen — also when reached via UV or sublimation.
         const designerCopies = parseAdminCopiesInput(a.copiesStr);
@@ -5027,6 +5078,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   }
 
   const [linkInput, setLinkInput] = useState("");
+
+  /** «Повторить заказ»: rows of one multi-file line of the repeated order («файл 2 из 3»). */
+  const repeatRuns = useMemo(() => repeatLineRuns(slots), [slots]);
 
   /** Stored keys the rows already reuse (front and reverse): «уже в заказе» in the picker. */
   const libraryKeysInOrder = useMemo(() => {
@@ -5708,6 +5762,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 {!slotHasArtwork(s) && s.missingFileName ? (
                                   <WizardMissingFileNote fileName={s.missingFileName} />
                                 ) : null}
+                                {repeatRuns.get(s.id) ? (
+                                  <p className="ml-7 text-[11px] font-medium text-emerald-800" data-testid="wizard-repeat-line-group">
+                                    {t.library.repeatLineFiles(repeatRuns.get(s.id)!.index, repeatRuns.get(s.id)!.count)}
+                                  </p>
+                                ) : null}
+                                {s.expiredPhotoCount ? <WizardExpiredPhotosNote count={s.expiredPhotoCount} /> : null}
                                 {s.linkUrl && linkNotAllowedFor(a.productType) ? (
                                   <p className="ml-7 text-[11px] font-medium text-red-600">
                                     {t.admin.newOrderPage.linkNeedsFile}

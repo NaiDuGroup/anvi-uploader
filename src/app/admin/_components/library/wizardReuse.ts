@@ -51,12 +51,19 @@ export function reuseFromRepeatFile(f: RepeatFileWire, units?: LibraryDictionary
   return out;
 }
 
-/** `GET /api/admin/orders/:id/repeat-files`: per file id, the reusable key or null (gone). */
-export async function loadRepeatOrderFiles(orderId: string): Promise<Record<string, WizardReusedFile | null>> {
+export interface RepeatOrderFiles {
+  /** Per file id: the reusable key, or null when the file is gone. */
+  files: Record<string, WizardReusedFile | null>;
+  /** Per order line id: layout photo keys gone from storage. */
+  missingPhotos: Record<string, string[]>;
+}
+
+/** `GET /api/admin/orders/:id/repeat-files`. */
+export async function loadRepeatOrderFiles(orderId: string): Promise<RepeatOrderFiles> {
   const res = await fetch(`/api/admin/orders/${orderId}/repeat-files`);
   if (!res.ok) throw new Error(useLanguageStore.getState().t.library.repeatFilesFailed);
-  const body = (await res.json()) as { files: Record<string, RepeatFileWire | null> };
-  const out: Record<string, WizardReusedFile | null> = {};
-  for (const [id, f] of Object.entries(body.files ?? {})) out[id] = f ? reuseFromRepeatFile(f) : null;
-  return out;
+  const body = (await res.json()) as { files: Record<string, RepeatFileWire | null>; missingPhotos?: Record<string, string[]> };
+  const files: Record<string, WizardReusedFile | null> = {};
+  for (const [id, f] of Object.entries(body.files ?? {})) files[id] = f ? reuseFromRepeatFile(f) : null;
+  return { files, missingPhotos: body.missingPhotos ?? {} };
 }
