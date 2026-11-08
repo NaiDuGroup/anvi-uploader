@@ -24,11 +24,14 @@ export default function ClientPicker({
   onChange,
   t,
   disabled,
+  inlineDropdown = false,
 }: {
   value: ClientPickerValue | null;
   onChange: (next: ClientPickerValue | null) => void;
   t: TAdmin;
   disabled?: boolean;
+  /** Dropdown in the normal flow (inside scrolling dialogs it is not clipped). */
+  inlineDropdown?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -106,7 +109,12 @@ export default function ClientPicker({
       )}
 
       {open && !disabled && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+        <div
+          className={cn(
+            "mt-1 rounded-lg border border-gray-200 bg-white py-1 shadow-lg",
+            inlineDropdown ? "relative" : "absolute left-0 right-0 top-full z-50",
+          )}
+        >
           <div className="border-b border-gray-100 px-2 pb-2 pt-1">
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />

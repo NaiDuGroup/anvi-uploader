@@ -152,7 +152,15 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
             Файлов в заказе: {target.fileCount}. Названия — по именам файлов; ссылки и уже удалённые файлы будут пропущены.
           </p>
         )}
-        <LibraryOwnerField value={owner} onChange={setOwner} orderClient={target.orderClient} disabled={busy} />
+        <LibraryOwnerField
+          value={owner}
+          onChange={(next) => {
+            setOwner(next);
+            setError(null);
+          }}
+          orderClient={target.orderClient}
+          disabled={busy}
+        />
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-gray-700">Теги</span>
           <input

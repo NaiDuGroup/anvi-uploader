@@ -69,6 +69,7 @@ export function LibraryOwnerField({
             value={picked}
             t={t.admin}
             disabled={disabled}
+            inlineDropdown
             onChange={(c) => {
               setPicked(c);
               onChange(c ? { clientId: c.id, clientName: c.personName || c.companyName || c.phone } : { clientId: "", clientName: null });

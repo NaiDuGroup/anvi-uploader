@@ -77,7 +77,10 @@ export function EditLibraryItemDialog({
         </label>
         <LibraryOwnerField
           value={owner}
-          onChange={setOwner}
+          onChange={(next) => {
+            setOwner(next);
+            setError(null);
+          }}
           orderClient={item.clientId ? { clientId: item.clientId, clientName: item.clientName } : null}
           orderClientLabel="Текущий клиент"
           disabled={busy}
