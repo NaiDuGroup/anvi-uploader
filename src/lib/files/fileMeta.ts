@@ -4,6 +4,7 @@
  * Server only: reads the file from storage once; the result is kept on `File`.
  */
 
+import { parseJpegHead, parsePngHead } from "./localFileMeta";
 import sharp from "sharp";
 import { pdfPageMeta } from "./pdfPageMeta";
 import { readLocalFile } from "@/lib/local-storage";
@@ -58,7 +59,12 @@ export async function rasterMeta(bytes: Buffer): Promise<Pick<FileMeta, "pixelWi
   const swap = (meta.orientation ?? 1) >= 5;
   const pixelWidth = swap ? meta.height : meta.width;
   const pixelHeight = swap ? meta.width : meta.height;
-  const dpi = meta.density && meta.density > 1 ? round(meta.density, 0.01) : null;
+  // sharp reports 72 dpi for a PNG / JPEG that has no density at all (libvips default):
+  // read those two from the header, as the browser does, so «no dpi» stays «no dpi».
+  const u8 = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const head = meta.format === "png" ? parsePngHead(u8) : meta.format === "jpeg" ? parseJpegHead(u8) : null;
+  const density = head ? head.dpi : (meta.density ?? null);
+  const dpi = density && density > 1 ? round(density, 0.01) : null;
   return {
     pixelWidth,
     pixelHeight,

@@ -9,6 +9,7 @@ import {
   giftSetGroupSlotIds,
   giftSetLineInput,
   giftSetReservedStock,
+  giftSetSwatchHex,
   giftSetRowFromLine,
   giftSetRowPlans,
   giftSetRowTotals,
@@ -3963,7 +3964,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         <td className="min-w-0 px-2.5 py-2 align-top text-xs text-gray-700">
           {item ? (
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/10" style={{ backgroundColor: item.colorHex ?? "#e5e7eb" }} aria-hidden />
+              <span className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/10" style={{ backgroundColor: giftSetSwatchHex(item) }} aria-hidden />
               <span className="font-medium">{ready ? (item.variantLabel ?? item.itemNames.ru) : `${item.itemNames.ru}${item.variantLabel ? ` · ${item.variantLabel}` : ""}`}</span>
               <span className="text-gray-400">{item.sku}</span>
             </span>
