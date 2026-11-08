@@ -17,6 +17,7 @@ export const printMethodsRu: PrintMethodsDictionary = {
   addPreset: "Добавить формат",
   deletePreset: "Удалить",
   confirmDeletePreset: (label) => `Удалить формат «${label}»? Старые заказы не изменятся.`,
+  confirmDeletePresetTitle: "Удалить формат?",
   fieldInvalid: (label) => `Проверьте поле «${label}»`,
   units: {
     cm: "см",

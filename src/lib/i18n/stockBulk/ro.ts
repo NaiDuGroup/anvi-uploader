@@ -39,6 +39,9 @@ export const stockBulkRo: StockBulkDictionary = {
   toolDealerDiscount: "Reducere dealer, %",
   toolsHint: "Modificările apar întâi în tabel — se salvează după «Salvează».",
   unsavedLeave: "Sunt prețuri nesalvate. Părăsiți pagina?",
+  unsavedLeaveTitle: "Prețuri nesalvate",
+  unsavedLeaveConfirm: "Pleacă fără salvare",
+  unsavedStay: "Rămân",
 
   stocktakeTitle: "Inventariere",
   stocktakeIntro: "Introduceți cantitatea reală. Rândurile goale nu se modifică — puteți număra pe părți; ce ați introdus se păstrează în acest browser până la înregistrare.",

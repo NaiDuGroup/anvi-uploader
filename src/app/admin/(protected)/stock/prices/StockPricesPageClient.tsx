@@ -15,6 +15,7 @@ import {
   sanitizeMoneyInput,
 } from "@/lib/money";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
 import { CatalogUnitCost } from "@/app/admin/_components/stock/CatalogUnitCost";
 import {
   ColorSwatch,
@@ -120,6 +121,8 @@ export default function StockPricesPageClient({
   const [showInactive, setShowInactive] = useState<boolean>(false);
   const [onlyMissing, setOnlyMissing] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
+  /** Category picked while prices are unsaved: waits for «Уйти без сохранения». */
+  const [leaveTo, setLeaveTo] = useState<string | null>(null);
   const [message, setMessage] = useState<{
     kind: "ok" | "error";
     text: string;
@@ -192,7 +195,14 @@ export default function StockPricesPageClient({
   }
 
   function chooseCategory(next: string): void {
-    if (dirty && !window.confirm(b.unsavedLeave)) return;
+    if (dirty) {
+      setLeaveTo(next);
+      return;
+    }
+    switchCategory(next);
+  }
+
+  function switchCategory(next: string): void {
     setDrafts({});
     setMessage(null);
     setCode(next);
@@ -661,6 +671,18 @@ export default function StockPricesPageClient({
           </div>
         </div>
       </div>
+      <AdminConfirmDialog
+        open={leaveTo !== null}
+        title={b.unsavedLeaveTitle}
+        description={b.unsavedLeave}
+        confirmLabel={b.unsavedLeaveConfirm}
+        cancelLabel={b.unsavedStay}
+        onConfirm={() => {
+          if (leaveTo !== null) switchCategory(leaveTo);
+          setLeaveTo(null);
+        }}
+        onClose={() => setLeaveTo(null)}
+      />
     </main>
   );
 }

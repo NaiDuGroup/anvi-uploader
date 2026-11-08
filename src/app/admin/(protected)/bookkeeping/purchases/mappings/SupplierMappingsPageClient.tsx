@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import type {
@@ -59,6 +60,7 @@ function MappingRow({
   const [draft, setDraft] = useState<Draft>(initial);
   const [busy, setBusy] = useState<boolean>(false);
   const [failed, setFailed] = useState<boolean>(false);
+  const [confirmingDelete, setConfirmingDelete] = useState<boolean>(false);
 
   const draftKind: StockTargetKind = parseChoice(draft.choice)?.kind ?? StockTargetKind.Ignore;
   const current: StockTargetOption | undefined = findTarget(
@@ -198,13 +200,24 @@ function MappingRow({
             variant="ghost"
             disabled={busy}
             aria-label={p.delete}
-            onClick={() => {
-              if (window.confirm(p.confirmDelete)) void send({ method: "DELETE" });
-            }}
+            onClick={() => setConfirmingDelete(true)}
           >
             <Trash2 className="h-4 w-4 text-gray-500" aria-hidden />
           </Button>
         </div>
+        <AdminConfirmDialog
+          open={confirmingDelete}
+          title={p.confirmDeleteTitle}
+          description={p.confirmDelete}
+          confirmLabel={p.delete}
+          cancelLabel={t.common.cancel}
+          busy={busy}
+          onConfirm={() => {
+            // A failed delete marks the row red, as before.
+            void send({ method: "DELETE" }).finally(() => setConfirmingDelete(false));
+          }}
+          onClose={() => setConfirmingDelete(false)}
+        />
       </td>
     </tr>
   );

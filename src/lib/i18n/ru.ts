@@ -45,6 +45,7 @@ export const ru: TranslationDictionary = {
     prevPage: "Предыдущая страница",
     nextPage: "Следующая страница",
     language: "Язык",
+    cancel: "Отмена",
   },
   productWindow: {
     details: "Фото и описание",
@@ -2523,6 +2524,8 @@ export const ru: TranslationDictionary = {
     historyDelete: "Удалить",
     historyDeleteConfirm:
       "Убрать этот макет из истории? Файл всё равно удалится автоматически через 7 дней.",
+    historyDeleteTitle: "Убрать из истории?",
+    historyDeleteError: "Не получилось удалить. Попробуйте ещё раз.",
     historyLoadError: "Не удалось загрузить историю",
     historyUploadWarn:
       "Файл скачан, но не удалось сохранить его в общую историю",
@@ -2739,6 +2742,7 @@ export const ru: TranslationDictionary = {
     save: "Сохранить",
     delete: "Удалить",
     confirmDelete: "Удалить правило? Уже проведённые приходы не изменятся.",
+    confirmDeleteTitle: "Удалить правило?",
   },
   stock: {
     hubCategoriesLink: "Категории",

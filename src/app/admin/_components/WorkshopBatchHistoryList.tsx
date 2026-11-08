@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Download, FileText, History, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { workshopBatchLifecycleStatus } from "@/lib/workshopBatches/lifecycle";
@@ -111,6 +112,9 @@ export function WorkshopBatchHistoryList({ kind, refreshKey }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  /** Entry waiting for «Убрать из истории?», and why its delete failed. */
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -137,21 +141,23 @@ export function WorkshopBatchHistoryList({ kind, refreshKey }: Props) {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      if (!window.confirm(s.historyDeleteConfirm)) return;
       setDeletingId(id);
+      setDeleteError(null);
       try {
         const res = await fetch(`/api/workshop-batches/${id}`, {
           method: "DELETE",
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         setItems((prev) => (prev ? prev.filter((it) => it.id !== id) : prev));
+        setConfirmId(null);
       } catch (error) {
         console.error("Failed to delete workshop batch:", error);
+        setDeleteError(s.historyDeleteError);
       } finally {
         setDeletingId(null);
       }
     },
-    [s.historyDeleteConfirm],
+    [s.historyDeleteError],
   );
 
   const count = items?.length ?? 0;
@@ -256,7 +262,8 @@ export function WorkshopBatchHistoryList({ kind, refreshKey }: Props) {
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          void handleDelete(it.id);
+                          setDeleteError(null);
+                          setConfirmId(it.id);
                         }}
                         disabled={deletingId === it.id}
                         className="text-red-600 hover:bg-red-50 hover:text-red-700"
@@ -276,6 +283,19 @@ export function WorkshopBatchHistoryList({ kind, refreshKey }: Props) {
           </ul>
         )}
       </div>
+      <AdminConfirmDialog
+        open={confirmId !== null}
+        title={s.historyDeleteTitle}
+        description={s.historyDeleteConfirm}
+        confirmLabel={s.historyDelete}
+        cancelLabel={t.common.cancel}
+        busy={confirmId !== null && deletingId === confirmId}
+        error={deleteError}
+        onConfirm={() => {
+          if (confirmId) void handleDelete(confirmId);
+        }}
+        onClose={() => setConfirmId(null)}
+      />
     </section>
   );
 }

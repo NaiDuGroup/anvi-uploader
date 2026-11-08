@@ -29,6 +29,7 @@ import type {
 import { parsePrintMethods, PRINT_METHODS, PrintMethod } from "@/lib/stock/unified/printMethods";
 import { errorText, formatMdl, importFetch, importSwrFetcher } from "@/app/admin/_components/imports/importsApi";
 import { ImportStatusBadge, MissingDocumentsBadge } from "@/app/admin/_components/imports/ImportBadges";
+import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
 
 const card = "rounded-xl border border-gray-200 bg-white p-4 shadow-sm";
 const h2 = "mb-3 text-sm font-semibold text-gray-900";
@@ -79,6 +80,22 @@ export default function ImportDetailClient({ id }: { id: string }) {
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [readResult, setReadResult] = useState<ReadResult | null>(null);
+  /** «Удалить импорт?» dialog: open, running, and why it failed. */
+  const [deleteOpen, setDeleteOpen] = useState<boolean>(false);
+  const [deleteBusy, setDeleteBusy] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function deleteImport(): Promise<void> {
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await importFetch(url, { method: "DELETE" });
+      router.push("/admin/stock/imports");
+    } catch (e) {
+      setDeleteError(errorText(e, ti.errors, ti.errorFallback));
+      setDeleteBusy(false);
+    }
+  }
 
   const fail = (e: unknown) => setMessage({ ok: false, text: errorText(e, ti.errors, ti.errorFallback) });
 
@@ -159,14 +176,9 @@ export default function ImportDetailClient({ id }: { id: string }) {
               ti.header.saved,
             )
           }
-          onDelete={async () => {
-            if (!window.confirm(ti.header.confirmDelete)) return;
-            try {
-              await importFetch(url, { method: "DELETE" });
-              router.push("/admin/stock/imports");
-            } catch (e) {
-              fail(e);
-            }
+          onDelete={() => {
+            setDeleteError(null);
+            setDeleteOpen(true);
           }}
         />
         <div className="grid content-start gap-4">
@@ -198,6 +210,17 @@ export default function ImportDetailClient({ id }: { id: string }) {
 
       <LinesCard data={data} busy={busy} act={act} readResult={readResult} />
       <PostCard data={data} busy={busy} act={act} />
+      <AdminConfirmDialog
+        open={deleteOpen}
+        title={ti.header.confirmDeleteTitle}
+        description={ti.header.confirmDelete}
+        confirmLabel={ti.header.delete}
+        cancelLabel={t.common.cancel}
+        busy={deleteBusy}
+        error={deleteError}
+        onConfirm={() => void deleteImport()}
+        onClose={() => setDeleteOpen(false)}
+      />
     </Shell>
   );
 }
@@ -333,6 +356,9 @@ function DocumentsCard({
   const base = `/api/admin/imports/${data.id}`;
   const [kind, setKind] = useState<ImportDocumentKind>(data.documents.length === 0 ? "proforma" : "declaration");
   const [uploadError, setUploadError] = useState<string | null>(null);
+  /** Document waiting for «Убрать документ?». */
+  const [removing, setRemoving] = useState<{ id: string; fileName: string } | null>(null);
+  const cancelLabel: string = useLanguageStore((s) => s.t.common.cancel);
   const fileRef = useRef<HTMLInputElement>(null);
   const posted: boolean = data.postedMode != null;
 
@@ -422,10 +448,7 @@ function DocumentsCard({
                   type="button"
                   aria-label={ti.docs.remove}
                   className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-red-600"
-                  onClick={() => {
-                    if (!window.confirm(ti.docs.confirmRemove(d.fileName))) return;
-                    void act("doc", () => importFetch<ImportDetailJson>(`${base}/documents/${d.id}`, { method: "DELETE" }));
-                  }}
+                  onClick={() => setRemoving({ id: d.id, fileName: d.fileName })}
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -449,6 +472,23 @@ function DocumentsCard({
         </Button>
       </div>
       {uploadError && <p className="mt-2 text-xs text-red-600">{uploadError}</p>}
+      <AdminConfirmDialog
+        open={removing !== null}
+        title={ti.docs.confirmRemoveTitle}
+        description={removing ? ti.docs.confirmRemove(removing.fileName) : ""}
+        confirmLabel={ti.docs.remove}
+        cancelLabel={cancelLabel}
+        busy={busy === "doc"}
+        onConfirm={() => {
+          if (!removing) return;
+          const docId: string = removing.id;
+          // A failure shows in the page message, as before.
+          void act("doc", () => importFetch<ImportDetailJson>(`${base}/documents/${docId}`, { method: "DELETE" })).finally(() =>
+            setRemoving(null),
+          );
+        }}
+        onClose={() => setRemoving(null)}
+      />
     </section>
   );
 }
@@ -887,6 +927,8 @@ function PostCard({ data, busy, act }: { data: ImportDetailJson; busy: string | 
   const { t, locale } = useLanguageStore();
   const ti = t.imports;
   const [mode, setMode] = useState<ImportPostingMode>("normal");
+  /** Which in-app confirm is open: post (mode picked below) or undo the posting. */
+  const [confirming, setConfirming] = useState<"post" | "unpost" | null>(null);
   const base = `/api/admin/imports/${data.id}`;
   const posted = data.postedMode === "normal" || data.postedMode === "historical" ? data.postedMode : null;
   const changedAfterPost: boolean =
@@ -918,10 +960,7 @@ function PostCard({ data, busy, act }: { data: ImportDetailJson; busy: string | 
                 variant="outline"
                 className="text-red-600"
                 disabled={busy === "unpost"}
-                onClick={() => {
-                  if (!window.confirm(ti.post.confirmUnpost)) return;
-                  void act("unpost", () => importFetch<ImportDetailJson>(`${base}/unpost`, { method: "POST" }));
-                }}
+                onClick={() => setConfirming("unpost")}
               >
                 {ti.post.unpost}
               </Button>
@@ -949,16 +988,42 @@ function PostCard({ data, busy, act }: { data: ImportDetailJson; busy: string | 
           </div>
           <Button
             disabled={busy === "post" || data.lines.length === 0}
-            onClick={() => {
-              if (!window.confirm(ti.post.confirmPost(ti.postedModes[mode]))) return;
-              post(mode);
-            }}
+            onClick={() => setConfirming("post")}
           >
             {busy === "post" && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
             {ti.post.post}
           </Button>
         </div>
       )}
+      <AdminConfirmDialog
+        open={confirming === "post"}
+        title={ti.post.confirmPostTitle}
+        description={ti.post.confirmPost(ti.postedModes[mode])}
+        confirmLabel={ti.post.post}
+        cancelLabel={t.common.cancel}
+        confirmVariant="default"
+        role="dialog"
+        busy={busy === "post"}
+        onConfirm={() => {
+          // A failure shows in the page message, as before.
+          void act("post", () => importFetch<ImportDetailJson>(`${base}/post`, { method: "POST", body: JSON.stringify({ mode }) }), ti.statuses.posted).finally(
+            () => setConfirming(null),
+          );
+        }}
+        onClose={() => setConfirming(null)}
+      />
+      <AdminConfirmDialog
+        open={confirming === "unpost"}
+        title={ti.post.confirmUnpostTitle}
+        description={ti.post.confirmUnpost}
+        confirmLabel={ti.post.unpost}
+        cancelLabel={t.common.cancel}
+        busy={busy === "unpost"}
+        onConfirm={() => {
+          void act("unpost", () => importFetch<ImportDetailJson>(`${base}/unpost`, { method: "POST" })).finally(() => setConfirming(null));
+        }}
+        onClose={() => setConfirming(null)}
+      />
     </section>
   );
 }

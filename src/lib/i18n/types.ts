@@ -74,6 +74,8 @@ export interface TranslationDictionary {
     prevPage: string;
     nextPage: string;
     language: string;
+    /** Cancel button of in-app confirm dialogs. */
+    cancel: string;
   };
   productWindow: {
     details: string;
@@ -2627,6 +2629,8 @@ export interface TranslationDictionary {
     historyDownload: string;
     historyDelete: string;
     historyDeleteConfirm: string;
+    historyDeleteTitle: string;
+    historyDeleteError: string;
     /** Toast-ish warning under the tool when the DB upload after compose fails. */
     historyLoadError: string;
     historyUploadWarn: string;
@@ -2827,6 +2831,7 @@ export interface TranslationDictionary {
     save: string;
     delete: string;
     confirmDelete: string;
+    confirmDeleteTitle: string;
   };
   /** Unified stock (единый склад): category pages, item editor, stock operations. */
   stock: {

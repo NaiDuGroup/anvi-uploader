@@ -39,6 +39,9 @@ export const stockBulkRu: StockBulkDictionary = {
   toolDealerDiscount: "Скидка дилеру, %",
   toolsHint: "Изменения сначала видны в таблице — запишутся после «Сохранить».",
   unsavedLeave: "Есть несохранённые цены. Уйти со страницы?",
+  unsavedLeaveTitle: "Цены не сохранены",
+  unsavedLeaveConfirm: "Уйти без сохранения",
+  unsavedStay: "Остаться",
 
   stocktakeTitle: "Инвентаризация",
   stocktakeIntro: "Впишите фактическое количество. Пустые строки не меняются — можно считать по частям; набранное сохраняется в этом браузере до проведения.",

@@ -50,6 +50,7 @@ import { saveDoc } from "@/lib/studio/storage";
 import { CARD_BACK_ID, CARD_FRONT_ID, type SheetStudioKind, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import { studioBackTemplates, studioTemplateById, type StudioTemplate } from "@/lib/studio/templates";
 import { studioApprovalChecks, studioVerifyNotes } from "@/lib/studio/verifyChecklist";
+import { ShopConfirmDialog } from "../ShopConfirmDialog";
 import { useShopLang } from "../ShopLangProvider";
 import type { StudioEditorApi } from "./StudioApp";
 import { PICTURE_BG, StudioLivePicture, productThumbnail, useStableAssets, useStudioProductLook } from "./StudioProductPicture";
@@ -82,6 +83,7 @@ export function StudioCardSideBar({ api, fields }: { api: StudioEditorApi; field
   const kind: SheetStudioKind = api.kind === "flyer" ? "flyer" : "card";
   const t = studioSheetT(kind, api.lang);
   const [chooser, setChooser] = useState(false);
+  const [confirmRemoveBack, setConfirmRemoveBack] = useState(false);
   const hasBack: boolean = cardHasBack(api.doc);
   const onBack: boolean = api.spec.id === CARD_BACK_ID;
   // Cards: the fixed «+0,50 lei/buc.» (no quote); flyers: what the back adds to the default pack.
@@ -105,11 +107,7 @@ export function StudioCardSideBar({ api, fields }: { api: StudioEditorApi; field
                 aria-label={t("removeBack")}
                 title={t("removeBack")}
                 className="flex h-10 w-10 items-center justify-center rounded-[9px] text-[#a82e22]"
-                onClick={() => {
-                  if (!window.confirm(t("removeBackConfirm"))) return;
-                  api.setSurface(CARD_FRONT_ID);
-                  api.setDoc(removeCardBack(api.doc));
-                }}
+                onClick={() => setConfirmRemoveBack(true)}
               >
                 <Icon d={STUDIO_ICONS.trash} size={18} />
               </button>
@@ -123,6 +121,19 @@ export function StudioCardSideBar({ api, fields }: { api: StudioEditorApi; field
           </button>
         )}
       </div>
+      <ShopConfirmDialog
+        open={confirmRemoveBack}
+        title={t("removeBackTitle")}
+        description={t("removeBackConfirm")}
+        confirmLabel={t("removeBack")}
+        cancelLabel={t("cancel")}
+        onClose={() => setConfirmRemoveBack(false)}
+        onConfirm={() => {
+          setConfirmRemoveBack(false);
+          api.setSurface(CARD_FRONT_ID);
+          api.setDoc(removeCardBack(api.doc));
+        }}
+      />
       {chooser ? (
         <CardBackChooser
           api={api}

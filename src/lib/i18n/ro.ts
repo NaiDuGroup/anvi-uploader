@@ -45,6 +45,7 @@ export const ro: TranslationDictionary = {
     prevPage: "Pagina anterioară",
     nextPage: "Pagina următoare",
     language: "Limba",
+    cancel: "Anulează",
   },
   productWindow: {
     details: "Poze și descriere",
@@ -2374,6 +2375,8 @@ export const ro: TranslationDictionary = {
     historyDelete: "Șterge",
     historyDeleteConfirm:
       "Elimini macheta din istoric? Fișierul se șterge oricum automat după 7 zile.",
+    historyDeleteTitle: "Elimini din istoric?",
+    historyDeleteError: "Nu s-a putut șterge. Încercați din nou.",
     historyLoadError: "Nu s-a putut încărca istoricul",
     historyUploadWarn:
       "Fișierul s-a descărcat, dar nu s-a putut salva în istoricul comun",
@@ -2578,6 +2581,7 @@ export const ro: TranslationDictionary = {
     save: "Salvează",
     delete: "Șterge",
     confirmDelete: "Ștergeți regula? Intrările deja înregistrate nu se schimbă.",
+    confirmDeleteTitle: "Ștergeți regula?",
   },
   stock: {
     hubCategoriesLink: "Categorii",

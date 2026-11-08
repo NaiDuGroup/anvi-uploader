@@ -36,6 +36,7 @@ export interface PrintMethodsDictionary {
   addPreset: string;
   deletePreset: string;
   confirmDeletePreset: (label: string) => string;
+  confirmDeletePresetTitle: string;
   fieldInvalid: (label: string) => string;
   units: Record<SettingsFieldUnit, string>;
   methods: Record<PrintMethodCode, MethodPageText>;

@@ -5,6 +5,7 @@ import type { CustomerFile } from "@/lib/shop/account/accountRules";
 import type { CheckoutDraft } from "@/lib/storefront/checkoutDraft";
 import { filterPhoneInput } from "@/lib/storefront/checkout";
 import { formatOrderDate } from "@/lib/storefront/format";
+import { ShopConfirmDialog } from "../ShopConfirmDialog";
 import { FileIcon } from "../ShopIcons";
 import { useShopLang } from "../ShopLangProvider";
 
@@ -24,10 +25,15 @@ export function AccountFilesClient({ initial }: { initial: CustomerFile[] }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ key: string; text: string } | null>(null);
 
+  /** The file waiting for «Удалить?» in the dialog, and why its delete failed. */
+  const [pending, setPending] = useState<CustomerFile | null>(null);
+  const [pendingError, setPendingError] = useState<string | null>(null);
+
   const remove = async (f: CustomerFile) => {
-    if (!window.confirm(t("accFileDeleteConfirm", { name: f.name }))) return;
     setBusy(f.key);
     setMsg(null);
+    setPendingError(null);
+    let failure: string | null = null;
     try {
       const res = await fetch("/api/shop/account/files", {
         method: "DELETE",
@@ -36,50 +42,79 @@ export function AccountFilesClient({ initial }: { initial: CustomerFile[] }) {
       });
       const body = (await res.json().catch(() => null)) as { orders?: number[] } | null;
       if (res.ok) setFiles((list) => list.filter((x) => x.key !== f.key));
-      else if (res.status === 409) setMsg({ key: f.key, text: t("accFileInUse", { list: (body?.orders ?? f.inUseBy).join(", ") }) });
-      else setMsg({ key: f.key, text: t("accError") });
+      else if (res.status === 409) failure = t("accFileInUse", { list: (body?.orders ?? f.inUseBy).join(", ") });
+      else failure = t("accError");
     } catch {
-      setMsg({ key: f.key, text: t("errNetwork") });
+      failure = t("errNetwork");
     }
     setBusy(null);
+    if (failure) {
+      setMsg({ key: f.key, text: failure });
+      setPendingError(failure);
+    } else setPending(null);
   };
+
+  const confirmDialog = (
+    <ShopConfirmDialog
+      open={pending !== null}
+      title={t("accFileDeleteTitle")}
+      description={pending ? t("accFileDeleteConfirm", { name: pending.name }) : ""}
+      confirmLabel={t("accFileDelete")}
+      cancelLabel={t("accFileDeleteCancel")}
+      busy={pending !== null && busy === pending.key}
+      error={pendingError}
+      onClose={() => {
+        setPending(null);
+        setPendingError(null);
+      }}
+      onConfirm={() => {
+        if (pending) void remove(pending);
+      }}
+    />
+  );
 
   if (files.length === 0) return <p className="m-0 text-lg text-(--muted)">{t("accFilesEmpty")}</p>;
   return (
-    <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-      {files.map((f) => (
-        <li key={f.key} className="flex flex-col gap-2 rounded-[14px] border-[1.5px] border-(--line) px-4 py-3">
-          <div className="flex items-center gap-3">
-            <FileIcon size={22} />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <b className="truncate">{f.name}</b>
-              <span className="text-sm text-(--muted)">
-                {[formatOrderDate(f.createdAt, lang), sizeText(f.sizeBytes), t("accFileOrders", { list: f.orderNumbers.map((n) => `#${n}`).join(", ") })]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </span>
+    <>
+      <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+        {files.map((f) => (
+          <li key={f.key} className="flex flex-col gap-2 rounded-[14px] border-[1.5px] border-(--line) px-4 py-3">
+            <div className="flex items-center gap-3">
+              <FileIcon size={22} />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <b className="truncate">{f.name}</b>
+                <span className="text-sm text-(--muted)">
+                  {[formatOrderDate(f.createdAt, lang), sizeText(f.sizeBytes), t("accFileOrders", { list: f.orderNumbers.map((n) => `#${n}`).join(", ") })]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingError(null);
+                  setPending(f);
+                }}
+                disabled={busy === f.key || f.inUseBy.length > 0}
+                aria-label={t("accFileDeleteAria", { name: f.name })}
+                className="inline-flex min-h-10 items-center rounded-lg px-2 font-semibold underline disabled:no-underline disabled:opacity-50"
+              >
+                {t("accFileDelete")}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => remove(f)}
-              disabled={busy === f.key || f.inUseBy.length > 0}
-              aria-label={t("accFileDeleteAria", { name: f.name })}
-              className="inline-flex min-h-10 items-center rounded-lg px-2 font-semibold underline disabled:no-underline disabled:opacity-50"
-            >
-              {t("accFileDelete")}
-            </button>
-          </div>
-          {f.inUseBy.length ? (
-            <span className="text-sm text-(--muted2)">{t("accFileInUse", { list: f.inUseBy.join(", ") })}</span>
-          ) : null}
-          {msg?.key === f.key ? (
-            <span role="alert" className="text-sm font-semibold text-(--err)">
-              {msg.text}
-            </span>
-          ) : null}
-        </li>
-      ))}
-    </ul>
+            {f.inUseBy.length ? (
+              <span className="text-sm text-(--muted2)">{t("accFileInUse", { list: f.inUseBy.join(", ") })}</span>
+            ) : null}
+            {msg?.key === f.key ? (
+              <span role="alert" className="text-sm font-semibold text-(--err)">
+                {msg.text}
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {confirmDialog}
+    </>
   );
 }
 

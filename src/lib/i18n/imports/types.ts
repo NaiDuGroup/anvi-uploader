@@ -46,6 +46,7 @@ export interface ImportsDictionary {
     create: string;
     delete: string;
     confirmDelete: string;
+    confirmDeleteTitle: string;
   };
   notes: { title: string; placeholder: string; related: string; relatedNone: string };
   docs: {
@@ -57,6 +58,7 @@ export interface ImportsDictionary {
     download: string;
     remove: string;
     confirmRemove: (name: string) => string;
+    confirmRemoveTitle: string;
     empty: string;
     missingTitle: string;
     readLines: string;
@@ -147,6 +149,8 @@ export interface ImportsDictionary {
     unpost: string;
     confirmPost: (mode: string) => string;
     confirmUnpost: string;
+    confirmPostTitle: string;
+    confirmUnpostTitle: string;
     posted: (mode: string, date: string) => string;
     provisionalNote: string;
     changedAfterPost: string;

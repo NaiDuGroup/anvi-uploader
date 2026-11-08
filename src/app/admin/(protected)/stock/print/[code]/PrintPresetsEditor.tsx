@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
 import { dtfErrorText, dtfRequest, parseDecimal } from "@/lib/dtf/dtfClientApi";
 import { PRINT_METHOD_API } from "@/lib/printMethods/dto";
 import { PrintMethodCode } from "@/lib/printMethods/methods";
@@ -73,6 +74,9 @@ export default function PrintPresetsEditor({
   const text = p.methods[code];
   const [rows, setRows] = useState<PresetDraft[]>(() => initial.map(toPresetDraft));
   const [busyRow, setBusyRow] = useState<number | null>(null);
+  /** Saved format waiting for «Удалить формат?», and why its delete failed. */
+  const [deleting, setDeleting] = useState<{ index: number; id: string; label: string } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   /** DTF transfers can be handed to dealers unpressed. */
   const withNoPress: boolean = code === PrintMethodCode.Dtf;
 
@@ -101,20 +105,28 @@ export default function PrintPresetsEditor({
     }
   }
 
-  async function remove(index: number): Promise<void> {
+  function remove(index: number): void {
     const row: PresetDraft | undefined = rows[index];
     if (!row) return;
     if (!row.id) {
       setRows((prev) => prev.filter((_, i) => i !== index));
       return;
     }
-    if (!window.confirm(p.confirmDeletePreset(row.label))) return;
-    setBusyRow(index);
+    setDeleteError(null);
+    setDeleting({ index, id: row.id, label: row.label });
+  }
+
+  /** Runs the delete confirmed in the dialog; a failure stays in the dialog. */
+  async function confirmRemove(): Promise<void> {
+    if (!deleting) return;
+    setBusyRow(deleting.index);
+    setDeleteError(null);
     try {
-      await dtfRequest(PRINT_METHOD_API.preset(code, row.id), "DELETE");
+      await dtfRequest(PRINT_METHOD_API.preset(code, deleting.id), "DELETE");
       await onChanged();
+      setDeleting(null);
     } catch (e) {
-      onFeedback({ ok: false, text: dtfErrorText(e, t) });
+      setDeleteError(dtfErrorText(e, t));
     } finally {
       setBusyRow(null);
     }
@@ -202,7 +214,7 @@ export default function PrintPresetsEditor({
                     className="ml-1 rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-red-600"
                     aria-label={p.deletePreset}
                     disabled={busyRow !== null}
-                    onClick={() => void remove(i)}
+                    onClick={() => remove(i)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -216,6 +228,17 @@ export default function PrintPresetsEditor({
         <Plus className="mr-1 h-4 w-4" />
         {p.addPreset}
       </Button>
+      <AdminConfirmDialog
+        open={deleting !== null}
+        title={p.confirmDeletePresetTitle}
+        description={deleting ? p.confirmDeletePreset(deleting.label) : ""}
+        confirmLabel={p.deletePreset}
+        cancelLabel={t.common.cancel}
+        busy={busyRow !== null}
+        error={deleteError}
+        onConfirm={() => void confirmRemove()}
+        onClose={() => setDeleting(null)}
+      />
     </div>
   );
 }

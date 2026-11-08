@@ -45,6 +45,7 @@ export const en: TranslationDictionary = {
     prevPage: "Previous page",
     nextPage: "Next page",
     language: "Language",
+    cancel: "Cancel",
   },
   productWindow: {
     details: "Photos and description",
@@ -2365,6 +2366,8 @@ export const en: TranslationDictionary = {
     historyDelete: "Delete",
     historyDeleteConfirm:
       "Remove this layout from history? The file will still auto-delete after 7 days.",
+    historyDeleteTitle: "Remove from history?",
+    historyDeleteError: "Could not delete. Please try again.",
     historyLoadError: "Could not load history",
     historyUploadWarn:
       "The file downloaded locally but could not be saved to the shared history",
@@ -2569,6 +2572,7 @@ export const en: TranslationDictionary = {
     save: "Save",
     delete: "Delete",
     confirmDelete: "Delete this rule? Receipts already posted stay unchanged.",
+    confirmDeleteTitle: "Delete this rule?",
   },
   stock: {
     hubCategoriesLink: "Categories",

@@ -38,6 +38,9 @@ export type StockBulkDictionary = {
   toolDealerDiscount: string;
   toolsHint: string;
   unsavedLeave: string;
+  unsavedLeaveTitle: string;
+  unsavedLeaveConfirm: string;
+  unsavedStay: string;
 
   stocktakeTitle: string;
   stocktakeIntro: string;
