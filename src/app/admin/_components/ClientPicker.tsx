@@ -42,26 +42,35 @@ export default function ClientPicker({
   const [options, setOptions] = useState<ClientPickerValue[]>([]);
   const wrapRef = useRef<HTMLDivElement>(null);
 
+  // Query whose results are in `options`; while it differs from the typed one we show «Загрузка…», not «Ничего не найдено».
+  const [loadedQuery, setLoadedQuery] = useState<string | null>(null);
+  const latestQuery = useRef("");
+
   const fetchClients = useCallback(async (search: string) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("limit", "40");
       if (search.trim()) params.set("search", search.trim());
-      const res = await fetch(`/api/admin/clients?${params}`);
-      if (!res.ok) {
-        setOptions([]);
-        return;
+      let data: { clients: ClientPickerValue[] } | null = null;
+      try {
+        const res = await fetch(`/api/admin/clients?${params}`);
+        if (res.ok) data = (await res.json()) as { clients: ClientPickerValue[] };
+      } catch {
+        // Network error: show «Ничего не найдено» rather than an endless «Загрузка…».
       }
-      const data = (await res.json()) as { clients: ClientPickerValue[] };
-      setOptions(data.clients ?? []);
+      // A slower earlier request must not overwrite the results of a newer one.
+      if (latestQuery.current !== search) return;
+      setOptions(data?.clients ?? []);
+      setLoadedQuery(search);
     } finally {
-      setLoading(false);
+      if (latestQuery.current === search) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     if (!open) return;
+    latestQuery.current = query;
     const tmr = setTimeout(() => fetchClients(query), 200);
     return () => clearTimeout(tmr);
   }, [open, query, fetchClients]);
@@ -159,7 +168,7 @@ export default function ClientPicker({
             role="listbox"
             aria-label={t.clientPickerLabel}
           >
-            {loading ? (
+            {loading || loadedQuery !== query ? (
               <li className="px-3 py-2 text-sm text-gray-500">{t.clientPickerLoading}</li>
             ) : options.length === 0 ? (
               <li className="px-3 py-2 text-sm text-gray-500">{t.clientPickerEmpty}</li>
