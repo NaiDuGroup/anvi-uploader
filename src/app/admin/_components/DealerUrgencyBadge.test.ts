@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ru } from "@/lib/i18n/ru";
 import { ro } from "@/lib/i18n/ro";
 import { en } from "@/lib/i18n/en";
-import { describeEntry, type HistoryEntry } from "./HistoryPanel";
+import { describeHistoryEntry, type HistoryEntry } from "@/lib/orderHistoryFormat";
 import { DealerUrgencyBadge, DealerUrgencyWaiveContext, dealerUrgencyBadgeText } from "./DealerUrgencyBadge";
 
 const entry = (action: string, metadata: Record<string, unknown>): HistoryEntry => ({
@@ -29,13 +29,13 @@ describe("dealer urgency texts", () => {
   });
 
   it("history entries", () => {
-    expect(describeEntry(entry("urgency_dealer_on", { feeMdl: 50 }), ru)).toBe("Дилер включил срочность (+50 лей)");
-    expect(describeEntry(entry("urgency_dealer_on", { feeMdl: 0 }), ru)).toBe("Дилер включил срочность (бесплатно)");
-    expect(describeEntry(entry("urgency_dealer_off", { feeMdl: 50 }), ru)).toBe("Дилер снял срочность (+50 лей)");
-    expect(describeEntry(entry("urgency_fee_waived", { feeMdl: 50 }), ru)).toBe(
-      "Сотрудник снял доплату за срочность (50 лей)",
-    );
-    expect(describeEntry(entry("urgency_staff_off", { feeMdl: 50 }), ru)).toContain("Сотрудник снял срочность");
+    const text = (action: string, meta: Record<string, unknown>) => describeHistoryEntry(entry(action, meta), ru).text;
+    expect(text("urgency_dealer_on", { feeMdl: 50 })).toBe("попросил(а) сделать заказ срочно (+50 лей)");
+    expect(text("urgency_dealer_on", { feeMdl: 0 })).toBe("попросил(а) сделать заказ срочно (бесплатно)");
+    expect(text("urgency_dealer_off", { feeMdl: 50 })).toBe("отказался(-ась) от срочности");
+    expect(text("urgency_fee_waived", { feeMdl: 50 })).toBe("снял(а) доплату за срочность 50 лей");
+    expect(text("urgency_staff_off", { feeMdl: 50 })).toBe("снял(а) срочность и доплату 50 лей");
+    expect(describeHistoryEntry(entry("urgency_dealer_on", { feeMdl: 50 }), ru).kind).toBe("urgency");
   });
 
   it("every locale has every key (no empty strings)", () => {

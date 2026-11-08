@@ -34,13 +34,27 @@ export async function GET(
       userIds.length > 0
         ? await prisma.user.findMany({
             where: { id: { in: userIds } },
-            select: { id: true, name: true, displayName: true, role: true },
+            select: {
+              id: true,
+              name: true,
+              displayName: true,
+              role: true,
+              studioCustomer: { select: { isDealer: true, companyName: true, personName: true } },
+            },
           })
         : [];
 
     const userMap = new Map(users.map((u) => [u.id, u]));
 
-    const result = logs.map((log) => {
+    // Customer-portal users show as «dealer» / «client» with their company / person name.
+    const nameOf = (u: (typeof users)[number]) =>
+      u.role === "customer"
+        ? (u.studioCustomer?.companyName ?? u.studioCustomer?.personName ?? u.displayName ?? u.name)
+        : (u.displayName ?? u.name);
+    const roleOf = (u: (typeof users)[number]) =>
+      u.role === "customer" ? (u.studioCustomer?.isDealer ? "dealer" : "client") : u.role;
+
+    const entries = logs.map((log) => {
       const u = userMap.get(log.userId);
       return {
         id: log.id,
@@ -50,12 +64,13 @@ export async function GET(
         newValue: log.newValue,
         metadata: log.metadata,
         createdAt: log.createdAt.toISOString(),
-        userName: u ? (u.displayName ?? u.name) : (log.userId === "client" ? "Client" : "Unknown"),
-        userRole: u?.role ?? (log.userId === "client" ? "client" : "unknown"),
+        userName: u ? nameOf(u) : (log.userId === "client" ? "Client" : "Unknown"),
+        userRole: u ? roleOf(u) : (log.userId === "client" ? "client" : "unknown"),
       };
     });
 
-    return NextResponse.json(result);
+    // Staff-only route (`getSessionUser` refuses customers): no customer ever reads this.
+    return NextResponse.json(entries);
   } catch (error) {
     console.error("Failed to fetch order history:", error);
     return NextResponse.json(

@@ -4,6 +4,7 @@ import { dtfRu } from "./dtf/ru";
 import { uvRu } from "./uv/ru";
 import { layoutIssueRu } from "./layoutIssue/ru";
 import { dealerUrgencyRu } from "./dealerUrgency/ru";
+import { orderHistoryRu } from "./orderHistory/ru";
 import { sublimationRu } from "./sublimation/ru";
 import { printMethodsRu } from "./printMethods/ru";
 import { importsRu } from "./imports/ru";
@@ -2620,6 +2621,7 @@ export const ru: TranslationDictionary = {
   uv: uvRu,
   layoutIssue: layoutIssueRu,
   dealerUrgency: dealerUrgencyRu,
+  orderHistory: orderHistoryRu,
   sublimation: sublimationRu,
   printMethods: printMethodsRu,
   imports: importsRu,

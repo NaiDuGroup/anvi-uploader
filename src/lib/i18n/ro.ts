@@ -4,6 +4,7 @@ import { dtfRo } from "./dtf/ro";
 import { uvRo } from "./uv/ro";
 import { layoutIssueRo } from "./layoutIssue/ro";
 import { dealerUrgencyRo } from "./dealerUrgency/ro";
+import { orderHistoryRo } from "./orderHistory/ro";
 import { sublimationRo } from "./sublimation/ro";
 import { printMethodsRo } from "./printMethods/ro";
 import { importsRo } from "./imports/ro";
@@ -2459,6 +2460,7 @@ export const ro: TranslationDictionary = {
   uv: uvRo,
   layoutIssue: layoutIssueRo,
   dealerUrgency: dealerUrgencyRo,
+  orderHistory: orderHistoryRo,
   sublimation: sublimationRo,
   printMethods: printMethodsRo,
   imports: importsRo,
