@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { parseUvLineData } from "@/lib/uv/parseUvLineData";
-import { parseOrderLineSetData } from "@/lib/giftSet/giftSet";
+import { isLegacyReadySetLine, parseOrderLineSetData } from "@/lib/giftSet/giftSet";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { ProductType } from "@/lib/validations";
 
@@ -56,7 +56,8 @@ export const MIXED_PRODUCT_ICON: LucideIcon = Layers;
  * source); a ready gift set (one UV line on the set item) is «Набор».
  */
 export function lineTypeKey(productType: string, uvLineDataRaw?: unknown, setDataRaw?: unknown): LineTypeKey | null {
-  if (productType === "uv_print" && parseOrderLineSetData(setDataRaw)?.kind === "ready") return "gift_set";
+  // Legacy ready set (one UV line for the whole set C); new ones are one line per item.
+  if (productType === "uv_print" && isLegacyReadySetLine(parseOrderLineSetData(setDataRaw))) return "gift_set";
   if (productType === "uv_print") {
     const uv = parseUvLineData(uvLineDataRaw);
     if (uv && (uv.technique === "transfer" || uv.source === "stickers")) return "uv_dtf";

@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateAccountingSettings, invalidateAccountingSettings } from "@/lib/accounting/accountingSettings";
@@ -14,6 +15,13 @@ import {
   type GiftSetTemplate,
 } from "./giftSet";
 import { uvLineAtGiftSetPrice } from "./giftSetUv";
+import { GIFT_SET_CATEGORY_CODE } from "./giftSetCategory";
+import {
+  readySetNotebookSnapshot,
+  readySetPenSnapshot,
+  readySetUvDescription,
+  type ReadySetVariant,
+} from "./giftSetReadyLines";
 
 /** «Шаблоны наборов» (stored, else the defaults). */
 export async function loadGiftSetTemplates(): Promise<GiftSetTemplate[]> {
@@ -39,8 +47,9 @@ function lineCopies(r: ResolvedAdminOrderLine): number {
 
 /**
  * Checks and prices the set groups of resolved lines (in place): assembled
- * set lines get their share of the set price as the price per piece
- * (`manualUnitPriceMdl`), a ready set's UV line is billed at the set price;
+ * and ready set lines get their share of the set price as the price per
+ * piece (`manualUnitPriceMdl`; a ready set's UV zone line: as its line
+ * total), a ready set's notebook / pen lines get the set item's snapshot;
  * every set line gets `giftSetExtras` (group id + set data). Lines outside a
  * set are untouched. Throws {@link AdminOrderResolveError} with a stable code.
  * `allowManualPrice`: staff may override the price of one set; dealers never.
@@ -52,23 +61,42 @@ export async function applyGiftSetsToResolved(
   if (!resolved.some((r) => r.input.set)) return;
   const templates = await loadGiftSetTemplates();
 
-  // Ready sets: the stock item SKU of each UV line's variant.
-  const variantIds = resolved
-    .filter((r) => r.input.set?.role === "ready" && r.uvExtras?.uvLineData.item)
-    .map((r) => r.uvExtras!.uvLineData.item!.variantId);
+  // Ready sets: the set item's colour variant named by the lines.
+  const variantIds = [
+    ...new Set(
+      resolved
+        .map((r) => (r.input.set?.role === "ready" ? (r.input.set.readyVariantId ?? null) : null))
+        .filter((v): v is string => Boolean(v)),
+    ),
+  ];
   const variants = variantIds.length
-    ? await prisma.stockVariant.findMany({ where: { id: { in: variantIds } }, select: { id: true, item: { select: { sku: true } } } })
+    ? await prisma.stockVariant.findMany({
+        where: { id: { in: variantIds } },
+        select: { id: true, sku: true, label: true, options: true, item: { select: { sku: true } } },
+      })
     : [];
-  const itemSkuByVariant = new Map(variants.map((v) => [v.id, v.item.sku]));
+  const variantById = new Map(variants.map((v) => [v.id, v]));
+  const readyVariant = (r: ResolvedAdminOrderLine): ReadySetVariant & { itemSku: string } | null => {
+    const id = r.input.set?.role === "ready" ? r.input.set.readyVariantId : null;
+    const v = id ? variantById.get(id) : undefined;
+    if (!v) return null;
+    const opts = (v.options ?? {}) as Record<string, unknown>;
+    const colourLabel = (typeof opts.color === "string" && opts.color.trim()) || v.label?.trim() || null;
+    const colorHex = typeof opts.colorHex === "string" && /^#[0-9a-f]{6}$/i.test(opts.colorHex) ? opts.colorHex : null;
+    return { sku: v.sku, colourLabel, colorHex, itemSku: v.item.sku };
+  };
 
   const planLines: GiftSetPlanLine[] = resolved.map((r) => {
     const li = r.input;
+    const rv = readyVariant(r);
     return {
       productType: li.productType,
       set: li.set ?? null,
       quantity: lineCopies(r),
       customerType: li.customerType === "dealer" ? "dealer" : "retail",
-      readyItemSku: r.uvExtras?.uvLineData.item ? (itemSkuByVariant.get(r.uvExtras.uvLineData.item.variantId) ?? null) : null,
+      readyItemSku: rv?.itemSku ?? null,
+      readyVariantSku: rv?.sku ?? null,
+      readyColourLabel: rv?.colourLabel ?? null,
       otherItem: Boolean(
         (li.productType === "mug" && (li.mugOther || !r.mugExtras?.stockVariantId)) ||
           (li.productType === "notebook" && (li.notebookOther || !r.notebookExtras?.stockVariantId)) ||
@@ -82,16 +110,36 @@ export async function applyGiftSetsToResolved(
   for (const [i, { groupId, data }] of plan.byLine) {
     const r = resolved[i]!;
     r.giftSetExtras = { setGroupId: groupId, setData: data };
-    if (data.kind === "ready" && r.uvExtras) {
-      r.uvExtras = { uvLineData: uvLineAtGiftSetPrice(r.uvExtras.uvLineData, data.lineTotalMdl) };
+    if (data.kind === "ready" && data.zoneId) {
+      const template = templates.find((t) => t.id === data.templateId)!;
+      const zone = template.zones.find((z) => z.id === data.zoneId)!;
+      const rv = readyVariant(r)!;
+      if (r.input.productType === "notebook") {
+        r.notebookExtras = {
+          stockVariantId: null,
+          notebookProductSnapshot: readySetNotebookSnapshot(zone, rv, randomUUID()) as unknown as Prisma.InputJsonValue,
+        };
+        r.manualUnitPriceMdl = data.lineUnitPriceMdl;
+      } else if (r.input.productType === "pen") {
+        r.penExtras = {
+          stockVariantId: null,
+          penProductSnapshot: readySetPenSnapshot(zone, rv) as unknown as Prisma.InputJsonValue,
+        };
+        r.manualUnitPriceMdl = data.lineUnitPriceMdl;
+      } else if (r.uvExtras) {
+        const uv = r.uvExtras.uvLineData;
+        const named: UvLineData = uv.clientItem
+          ? { ...uv, clientItem: { ...uv.clientItem, description: readySetUvDescription(zone, rv.colourLabel) } }
+          : uv;
+        r.uvExtras = { uvLineData: uvLineAtGiftSetPrice(named, data.lineTotalMdl) };
+      }
     } else {
       r.manualUnitPriceMdl = data.lineUnitPriceMdl;
     }
   }
 }
 
-/** Category of bought-in ready sets (UV-printable, so the set item can be a UV stock line). */
-export const GIFT_SET_CATEGORY_CODE = "gift_sets";
+export { GIFT_SET_CATEGORY_CODE };
 
 /**
  * Creates the thermos set stock item (one variant per colour, 0 pcs, no cost)

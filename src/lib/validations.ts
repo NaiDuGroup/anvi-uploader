@@ -735,9 +735,13 @@ export const giftSetLineInputSchema = z.object({
   quantity: z.number().int().min(1).max(GIFT_SET_MAX_QUANTITY),
   role: z.enum(["pen", "notebook", "mug", "ready"]),
   manualUnitPriceMdl: z.number().positive().max(999_999).nullable().optional(),
+  /** Ready set: the zone this line prints. */
+  zoneId: z.string().regex(/^[a-z0-9_]{1,30}$/i).nullable().optional(),
+  /** Ready set: the set item's colour variant. */
+  readyVariantId: z.string().uuid().nullable().optional(),
 });
 
-const adminOrderLineSchema = z.object({
+export const adminOrderLineSchema = z.object({
   productType: z.enum(PRODUCT_TYPES),
   mugLayoutData: mugLayoutDataSchema.optional(),
   mugProductId: z.string().uuid().optional(),

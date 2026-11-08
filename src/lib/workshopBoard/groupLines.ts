@@ -43,7 +43,7 @@ import type {
   SublimationLineFacts,
 } from "./types";
 import { SECTION_ORDER } from "./types";
-import { giftSetBadgeLabel, parseOrderLineSetData } from "@/lib/giftSet/giftSet";
+import { giftSetBadgeLabel, giftSetPackNote, isLegacyReadySetLine, parseOrderLineSetData } from "@/lib/giftSet/giftSet";
 import { paperLineLabelRu } from "./paperLineLabel";
 import { lineStatusForOrderStatus } from "@/lib/orderLineProductionStatus";
 import { boardLineStatus } from "@/lib/orderStatusFromLines";
@@ -69,6 +69,8 @@ export interface RawOrderLine {
   shopLineData?: unknown;
   /** «Набор» (`OrderLine.setData`): badge on the card. */
   setData?: unknown;
+  /** «Набор»: pack note + «Закупка» of the line's set (`giftSet/giftSetBoard.ts`). */
+  giftSetFlags?: { packNote: string | null; procurement: boolean } | null;
   /** `OrderLine.productionStatus`; absent → the order status's line status (legacy rows). */
   productionStatus?: string;
   /** «Нужен макет» details (`src/lib/layoutIssue.ts`). */
@@ -110,9 +112,19 @@ export interface RawOrder {
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 /** «Набор: Ручка + блокнот + кружка ×3» + the component («Ручка») of a set line; null outside a set. */
-function giftSetBoardBadge(raw: unknown): WorkshopBoardLine["giftSet"] {
+function giftSetBoardBadge(
+  raw: unknown,
+  flags: RawOrderLine["giftSetFlags"],
+): WorkshopBoardLine["giftSet"] {
   const d = parseOrderLineSetData(raw);
-  return d ? { label: giftSetBadgeLabel(d), role: d.roleLabel, quantity: d.quantity } : null;
+  if (!d) return null;
+  return {
+    label: giftSetBadgeLabel(d),
+    role: isLegacyReadySetLine(d) ? null : d.roleLabel,
+    quantity: d.quantity,
+    packNote: flags?.packNote ?? giftSetPackNote(d.kind, d.boxSku),
+    procurement: flags?.procurement === true,
+  };
 }
 
 function isValidProductType(value: string): value is ProductType {
@@ -247,7 +259,11 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
   if (pt === "uv_print") {
     const data = parseUvLineData(line.uvLineData);
     if (!data) return null;
-    return { kind: "uv", data: uvLineFacts(data, line.files) };
+    const facts = uvLineFacts(data, line.files);
+    // «Набор» C: the thermos is the set's (written off by the set), not a client item.
+    const set = parseOrderLineSetData(line.setData);
+    if (set?.kind === "ready" && set.zoneId && data.source === "client") facts.giftSetItem = true;
+    return { kind: "uv", data: facts };
   }
 
   if (pt === "sublimation_print") {
@@ -389,6 +405,7 @@ function groupKey(facts: LineFacts): string {
         if (facts.data.variantId) return `uvdtf::${facts.data.variantId}`;
         return facts.data.source === "stickers" ? UV_DTF_STICKERS_GROUP_KEY : UV_DTF_CLIENT_GROUP_KEY;
       }
+      if (facts.data.giftSetItem) return `uv::set::${facts.data.clientItemDescription ?? ""}`;
       return facts.data.variantId ? `uv::${facts.data.variantId}` : UV_CLIENT_GROUP_KEY;
     // Blanks of one variant print and press together; client items share one card.
     case "sublimation": return facts.data.variantId ? `subl::${facts.data.variantId}` : SUBLIMATION_CLIENT_GROUP_KEY;
@@ -410,6 +427,7 @@ function groupLabel(facts: LineFacts): string {
         if (facts.data.itemName) return `UV-DTF · ${facts.data.itemName}`;
         return facts.data.source === "stickers" ? UV_DTF_STICKERS_GROUP_LABEL : UV_DTF_CLIENT_GROUP_LABEL;
       }
+      if (facts.data.giftSetItem) return `UV · ${facts.data.clientItemDescription ?? "—"}`;
       return facts.data.itemName ? `UV · ${facts.data.itemName}` : UV_CLIENT_GROUP_LABEL;
     case "sublimation":
       return facts.data.variantId ? `Сублимация · ${facts.data.itemName}` : SUBLIMATION_CLIENT_GROUP_LABEL;
@@ -653,7 +671,7 @@ export function groupLines(
         facts,
         files: rawLine.files,
         notes: order.notes,
-        giftSet: giftSetBoardBadge(rawLine.setData),
+        giftSet: giftSetBoardBadge(rawLine.setData, rawLine.giftSetFlags),
         createdByName: order.createdByName,
         sentToWorkshopByName: order.sentToWorkshopByName,
       };

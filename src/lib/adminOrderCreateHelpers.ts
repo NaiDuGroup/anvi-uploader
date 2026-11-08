@@ -105,7 +105,7 @@ import { deductUvLineStock } from "@/lib/uv/uvOrderStock";
 import { loadUvInkCosts, loadUvSettings, loadUvStockItem, resolveUvLine } from "@/lib/uv/resolveUvLine";
 import { buildUvLineData } from "@/lib/uv/buildUvLineData";
 import type { UvLineInput } from "@/lib/uv/uvLineInput";
-import type { OrderLineSetData } from "@/lib/giftSet/giftSet";
+import { giftSetExtraStockSkus, type OrderLineSetData } from "@/lib/giftSet/giftSet";
 import { takeGiftSetBoxStock } from "@/lib/giftSet/giftSetStock";
 import type { UvLineData } from "@/lib/uv/types";
 import { SublimationLineError } from "@/lib/sublimation/sublimationLineCalc";
@@ -442,13 +442,13 @@ export async function resolveAdminOrderLineProducts(
     }
     try {
       uvExtras = {
-        // A ready gift set is billed at the set price later (`applyGiftSetsToResolved`):
-        // the set item needs no price of its own here.
+        // A gift set line is billed at the set price later (`applyGiftSetsToResolved`):
+        // it needs no price of its own here. (Legacy ready set: one UV line on the set item.)
         uvLineData:
-          line.set?.role === "ready"
+          line.set?.role === "ready" && line.uv.source === "stock"
             ? await resolveReadyGiftSetUvLine(line.uv, line.customerType ?? "retail")
             : await resolveUvLine(line.uv, line.customerType ?? "retail", {
-                allowUnpriced: opts?.allowUnpricedPrint,
+                allowUnpriced: opts?.allowUnpricedPrint || Boolean(line.set),
               }),
       };
     } catch (e) {
@@ -1345,19 +1345,20 @@ export async function deductStockForAdminOrderLines(
     }
   }
 
-  // «Набор»: the box, once per set, on the group's first line.
+  // «Набор»: the box (A/B) / the ready set item (C), once per set, on the group's first line.
   for (let i = 0; i < params.resolved.length; i++) {
     const set = params.resolved[i]!.giftSetExtras?.setData;
-    if (!set?.boxSku) continue;
-    const boxIssue = await takeGiftSetBoxStock(tx, {
-      boxSku: set.boxSku,
-      quantity: set.quantity,
-      orderId: params.orderId,
-      orderNumber: params.orderNumber,
-      orderLineId: dbLines[i]!.id,
-      createdById: params.createdById,
-    });
-    if (boxIssue) procurementIssues.push(boxIssue);
+    for (const sku of giftSetExtraStockSkus(set)) {
+      const boxIssue = await takeGiftSetBoxStock(tx, {
+        boxSku: sku,
+        quantity: set!.quantity,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        orderLineId: dbLines[i]!.id,
+        createdById: params.createdById,
+      });
+      if (boxIssue) procurementIssues.push(boxIssue);
+    }
   }
 
   const procurementMeta =

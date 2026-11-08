@@ -9,9 +9,16 @@
  *    The set's fixed price is split across the lines (`splitSetUnitPrice`) so
  *    the lines add up to price × N exactly; the box is written off once per
  *    set on the group's first line.
- *  - **ready** (C «Ручка + блокнот + термос», bought in as one product): one
- *    `uv_print` line on the set's stock item (one variant per colour), one
- *    zone (and file) per printed component, priced at the set price.
+ *  - **ready** (C «Ручка + блокнот + термос», bought in as one product with
+ *    colour variants): one order line per printed component (zone), like
+ *    A/B — notebook → `notebook` line, pen → `pen` line (both «другой»
+ *    item, not our stock), anything else (thermos) → `uv_print` client-item
+ *    line with one zone. Each has its own file, layout check and workshop
+ *    card in its normal section. The set price is split across the lines by
+ *    zone weight; the set item (one colour variant) is written off once per
+ *    set on the group's first line (`setItemSku`), like the box of A/B.
+ *    Orders saved before 2026-11-08 kept C as ONE `uv_print` line on the set
+ *    item (role «ready», no `zoneId`): read-only compat in display.
  *
  * Templates («Шаблоны наборов») live in `AccountingSettings.giftSetTemplates`;
  * null = {@link DEFAULT_GIFT_SET_TEMPLATES}.
@@ -48,7 +55,24 @@ export interface GiftSetZone {
   /** Print size, cm (the artwork is checked against it). */
   widthCm: number;
   heightCm: number;
+  /** Share of the set price this line carries (relative). */
+  weight: number;
 }
+
+/** Order line type of a ready set's zone: notebook / pen lines go to their own board sections, the rest is UV. */
+export type GiftSetZoneLineType = "notebook" | "pen" | "uv_print";
+
+export function readyZoneLineType(zoneId: string): GiftSetZoneLineType {
+  return zoneId === "notebook" ? "notebook" : zoneId === "pen" ? "pen" : "uv_print";
+}
+
+/** Default price weight of a ready-set zone (thermos 311 + notebook 189 + pen 100 = 600). */
+export function defaultZoneWeight(zoneId: string): number {
+  return zoneId === "thermos" ? 311 : zoneId === "notebook" ? 189 : 100;
+}
+
+/** DPI the set's artwork is checked / printed at (the same as our notebooks and pens). */
+export const GIFT_SET_PRINT_DPI = 300;
 
 export interface GiftSetTemplate {
   /** Stable id, letters / digits / `_` / `-` (kept on order lines). */
@@ -126,9 +150,9 @@ export const DEFAULT_GIFT_SET_TEMPLATES: readonly GiftSetTemplate[] = [
     components: [],
     readyItemSku: READY_THERMOS_SET_ITEM_SKU,
     zones: [
-      { id: "thermos", label: "Термос", widthCm: 17, heightCm: 2.5 },
-      { id: "notebook", label: "Блокнот", widthCm: 14.5, heightCm: 21 },
-      { id: "pen", label: "Ручка", widthCm: 5, heightCm: 0.6 },
+      { id: "thermos", label: "Термос", widthCm: 17, heightCm: 2.5, weight: 311 },
+      { id: "notebook", label: "Блокнот", widthCm: 14.5, heightCm: 21, weight: 189 },
+      { id: "pen", label: "Ручка", widthCm: 5, heightCm: 0.6, weight: 100 },
     ],
   },
 ];
@@ -248,7 +272,9 @@ export function validateGiftSetTemplates(
         }
         if (ids.has(zid)) return fail("zone_id_duplicate");
         ids.add(zid);
-        t.zones.push({ id: zid, label, widthCm: w, heightCm: h });
+        const zw = num(zo.weight);
+        if (zo.weight != null && zo.weight !== "" && (zw == null || !(zw > 0))) return fail("component_weight_invalid");
+        t.zones.push({ id: zid, label, widthCm: w, heightCm: h, weight: zw != null && zw > 0 ? zw : defaultZoneWeight(zid) });
       }
       if (t.zones.length === 0) return fail("zones_required");
     }
@@ -335,6 +361,10 @@ export interface GiftSetLineInput {
   role: GiftSetLineRole;
   /** Staff only: price of one set instead of the template's (stripped / ignored for dealers). */
   manualUnitPriceMdl?: number | null;
+  /** Ready set: the zone (component) this line prints. */
+  zoneId?: string | null;
+  /** Ready set: colour variant of the set item (`StockVariant.id`), the same on every line of the set. */
+  readyVariantId?: string | null;
 }
 
 /** Persisted in `OrderLine.setData`. */
@@ -359,7 +389,14 @@ export interface OrderLineSetData {
   lineTotalMdl: number;
   /** Box written off with this line (the group's first line of an assembled set), else null. */
   boxSku: string | null;
-  /** Ready set: zone ids in file order (thermos, notebook, pen). */
+  /** Ready set: the set item's colour variant written off with this line (the group's first line), else null. */
+  setItemSku?: string | null;
+  /** Ready set: the zone this line prints («thermos» / «notebook» / «pen»). */
+  zoneId?: string;
+  /** Ready set: colour variant id + label of the set item (every line of the set). */
+  readyVariantId?: string;
+  readyColourLabel?: string;
+  /** Legacy ready set (one UV line for the whole set, before 2026-11-08): zone ids in file order. */
   zoneIds?: string[];
 }
 
@@ -370,8 +407,11 @@ export interface GiftSetPlanLine {
   /** Pieces the line bills (sum of file copies; UV: its quantity). */
   quantity: number;
   customerType: GiftSetCustomerType;
-  /** Ready set: SKU of the stock item the line's variant belongs to. */
+  /** Ready set: SKU of the stock item the set's colour variant belongs to. */
   readyItemSku?: string | null;
+  /** Ready set: SKU + colour label of the set's colour variant. */
+  readyVariantSku?: string | null;
+  readyColourLabel?: string | null;
   /** Mug / notebook / pen picked as «другой …» (not a stock item). */
   otherItem?: boolean;
 }
@@ -433,25 +473,51 @@ export function planGiftSets(
     };
 
     if (template.kind === "ready") {
-      if (idx.length !== 1) return { ok: false, code: "gift_set_components_mismatch", groupId };
-      const line = lines[idx[0]!]!;
-      if (line.productType !== "uv_print" || line.set!.role !== "ready") {
-        return { ok: false, code: "gift_set_line_type_mismatch", groupId };
+      // One line per zone, each of its zone's line type; one colour for the set.
+      const zoneIds = idx.map((i) => lines[i]!.set!.zoneId ?? "");
+      const wantedZones = template.zones.map((z) => z.id);
+      if (
+        zoneIds.length !== wantedZones.length ||
+        wantedZones.some((z) => !zoneIds.includes(z)) ||
+        new Set(zoneIds).size !== zoneIds.length ||
+        idx.some((i) => lines[i]!.set!.role !== "ready")
+      ) {
+        return { ok: false, code: "gift_set_components_mismatch", groupId };
       }
-      if (!line.readyItemSku || line.readyItemSku !== template.readyItemSku) {
+      for (const i of idx) {
+        const l = lines[i]!;
+        if (l.productType !== readyZoneLineType(l.set!.zoneId!)) return { ok: false, code: "gift_set_line_type_mismatch", groupId };
+        // The set's notebook / pen come with the set: never one of our stock items.
+        if (l.productType !== "uv_print" && !l.otherItem) return { ok: false, code: "gift_set_item_mismatch", groupId };
+      }
+      const variantId = first.set!.readyVariantId ?? null;
+      if (
+        !variantId ||
+        idx.some((i) => (lines[i]!.set!.readyVariantId ?? null) !== variantId) ||
+        !first.readyItemSku ||
+        first.readyItemSku.toUpperCase() !== (template.readyItemSku ?? "").toUpperCase()
+      ) {
         return { ok: false, code: "gift_set_item_mismatch", groupId };
       }
-      byLine.set(idx[0]!, {
-        groupId,
-        data: {
-          ...base,
-          role: "ready",
-          roleLabel: null,
-          lineUnitPriceMdl: price.unitPriceMdl,
-          lineTotalMdl: round2(price.unitPriceMdl * quantity),
-          boxSku: null,
-          zoneIds: template.zones.map((z) => z.id),
-        },
+      const zones = idx.map((i) => template.zones.find((z) => z.id === lines[i]!.set!.zoneId)!);
+      const shares = splitSetUnitPrice(price.unitPriceMdl, zones.map((z) => z.weight));
+      idx.forEach((lineIndex, k) => {
+        byLine.set(lineIndex, {
+          groupId,
+          data: {
+            ...base,
+            role: "ready",
+            roleLabel: zones[k]!.label,
+            lineUnitPriceMdl: shares[k]!,
+            lineTotalMdl: round2(shares[k]! * quantity),
+            boxSku: k === 0 ? template.boxSku : null,
+            // The set item (one colour variant) goes with the group's first line, once per set.
+            setItemSku: k === 0 ? (first.readyVariantSku ?? null) : null,
+            zoneId: zones[k]!.id,
+            readyVariantId: variantId,
+            ...(first.readyColourLabel ? { readyColourLabel: first.readyColourLabel } : {}),
+          },
+        });
       });
       continue;
     }
@@ -487,16 +553,27 @@ export function planGiftSets(
   return { ok: true, byLine };
 }
 
-/** Stock taken for the sets of an order apart from the lines' own items: boxes by SKU, N per set. */
+/** SKUs a set line takes from stock apart from its own item: the box (A/B) and / or the ready set item (C). */
+export function giftSetExtraStockSkus(d: Pick<OrderLineSetData, "boxSku" | "setItemSku"> | null | undefined): string[] {
+  if (!d) return [];
+  return [d.boxSku, d.setItemSku ?? null].filter((s): s is string => Boolean(s));
+}
+
+/** Stock taken for the sets of an order apart from the lines' own items: boxes / ready set items by SKU, N per set. */
 export function giftSetBoxWriteOffs(
-  data: readonly (Pick<OrderLineSetData, "boxSku" | "quantity"> | null | undefined)[],
+  data: readonly (Pick<OrderLineSetData, "boxSku" | "setItemSku" | "quantity"> | null | undefined)[],
 ): { sku: string; quantity: number }[] {
   const by = new Map<string, number>();
   for (const d of data) {
-    if (!d?.boxSku || !(d.quantity > 0)) continue;
-    by.set(d.boxSku, (by.get(d.boxSku) ?? 0) + d.quantity);
+    if (!d || !(d.quantity > 0)) continue;
+    for (const sku of giftSetExtraStockSkus(d)) by.set(sku, (by.get(sku) ?? 0) + d.quantity);
   }
   return [...by.entries()].map(([sku, quantity]) => ({ sku, quantity }));
+}
+
+/** Legacy ready set: the whole set on one UV line (orders before 2026-11-08). */
+export function isLegacyReadySetLine(d: Pick<OrderLineSetData, "role" | "zoneId"> | null | undefined): boolean {
+  return d?.role === "ready" && !d.zoneId;
 }
 
 /** Stored `OrderLine.setData`, or null. */
@@ -522,6 +599,10 @@ export function parseOrderLineSetData(raw: unknown): OrderLineSetData | null {
     lineUnitPriceMdl: num(o.lineUnitPriceMdl) ?? 0,
     lineTotalMdl: num(o.lineTotalMdl) ?? 0,
     boxSku: typeof o.boxSku === "string" && o.boxSku ? o.boxSku : null,
+    ...(typeof o.setItemSku === "string" && o.setItemSku ? { setItemSku: o.setItemSku } : {}),
+    ...(typeof o.zoneId === "string" && o.zoneId ? { zoneId: o.zoneId } : {}),
+    ...(typeof o.readyVariantId === "string" && o.readyVariantId ? { readyVariantId: o.readyVariantId } : {}),
+    ...(typeof o.readyColourLabel === "string" && o.readyColourLabel ? { readyColourLabel: o.readyColourLabel } : {}),
     ...(Array.isArray(o.zoneIds) ? { zoneIds: o.zoneIds.filter((z): z is string => typeof z === "string") } : {}),
   };
 }
@@ -529,4 +610,23 @@ export function parseOrderLineSetData(raw: unknown): OrderLineSetData | null {
 /** «Набор: Ручка + блокнот + кружка ×3». */
 export function giftSetBadgeLabel(d: Pick<OrderLineSetData, "name" | "quantity">): string {
   return `Набор: ${d.name} ×${d.quantity}`;
+}
+
+/** «30×23×8,5» from a box SKU in millimetres («EW-BOX-300X230X85»); null when the SKU has no size. */
+export function boxSizeFromSku(sku: string): string | null {
+  const m = /(\d{2,4})X(\d{2,4})(?:X(\d{1,4}))?/i.exec(sku);
+  if (!m) return null;
+  const cm = (mm: string): string => String(Math.round(Number(mm)) / 10).replace(".", ",");
+  return [m[1], m[2], m[3]].filter((x): x is string => Boolean(x)).map(cm).join("×");
+}
+
+/**
+ * Packing note of a set on the workshop board: «+ коробка 30×23×8,5» (A/B,
+ * the template's box), «в коробке набора» (C, the bought-in set comes in its
+ * own box), null without a box.
+ */
+export function giftSetPackNote(kind: GiftSetKind, boxSku: string | null): string | null {
+  if (kind === "ready") return "в коробке набора";
+  if (!boxSku) return null;
+  return `+ коробка ${boxSizeFromSku(boxSku) ?? boxSku}`;
 }

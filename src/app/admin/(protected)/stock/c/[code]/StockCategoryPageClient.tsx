@@ -255,7 +255,12 @@ export default function StockCategoryPageClient({ code }: { code: string }) {
         <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <h1 className="min-w-0 shrink-0 truncate text-2xl font-bold tracking-tight text-gray-900">
             {title || " "}
-            {unit ? <span className="ml-2 align-middle text-sm font-medium text-gray-400">{s.units[unit]}</span> : null}
+            {unit ? (
+              <>
+                {" "}
+                <span className="ml-1 align-middle text-sm font-medium text-gray-400">· {s.units[unit]}</span>
+              </>
+            ) : null}
           </h1>
           <div className="relative w-full min-w-0 sm:w-72 sm:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden />
