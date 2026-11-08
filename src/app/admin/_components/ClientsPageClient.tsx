@@ -285,25 +285,29 @@ export default function ClientsPageClient({
                       >
                         {t.invoices.clientHistoryNew}
                       </NavLinkButton>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-2"
-                        onClick={() => {
-                          setEditing(r);
-                          setFormOpen(true);
-                        }}
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 border-red-200 px-2 text-red-600 hover:bg-red-50"
-                        onClick={() => setDeleteTarget(r)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      {canMutate ? (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => {
+                              setEditing(r);
+                              setFormOpen(true);
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 border-red-200 px-2 text-red-600 hover:bg-red-50"
+                            onClick={() => setDeleteTarget(r)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
