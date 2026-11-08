@@ -134,7 +134,10 @@ export default function GiftSetTemplatesSettingsSection() {
         <Gift className="h-4 w-4" aria-hidden />
         {g.settingsTitle}
       </h2>
-      <p className="mb-3 text-xs text-gray-500">{g.settingsHint}</p>
+      <p className="mb-2 text-xs text-gray-500">{g.settingsHint}</p>
+      <p className="mb-3 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-900" data-testid="gift-set-price-note">
+        {g.settingsPriceNote}
+      </p>
       {noDealer.length > 0 ? (
         <p className="mb-3 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="status">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />

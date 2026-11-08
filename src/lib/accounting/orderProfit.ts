@@ -11,7 +11,11 @@ import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLine
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import { parseUvLineData } from "@/lib/uv/parseUvLineData";
 import { parseSublimationLineData } from "@/lib/sublimation/parseSublimationLineData";
-import { giftSetExtraStockSkus, parseOrderLineSetData } from "@/lib/giftSet/giftSet";
+import {
+  giftSetExtraStockSkus,
+  isGiftSetBoxLineType,
+  parseOrderLineSetData,
+} from "@/lib/giftSet/giftSet";
 import { sumExpensePoolForDay, type ExpenseForAccrual } from "./expenseAccrual";
 import {
   LEGACY_VAT_BASIS,
@@ -44,6 +48,8 @@ export type ProfitOrderLineInput = {
    * C v2 `setItemSku`), N per set — its cost is counted on that line.
    */
   setData?: unknown;
+  /** «Набор»: the set group of the line (set profit breakdown). */
+  setGroupId?: string | null;
   files: readonly { copies: number }[];
 };
 
@@ -268,28 +274,160 @@ export function computeOrderProductionCost(
   cfg: ProductionCostsConfig,
   liveCosts: Pick<LiveUnitCosts, "uvPrintPerPiece"> = EMPTY_LIVE_UNIT_COSTS,
 ): number {
-  const uvPerPiece = (line: ProfitOrderLineInput): number =>
-    (line.stockVariantId ? liveCosts.uvPrintPerPiece?.get(line.stockVariantId) : undefined) ?? 0;
-  const variable = lines.reduce((acc, line) => {
-    if (line.productType === "mug") {
-      const qty = mugOrderStockQuantityFromFiles(line.files);
-      return acc + cfg.mugPrintPerUnit * qty;
-    }
-    if (line.productType === "notebook") {
-      const qty = notebookOrderStockQuantityFromFiles(line.files);
-      return acc + uvPerPiece(line) * qty;
-    }
-    if (line.productType === "pen") {
-      const qty = penOrderStockQuantityFromFiles(line.files);
-      return acc + uvPerPiece(line) * qty;
-    }
-    return acc;
-  }, 0);
+  const variable = lines.reduce((acc, line) => acc + linePrintCost(line, cfg, liveCosts), 0);
   const total =
     cfg.packagingPerOrder +
     cfg.otherConsumablesPerOrder +
     variable;
   return normalizeProfitScalar(total);
+}
+
+/** Print cost of one mug / notebook / pen line (mug: the flat norm; notebook / pen: UV print per piece). Other lines: 0. */
+function linePrintCost(
+  line: ProfitOrderLineInput,
+  cfg: ProductionCostsConfig,
+  liveCosts: Pick<LiveUnitCosts, "uvPrintPerPiece">,
+): number {
+  const uvPerPiece = (): number =>
+    (line.stockVariantId ? liveCosts.uvPrintPerPiece?.get(line.stockVariantId) : undefined) ?? 0;
+  if (line.productType === "mug") return cfg.mugPrintPerUnit * mugOrderStockQuantityFromFiles(line.files);
+  if (line.productType === "notebook") return uvPerPiece() * notebookOrderStockQuantityFromFiles(line.files);
+  if (line.productType === "pen") return uvPerPiece() * penOrderStockQuantityFromFiles(line.files);
+  return 0;
+}
+
+// ─── «Набор» profit ─────────────────────────────────────────────────────────────
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** One item line of a set in the set profit breakdown. */
+export interface GiftSetProfitItem {
+  /** «Кружка» (the set's item label), else the line type. */
+  label: string;
+  productType: string;
+  /** The item from stock (avg cost; snapshot cost when the order froze one). */
+  itemCost: number;
+  /** Print of the line (mug norm, UV print per piece; a UV / sublimation line's own cost). */
+  printCost: number;
+  missingCost: boolean;
+}
+
+/** Profit of one set of an order: set price − items − print − box. */
+export interface GiftSetProfit {
+  groupId: string;
+  templateId: string;
+  name: string;
+  /** Number of sets. */
+  quantity: number;
+  /** The set price billed (sum of the item lines' shares), on the report's VAT basis. */
+  revenue: number;
+  items: GiftSetProfitItem[];
+  /** Box (A / B) or the bought-in set item (C), N per set. */
+  boxCost: number;
+  totalCost: number;
+  profit: number;
+  /** Some item / box has no purchase cost yet (counted as 0). */
+  missingCost: boolean;
+}
+
+/**
+ * Profit of every set of an order's lines (grouped by `setGroupId`): the set
+ * price the order billed minus the cost of each item (the same item cost the
+ * order profit uses), the print cost of each line (the same production cost)
+ * and the box. Lines outside a set are left out. Staff only (costs).
+ */
+export function computeGiftSetProfits(
+  lines: readonly ProfitOrderLineInput[],
+  production: ProductionCostsConfig,
+  liveCosts: LiveUnitCosts,
+  opts: { snapshotDivisor?: number; vatBasis?: ProfitVatBasis } = {},
+): GiftSetProfit[] {
+  const divisor = opts.snapshotDivisor ?? 1;
+  const basis = opts.vatBasis ?? LEGACY_VAT_BASIS;
+  const groups = new Map<string, { lines: ProfitOrderLineInput[]; set: NonNullable<ReturnType<typeof parseOrderLineSetData>> }>();
+  for (const line of lines) {
+    if (!line.setGroupId) continue;
+    const set = parseOrderLineSetData(line.setData);
+    if (!set) continue;
+    const g = groups.get(line.setGroupId);
+    if (g) g.lines.push(line);
+    else groups.set(line.setGroupId, { lines: [line], set });
+  }
+  const out: GiftSetProfit[] = [];
+  for (const [groupId, { lines: groupLines, set }] of groups) {
+    let billed = 0;
+    let boxCost = 0;
+    let missingCost = false;
+    const items: GiftSetProfitItem[] = [];
+    for (const line of groupLines) {
+      const d = parseOrderLineSetData(line.setData);
+      // The set's stock unit (box / set item), and older orders' hidden box on the first line.
+      const unit = giftSetUnitsCost(line, liveCosts);
+      boxCost += unit.lineTotal;
+      if (unit.missingUnitCost) missingCost = true;
+      if (isGiftSetBoxLineType(line.productType) || d?.role === "box") continue;
+      billed += d?.lineTotalMdl ?? 0;
+      const own = lineOwnPurchaseTotal(line, liveCosts, divisor);
+      const catalogItem = line.productType === "mug" || line.productType === "notebook" || line.productType === "pen";
+      const item: GiftSetProfitItem = {
+        label: d?.roleLabel || line.productType,
+        productType: line.productType,
+        itemCost: catalogItem ? round2(own.lineTotal) : 0,
+        printCost: round2(catalogItem ? linePrintCost(line, production, liveCosts) : own.lineTotal),
+        missingCost: own.missingUnitCost,
+      };
+      if (item.missingCost) missingCost = true;
+      items.push(item);
+    }
+    const revenue = round2(revenueOnBasis(billed, basis));
+    const totalCost = round2(items.reduce((s, i) => s + i.itemCost + i.printCost, 0) + boxCost);
+    out.push({
+      groupId,
+      templateId: set.templateId,
+      name: set.name,
+      quantity: set.quantity,
+      revenue,
+      items,
+      boxCost: round2(boxCost),
+      totalCost,
+      profit: round2(revenue - totalCost),
+      missingCost,
+    });
+  }
+  return out;
+}
+
+/** «Наборы» of a period: per template the number of sets, revenue, cost and profit. */
+export interface GiftSetProfitSummaryRow {
+  templateId: string;
+  name: string;
+  sets: number;
+  revenue: number;
+  cost: number;
+  profit: number;
+  missingCost: boolean;
+}
+
+export function summarizeGiftSetProfits(sets: readonly GiftSetProfit[]): GiftSetProfitSummaryRow[] {
+  const by = new Map<string, GiftSetProfitSummaryRow>();
+  for (const s of sets) {
+    const row = by.get(s.templateId) ?? {
+      templateId: s.templateId,
+      name: s.name,
+      sets: 0,
+      revenue: 0,
+      cost: 0,
+      profit: 0,
+      missingCost: false,
+    };
+    row.sets += s.quantity;
+    row.revenue = round2(row.revenue + s.revenue);
+    row.cost = round2(row.cost + s.totalCost);
+    row.profit = round2(row.profit + s.profit);
+    row.missingCost = row.missingCost || s.missingCost;
+    by.set(s.templateId, row);
+  }
+  return [...by.values()].sort((a, b) => b.sets - a.sets || a.name.localeCompare(b.name));
 }
 
 export function computeOrderDirectCosts(

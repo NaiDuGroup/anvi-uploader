@@ -11,6 +11,7 @@ import {
   parseGiftSetTemplates,
   planGiftSets,
   READY_THERMOS_SET_COLOURS,
+  type StoredGiftSetPrice,
   READY_THERMOS_SET_ITEM_SKU,
   type GiftSetPlanLine,
   type GiftSetTemplate,
@@ -59,7 +60,11 @@ function lineCopies(r: ResolvedAdminOrderLine): number {
  */
 export async function applyGiftSetsToResolved(
   resolved: ResolvedAdminOrderLine[],
-  opts: { allowManualPrice: boolean },
+  opts: {
+    allowManualPrice: boolean;
+    /** Edit: the order's stored set prices (`storedGiftSetPrices`) — a saved set keeps its price when the template changed. */
+    storedPrices?: ReadonlyMap<string, StoredGiftSetPrice>;
+  },
 ): Promise<void> {
   if (!resolved.some((r) => r.input.set)) return;
   const templates = await loadGiftSetTemplates();

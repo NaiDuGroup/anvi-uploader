@@ -17,6 +17,7 @@ import type { MugLayoutData, NotebookLayoutData, PenLayoutData } from "@/lib/val
 import { returnMugStockForOrder } from "@/lib/mug/mugOrderStock";
 import { returnMaterialStockForOrder } from "@/lib/stock/unified/materialOrderStock";
 import { applyGiftSetsToResolved } from "@/lib/giftSet/giftSetServer";
+import { storedGiftSetPrices } from "@/lib/giftSet/giftSet";
 import { returnNotebookStockForOrder } from "@/lib/notebook/notebookOrderStock";
 import { returnPenStockForOrder } from "@/lib/pen/penOrderStock";
 import {
@@ -359,7 +360,8 @@ export async function resolveLinesForAdminOrderUpdate(
   });
 
   // «Набор»: the set price wins over a line's manual price (staff may set the price of one set).
-  await applyGiftSetsToResolved(resolved, { allowManualPrice: true });
+  // A saved set keeps its stored price when the template price changed since (season prices).
+  await applyGiftSetsToResolved(resolved, { allowManualPrice: true, storedPrices: storedGiftSetPrices(order.orderLines) });
 
   return resolved;
 }

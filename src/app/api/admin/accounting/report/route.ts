@@ -6,13 +6,16 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
-import { profitVatBasisFromSettings, type ProfitVatBasis } from "@/lib/accounting/vatBasis";
+import { profitVatBasisFromSettings, snapshotCostDivisor, type ProfitVatBasis } from "@/lib/accounting/vatBasis";
 import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
 import {
   buildOrderProfitRows,
+  computeGiftSetProfits,
   normalizeProfitScalar,
+  summarizeGiftSetProfits,
   summarizeProfitRows,
+  type GiftSetProfit,
   type LiveUnitCosts,
   type ProfitOrderLineInput,
 } from "@/lib/accounting/orderProfit";
@@ -182,6 +185,7 @@ export async function GET(request: NextRequest) {
       uvLineData: l.uvLineData,
       sublimationLineData: l.sublimationLineData,
       setData: l.setGroupId ? l.setData : null,
+      setGroupId: l.setGroupId,
       files: l.files,
     }));
     return {
@@ -208,6 +212,18 @@ export async function GET(request: NextRequest) {
   }));
 
   const summary = summarizeProfitRows(profitRows);
+
+  // «Набор»: profit of each set (set price − items − print − box), per order and per template.
+  const giftSetsByOrder = new Map<string, GiftSetProfit[]>();
+  for (const o of orderInputs) {
+    if (!o.orderLines.some((l) => l.setGroupId)) continue;
+    const sets = computeGiftSetProfits(o.orderLines, production, liveCosts, {
+      snapshotDivisor: snapshotCostDivisor(o.createdAt, vatBasis),
+      vatBasis,
+    });
+    if (sets.length > 0) giftSetsByOrder.set(o.id, sets);
+  }
+  const giftSetsSummary = summarizeGiftSetProfits([...giftSetsByOrder.values()].flat());
 
   const expensesBreakdown = expenseRows.map((e) => ({
     id: e.id,
@@ -244,7 +260,9 @@ export async function GET(request: NextRequest) {
       netProfit: r.netProfit,
       profitMarginPct: r.profitMarginPct,
       missingProductCost: r.missingProductCost,
+      giftSets: giftSetsByOrder.get(r.id) ?? [],
     })),
+    giftSetsSummary,
     expensesBreakdown,
   });
 }

@@ -52,6 +52,7 @@ export default function AccountingPageClient() {
     amountsExVat,
     summary,
     orders,
+    giftSetsSummary,
     expensesBreakdown,
     error: reportError,
     isLoading: loading,
@@ -437,6 +438,45 @@ export default function AccountingPageClient() {
             </table>
           </section>
 
+          {giftSetsSummary.length > 0 ? (
+            // «Наборы»: per template — sets sold in the period, set price, items + print + box, profit.
+            <section className="rounded-xl border border-gray-200/90 bg-white p-4 shadow-sm" data-testid="acct-gift-sets">
+              <h2 className="text-sm font-semibold text-gray-900">{t.accounting.giftSetsSummaryTitle}</h2>
+              <p className="mt-0.5 text-xs text-gray-500">{t.accounting.giftSetsSummaryHint}</p>
+              <div className="mt-2 overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-left text-xs text-gray-600">
+                      <th className="py-2 pr-3 font-medium">{t.accounting.giftSetsColTemplate}</th>
+                      <th className="py-2 pr-3 text-right font-medium">{t.accounting.giftSetsColCount}</th>
+                      <th className="py-2 pr-3 text-right font-medium">{t.accounting.giftSetsColRevenue}</th>
+                      <th className="py-2 pr-3 text-right font-medium">{t.accounting.giftSetsColCost}</th>
+                      <th className="py-2 text-right font-medium">{t.accounting.giftSetsColProfit}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {giftSetsSummary.map((r) => (
+                      <tr key={r.templateId} className="border-b border-gray-100">
+                        <td className="py-2 pr-3 text-gray-900">{r.name}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{r.sets}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">{fmt(r.revenue)}</td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          <span className="inline-flex items-center justify-end gap-1">
+                            {fmt(r.cost)}
+                            {r.missingCost ? (
+                              <span className="rounded bg-amber-100 px-1 text-[10px] text-amber-900">{t.accounting.missingCostBadge}</span>
+                            ) : null}
+                          </span>
+                        </td>
+                        <td className="py-2 text-right font-medium tabular-nums">{fmt(r.profit)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ) : null}
+
           <section>
             <div className="rounded-xl border border-gray-200/90 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-2">
@@ -554,6 +594,47 @@ export default function AccountingPageClient() {
                 </div>
               ))}
             </dl>
+            {(detailOrder.giftSets ?? []).map((gs) => (
+              // «Набор: …»: set price − each item − its print − box = profit.
+              <div key={gs.groupId} className="border-t border-gray-100 px-4 py-3 text-xs" data-testid="acct-gift-set">
+                <p className="mb-1.5 text-sm font-semibold text-fuchsia-900">
+                  {t.accounting.giftSetBlockTitle(gs.name, gs.quantity)}
+                </p>
+                <dl className="space-y-1">
+                  {gs.items.map((it, k) => (
+                    <div key={k} className="flex justify-between gap-4">
+                      <dt className="text-gray-600">
+                        {it.label}
+                        <span className="text-gray-400">
+                          {" "}
+                          · {t.accounting.giftSetItemCost} {fmt(it.itemCost)} + {t.accounting.giftSetPrintCost} {fmt(it.printCost)}
+                        </span>
+                      </dt>
+                      <dd className="tabular-nums text-gray-900">{fmt(it.itemCost + it.printCost)}</dd>
+                    </div>
+                  ))}
+                  {gs.boxCost > 0 ? (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-gray-600">{t.accounting.giftSetBoxCost}</dt>
+                      <dd className="tabular-nums text-gray-900">{fmt(gs.boxCost)}</dd>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between gap-4 border-t border-gray-100 pt-1">
+                    <dt className="text-gray-600">{t.accounting.giftSetTotalCost}</dt>
+                    <dd className="tabular-nums text-gray-900">{fmt(gs.totalCost)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-600">{t.accounting.giftSetRevenue}</dt>
+                    <dd className="tabular-nums text-gray-900">{fmt(gs.revenue)}</dd>
+                  </div>
+                  <div className="flex justify-between gap-4 text-sm">
+                    <dt className="font-medium text-gray-900">{t.accounting.giftSetProfit}</dt>
+                    <dd className="font-semibold tabular-nums text-gray-900">{fmt(gs.profit)}</dd>
+                  </div>
+                </dl>
+                {gs.missingCost ? <p className="mt-1 text-[11px] text-amber-800">{t.accounting.giftSetMissingCost}</p> : null}
+              </div>
+            ))}
             <div className="border-t border-gray-100 px-4 py-3">
               <Button type="button" variant="outline" size="sm" onClick={() => setDetailOrder(null)}>
                 {t.accounting.breakdownClose}

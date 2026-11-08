@@ -13,6 +13,11 @@
  *    (`setData.boxSku` on the box line). Orders saved before 2026-11-08 have
  *    no box line: the group's first line carries `boxSku` (hidden write-off),
  *    still returned / re-taken by SKU (`giftSetExtraStockSkus`).
+ *    Since 2026-11-09 an assembled set is a promo combo of ordinary rows: each
+ *    row takes ANY stock item of its type (the template's `skuMatch` is only
+ *    the default), the set price stays fixed; removing a row or changing its
+ *    type dissolves the set (`dissolveGiftSetAssigns`). A saved set keeps the
+ *    price it was sold at when the template price changes (`giftSetPriceOnSave`).
  *  - **ready** (C «Ручка + блокнот + термос», bought in as one product with
  *    colour variants): one order line per printed component (zone), like
  *    A/B — notebook → `notebook` line, pen → `pen` line (both «другой»
@@ -459,6 +464,65 @@ export type GiftSetPlan =
   | { ok: false; code: GiftSetPlanErrorCode; groupId: string };
 
 /**
+ * Price of one set as an order stored it (edit): a saved set keeps its price
+ * when the template price changes later (the owner changes it by season) —
+ * new orders get the new price, old orders keep theirs.
+ */
+export interface StoredGiftSetPrice {
+  templateId: string;
+  customerType: GiftSetCustomerType;
+  unitPriceMdl: number;
+  priceSource: GiftSetPriceSource;
+}
+
+/** Stored set prices of an order's lines by set group (first priced line of each group). */
+export function storedGiftSetPrices(
+  lines: readonly { setGroupId?: string | null; setData?: unknown }[],
+): Map<string, StoredGiftSetPrice> {
+  const out = new Map<string, StoredGiftSetPrice>();
+  for (const l of lines) {
+    if (!l.setGroupId || out.has(l.setGroupId)) continue;
+    const d = parseOrderLineSetData(l.setData);
+    if (!d || !(d.unitPriceMdl > 0)) continue;
+    out.set(l.setGroupId, {
+      templateId: d.templateId,
+      customerType: d.customerType,
+      unitPriceMdl: d.unitPriceMdl,
+      priceSource: d.priceSource,
+    });
+  }
+  return out;
+}
+
+/**
+ * Price of one set on save: a staff manual price wins; else a set already
+ * saved with this template and customer type keeps its stored price (a staff
+ * manual price stays too when the editor may not change it, e.g. a dealer);
+ * else the template's current price.
+ */
+export function giftSetPriceOnSave(
+  template: Pick<GiftSetTemplate, "id" | "retailPriceMdl" | "dealerPriceMdl">,
+  customerType: GiftSetCustomerType,
+  manualUnitPriceMdl: number | null,
+  stored: StoredGiftSetPrice | null | undefined,
+  allowManualPrice: boolean,
+): { unitPriceMdl: number; source: GiftSetPriceSource } {
+  if (allowManualPrice && manualUnitPriceMdl != null && Number.isFinite(manualUnitPriceMdl) && manualUnitPriceMdl > 0) {
+    return giftSetUnitPrice(template, customerType, manualUnitPriceMdl);
+  }
+  if (
+    stored &&
+    stored.templateId === template.id &&
+    stored.customerType === customerType &&
+    stored.unitPriceMdl > 0 &&
+    (stored.priceSource !== "manual" || !allowManualPrice)
+  ) {
+    return { unitPriceMdl: stored.unitPriceMdl, source: stored.priceSource };
+  }
+  return giftSetUnitPrice(template, customerType, null);
+}
+
+/**
  * Checks every set group of an order's lines against its template and prices
  * it: per line the set data (share of the set price, total, box). Lines with
  * no `set` are left out.
@@ -466,7 +530,11 @@ export type GiftSetPlan =
 export function planGiftSets(
   lines: readonly GiftSetPlanLine[],
   templates: readonly GiftSetTemplate[],
-  opts: { allowManualPrice: boolean },
+  opts: {
+    allowManualPrice: boolean;
+    /** Edit: prices the order's sets were saved with (by group id) — kept when the template price changed since. */
+    storedPrices?: ReadonlyMap<string, StoredGiftSetPrice>;
+  },
 ): GiftSetPlan {
   const groups = new Map<string, number[]>();
   lines.forEach((l, i) => {
@@ -490,7 +558,7 @@ export function planGiftSets(
     }
     const customerType = first.customerType;
     const manual = opts.allowManualPrice ? (idx.map((i) => lines[i]!.set!.manualUnitPriceMdl).find((m) => m != null) ?? null) : null;
-    const price = giftSetUnitPrice(template, customerType, manual);
+    const price = giftSetPriceOnSave(template, customerType, manual, opts.storedPrices?.get(groupId), opts.allowManualPrice);
     const base = {
       version: 1 as const,
       templateId: template.id,

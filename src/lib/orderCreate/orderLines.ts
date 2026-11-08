@@ -16,6 +16,7 @@ import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 import { newLineProductionFields } from "@/lib/orderLineStatusSync";
 import type { AdminOrderLineInput } from "@/lib/validations";
 import { applyGiftSetsToResolved } from "@/lib/giftSet/giftSetServer";
+import type { StoredGiftSetPrice } from "@/lib/giftSet/giftSet";
 
 export interface ResolvedOrderLines {
   resolved: ResolvedAdminOrderLine[];
@@ -31,7 +32,11 @@ export interface ResolvedOrderLines {
 export async function resolveOrderLines(
   lineInputs: AdminOrderLineInput[],
   /** Passed to {@link resolveAdminOrderLineProducts} (dealer cabinet: unpriced UV / sublimation print allowed). */
-  opts?: { allowUnpricedPrint?: boolean },
+  opts?: {
+    allowUnpricedPrint?: boolean;
+    /** Edit: the order's stored set prices — a saved set keeps its price when the template changed since. */
+    storedGiftSetPrices?: ReadonlyMap<string, StoredGiftSetPrice>;
+  },
 ): Promise<ResolvedOrderLines> {
   const resolved: ResolvedAdminOrderLine[] = new Array(lineInputs.length);
   const lfLineTotalsMdl = new Map<number, number>();
@@ -61,7 +66,7 @@ export async function resolveOrderLines(
     resolved[i] = await resolveAdminOrderLineProducts(lineInputs[i]!, dtfRuns[i], opts);
   }
   // «Набор»: template check + set price (staff manual set price: applied again by the admin route).
-  await applyGiftSetsToResolved(resolved, { allowManualPrice: false });
+  await applyGiftSetsToResolved(resolved, { allowManualPrice: false, storedPrices: opts?.storedGiftSetPrices });
 
   return { resolved, lfLineTotalsMdl };
 }

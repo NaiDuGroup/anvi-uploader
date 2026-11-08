@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import { fetcher } from "./fetcher";
+import type { GiftSetProfit, GiftSetProfitSummaryRow } from "@/lib/accounting/orderProfit";
 
 export interface AccountingReportOrder {
   id: string;
@@ -16,6 +17,8 @@ export interface AccountingReportOrder {
   netProfit: number;
   profitMarginPct: number;
   missingProductCost: boolean;
+  /** «Набор»: profit of each set of the order (set price − items − print − box). */
+  giftSets?: GiftSetProfit[];
 }
 
 export interface AccountingExpenseRow {
@@ -47,6 +50,8 @@ interface AccountingReportResponse {
   currency: string;
   summary: AccountingSummary;
   orders: AccountingReportOrder[];
+  /** «Наборы» of the period, per template. */
+  giftSetsSummary?: GiftSetProfitSummaryRow[];
   expensesBreakdown: AccountingExpenseRow[];
 }
 
@@ -69,6 +74,7 @@ export function useAccountingReport(dateFrom: string, dateTo: string) {
     amountsExVat: data?.amountsExVat ?? false,
     summary: data?.summary ?? null,
     orders: data?.orders ?? null,
+    giftSetsSummary: data?.giftSetsSummary ?? [],
     expensesBreakdown: data?.expensesBreakdown ?? [],
     error,
     isLoading,

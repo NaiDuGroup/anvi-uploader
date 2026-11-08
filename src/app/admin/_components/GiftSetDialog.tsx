@@ -8,17 +8,16 @@ import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { UvStockItemJson } from "@/lib/uv/dto";
 import {
   giftSetBoxName,
+  giftSetPriceOnSave,
   giftSetReadyUnitLabel,
   giftSetUnitPrice,
   type GiftSetCustomerType,
-  type GiftSetRole,
   type GiftSetTemplate,
+  type StoredGiftSetPrice,
 } from "@/lib/giftSet/giftSet";
 import {
   defaultGiftSetChoice,
   giftSetChoiceProblem,
-  giftSetComponentOptions,
-  giftSetComponentTitle,
   giftSetItemAlt,
   giftSetShortNames,
   giftSetSwatchHex,
@@ -107,8 +106,10 @@ function VariantPicker({
 }
 
 /**
- * «Набор» picker: template, number of sets, the colour of every item (or of
- * the ready set), price per set (retail / dealer; staff may type their own).
+ * «Набор» picker: template, number of sets, price per set (retail / dealer;
+ * staff may type their own). A ready set (C) picks its colour here; an
+ * assembled set (A / B) just lists what it adds — the default items fill the
+ * rows, and the manager changes any mug / notebook / pen in its row.
  */
 export function GiftSetDialog({
   templates,
@@ -116,6 +117,7 @@ export function GiftSetDialog({
   customerType,
   allowManualPrice,
   initial,
+  savedPrice = null,
   reserved,
   boxStock,
   boxNames,
@@ -129,6 +131,8 @@ export function GiftSetDialog({
   customerType: GiftSetCustomerType;
   allowManualPrice: boolean;
   initial: GiftSetChoice | null;
+  /** Edit: the price the saved set was sold at (kept for the same template and customer type). */
+  savedPrice?: StoredGiftSetPrice | null;
   /** Units the unsaved order already takes (other rows / sets): variant id, `box:<SKU>`. */
   reserved: ReadonlyMap<string, number>;
   /** Stock of the template boxes by SKU (staff); absent → not shown. */
@@ -160,7 +164,13 @@ export function GiftSetDialog({
       }
     : null;
   const problem = template && effective ? giftSetChoiceProblem(template, effective) : "variant";
-  const price = template ? giftSetUnitPrice(template, customerType, effective?.manualUnitPriceMdl ?? null) : null;
+  const price = template
+    ? giftSetPriceOnSave(template, customerType, effective?.manualUnitPriceMdl ?? null, savedPrice, allowManualPrice)
+    : null;
+  // The saved order's price differs from today's template price: say which one counts.
+  const templateNow = template ? giftSetUnitPrice(template, customerType).unitPriceMdl : null;
+  const keptOldPrice =
+    price != null && templateNow != null && price.source !== "manual" && savedPrice?.templateId === template?.id && price.unitPriceMdl !== templateNow;
   const available = (i: UvStockItemJson): number => i.stockQuantity - (reserved.get(i.id) ?? 0);
   const want = Math.max(0, effective?.quantity ?? 0);
   // Items short for N sets: the order still goes in, marked «Закупка».
@@ -286,18 +296,29 @@ export function GiftSetDialog({
                 ) : null}
               </>
             ) : (
-              template.components.map((c) => (
-                <VariantPicker
-                  key={c.role}
-                  testId={`gift-set-variants-${c.role}`}
-                  label={giftSetComponentTitle(c.label, c.skuMatch, giftSetComponentOptions(template, c.role, catalogs))}
-                  items={giftSetComponentOptions(template, c.role, catalogs)}
-                  value={choice.variants[c.role]}
-                  onChange={(id) => setChoice({ ...choice, variants: { ...choice.variants, [c.role as GiftSetRole]: id } })}
-                  available={available}
-                  t={t}
-                />
-              ))
+              // Assembled: what the set adds (default items); each is changed later in its row.
+              <div data-testid="gift-set-contents">
+                <p className="mb-1.5 text-sm font-semibold text-gray-900">{g.contents}</p>
+                <ul className="flex flex-col gap-1.5">
+                  {template.components.map((c) => {
+                    const item = allItems.find((i) => i.id === choice.variants[c.role]);
+                    return (
+                      <li key={c.role} className="flex items-center gap-2 text-xs text-gray-700" data-testid={`gift-set-contents-${c.role}`}>
+                        {item ? (
+                          <GiftSetItemThumb imageUrl={item.imageUrl} swatch={giftSetSwatchHex(item)} alt={giftSetItemAlt(item)} size="sm" />
+                        ) : null}
+                        <span className="flex flex-col leading-tight">
+                          <span className="font-medium text-gray-900">{c.label}</span>
+                          <span className="text-gray-500">
+                            {item ? `${item.itemNames.ru ?? item.name}${item.variantLabel ? ` · ${item.variantLabel}` : ""}` : g.noVariants}
+                          </span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="mt-1.5 text-xs text-gray-500">{g.contentsHint}</p>
+              </div>
             )
           ) : null}
 
@@ -342,6 +363,11 @@ export function GiftSetDialog({
                   {g.total}: <b data-testid="gift-set-total">{fmt(Math.round(price.unitPriceMdl * Math.max(0, effective?.quantity ?? 0) * 100) / 100)} MDL</b>
                 </span>
               </div>
+              {keptOldPrice ? (
+                <p className="mt-1 text-xs text-gray-600" data-testid="gift-set-kept-price">
+                  {g.keptOldPrice(fmt(templateNow!))}
+                </p>
+              ) : null}
               {customerType === "dealer" && template.dealerPriceMdl == null && allowManualPrice ? (
                 <p className="mt-1 text-xs text-amber-700">{g.dealerPriceMissing}</p>
               ) : null}

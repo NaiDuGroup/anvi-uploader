@@ -2274,6 +2274,22 @@ export interface TranslationDictionary {
     breakdownTaxes: string;
     breakdownNet: string;
     breakdownMargin: string;
+    /** «Набор» profit: per set of the order, and the «Наборы» summary of the period. */
+    giftSetBlockTitle: (name: string, quantity: number) => string;
+    giftSetItemCost: string;
+    giftSetPrintCost: string;
+    giftSetBoxCost: string;
+    giftSetTotalCost: string;
+    giftSetRevenue: string;
+    giftSetProfit: string;
+    giftSetMissingCost: string;
+    giftSetsSummaryTitle: string;
+    giftSetsSummaryHint: string;
+    giftSetsColTemplate: string;
+    giftSetsColCount: string;
+    giftSetsColRevenue: string;
+    giftSetsColCost: string;
+    giftSetsColProfit: string;
     sectionProduction: string;
     sectionExpenses: string;
     productionMugPrint: string;
@@ -3275,6 +3291,21 @@ export interface TranslationDictionary {
     removeConfirmTitle: (name: string) => string;
     /** Body of the confirm: all rows of the set and their files go away. */
     removeConfirm: string;
+    /** Assembled set: an item row leaves the set (removed / changed to another type) — «Убрать кружку из набора?». */
+    leaveConfirmTitle: (role: "pen" | "notebook" | "mug", change: boolean) => string;
+    /** Body: the set dissolves, the other rows go at their normal price, the box goes. */
+    leaveConfirm: string;
+    leaveRemove: string;
+    leaveChange: string;
+    /** Tooltip of a set row's quantity: changed in «Изменить набор». */
+    quantityInSetDialog: string;
+    /** Dialog (assembled set): what the set adds, and that each item is changed in its row. */
+    contents: string;
+    contentsHint: string;
+    /** Dialog (edit): the order keeps the price it was sold at; today's template price for reference. */
+    keptOldPrice: (templatePrice: string) => string;
+    /** Settings: a new template price applies to new orders only. */
+    settingsPriceNote: string;
     fileFor: (label: string) => string;
     zoneSize: (w: string, h: string) => string;
     /** «+ коробка 30×23×8,5» (box size or SKU). */

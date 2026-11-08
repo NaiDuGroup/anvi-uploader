@@ -13,6 +13,7 @@ import {
 import { expandToOneFilePerLine } from "@/lib/adminOrderCreateHelpers";
 import { findArtworkLargerThanOrdered } from "@/lib/files/serverArtworkCheck";
 import { resolveOrderLines } from "@/lib/orderCreate/orderLines";
+import { storedGiftSetPrices } from "@/lib/giftSet/giftSet";
 import { dealerFreeLines, dealerLineTotalsMdl, dealerOrderTotalMdl } from "@/lib/orderCreate/dealerLinePrices";
 import { serializeOrderPrice } from "@/lib/orderPriceDecimal";
 import type { AdminOrderLineInput, DealerOrderUpdateInput } from "@/lib/validations";
@@ -210,7 +211,11 @@ export async function dealerEditOrder(params: {
     if (tooLarge) throw new DealerOrderModifyError("artwork_larger_than_ordered", null, tooLarge);
   }
 
-  const { resolved, lfLineTotalsMdl } = await resolveOrderLines(lineInputs, { allowUnpricedPrint: true });
+  const { resolved, lfLineTotalsMdl } = await resolveOrderLines(lineInputs, {
+    allowUnpricedPrint: true,
+    // A saved set keeps its price (and a staff set price) when the template price changed since.
+    storedGiftSetPrices: storedGiftSetPrices(preOrder.orderLines),
+  });
   const lineTotalsMdl = await dealerLineTotalsMdl(resolved, lfLineTotalsMdl);
   const goodsTotalMdl = dealerOrderTotalMdl(lineTotalsMdl, dealerFreeLines(resolved));
 

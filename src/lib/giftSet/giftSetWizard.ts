@@ -22,7 +22,6 @@ import {
   GIFT_SET_BOX_LINE_TYPE,
   giftSetBoxName,
   giftSetReadyUnitLabel,
-  giftSetUnitPrice,
   readyZoneLineType,
   skuMatches,
   splitSetUnitPrice,
@@ -31,6 +30,8 @@ import {
   type GiftSetRole,
   type GiftSetTemplate,
   type OrderLineSetData,
+  type StoredGiftSetPrice,
+  giftSetPriceOnSave,
 } from "./giftSet";
 
 /** What a wizard row keeps about its set. */
@@ -46,6 +47,12 @@ export interface GiftSetRowAssign {
   quantity: number;
   /** Staff: price of one set instead of the template's (null = template). */
   manualUnitPriceMdl: number | null;
+  /**
+   * Edit: the price the saved set was sold at (`OrderLine.setData`). It stays
+   * when the template price changes later — the server keeps it the same way
+   * (`giftSetPriceOnSave`); a new template / customer type takes today's price.
+   */
+  savedPrice?: StoredGiftSetPrice | null;
 }
 
 /** What the set dialog returns. */
@@ -89,12 +96,24 @@ export function readyGiftSetVariants(template: GiftSetTemplate, uvItems: readonl
   return uvItems.filter((i) => i.sku.toUpperCase() === up || i.sku.toUpperCase().startsWith(`${up}-`));
 }
 
-/** Default choice: the first in-stock variant of each component (else the first). */
+/** Every stock variant of a component's type (any mug / notebook / pen): an assembled set's row takes any of them. */
+export function giftSetRoleOptions(role: GiftSetRole, catalogs: GiftSetCatalogs): UvStockItemJson[] {
+  const method = methodFor(role);
+  const items = method === "uv_print" ? catalogs.uv : catalogs.sublimation;
+  return items.filter((i) => designerProductForCategory(method, i.categoryCode) === role);
+}
+
+/**
+ * Default choice: per component the first in-stock variant of the template's
+ * SKU glob (else its first); when nothing matches the glob, the first in-stock
+ * item of the component's type — the row starts filled, the manager changes
+ * the item in the row.
+ */
 export function defaultGiftSetChoice(template: GiftSetTemplate, catalogs: GiftSetCatalogs): GiftSetChoice {
   const pick = (items: UvStockItemJson[]): string | undefined => (items.find((i) => i.stockQuantity > 0) ?? items[0])?.id;
   const variants: Partial<Record<GiftSetRole, string>> = {};
   for (const c of template.components) {
-    const id = pick(giftSetComponentOptions(template, c.role, catalogs));
+    const id = pick(giftSetComponentOptions(template, c.role, catalogs)) ?? pick(giftSetRoleOptions(c.role, catalogs));
     if (id) variants[c.role] = id;
   }
   return {
@@ -178,7 +197,13 @@ export function giftSetRowTotals(
       g.forEach((r) => out.set(r.slotId, 0));
       continue;
     }
-    const price = giftSetUnitPrice(template, customerType, opts.allowManualPrice ? first.manualUnitPriceMdl : null);
+    const price = giftSetPriceOnSave(
+      template,
+      customerType,
+      first.manualUnitPriceMdl,
+      g.map((r) => r.giftSet.savedPrice).find((p) => p != null),
+      opts.allowManualPrice,
+    );
     const weights = g.map((r) =>
       template.kind === "ready"
         ? (template.zones.find((z) => z.id === r.giftSet.zoneId)?.weight ?? 0)
@@ -206,6 +231,12 @@ export function giftSetRowFromLine(
     role: data.role === "box" ? "ready" : data.role,
     quantity: data.quantity,
     manualUnitPriceMdl: data.priceSource === "manual" ? data.unitPriceMdl : null,
+    savedPrice: {
+      templateId: data.templateId,
+      customerType: data.customerType,
+      unitPriceMdl: data.unitPriceMdl,
+      priceSource: data.priceSource,
+    },
     ...(zoneId ? { zoneId } : {}),
     ...(readyVariantId ? { readyVariantId } : {}),
   };
@@ -575,5 +606,42 @@ export function giftSetShortNames(
     const rest = words[k]!.filter((w) => !common.has(w.toLowerCase()) && !/^[—–-]$/.test(w)).join(" ");
     out.set(it.id, rest || full[k]!);
   });
+  return out;
+}
+
+// ─── Dissolving an assembled set ────────────────────────────────────────────────
+
+/**
+ * An assembled set is a promo combo of ordinary rows: a row may change to any
+ * stock item of its own type (another mug / notebook / pen) and stay in the
+ * set. Anything else — another product type, the client's own item — takes
+ * the row out of the set, and the set dissolves ({@link dissolveGiftSetAssigns}).
+ * Ready sets (C) never take free changes (their rows have no product picker).
+ */
+export function giftSetRowKeepsSet(
+  gs: Pick<GiftSetRowAssign, "role">,
+  next: { productType: string; stockItem: boolean },
+): boolean {
+  if (gs.role === "ready") return false;
+  return next.productType === gs.role && next.stockItem;
+}
+
+/**
+ * Wizard rows after a set dissolves (one item row removed or changed to
+ * another type): every row of the group leaves the set and goes back to its
+ * normal price (`linePriceStr` cleared → the row's own price, as if added on
+ * its own). The set's box row is derived from the group, so it goes too —
+ * nothing is written off for it. `removedSlotId` is dropped from the result.
+ */
+export function dissolveGiftSetAssigns<A extends { giftSet?: GiftSetRowAssign | null; linePriceStr: string }>(
+  assigns: Readonly<Record<string, A>>,
+  groupId: string,
+  removedSlotId?: string | null,
+): Record<string, A> {
+  const out: Record<string, A> = {};
+  for (const [id, a] of Object.entries(assigns)) {
+    if (id === removedSlotId) continue;
+    out[id] = a.giftSet?.groupId === groupId ? { ...a, giftSet: null, linePriceStr: "" } : a;
+  }
   return out;
 }

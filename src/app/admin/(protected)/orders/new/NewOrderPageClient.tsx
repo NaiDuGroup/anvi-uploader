@@ -8,6 +8,7 @@ import {
   isLegacyReadySetLine,
   parseOrderLineSetData,
   readyZoneLineType,
+  type GiftSetRole,
   type GiftSetTemplate,
   type GiftSetZone,
 } from "@/lib/giftSet/giftSet";
@@ -25,6 +26,8 @@ import {
   giftSetRowFromLine,
   giftSetRowPlans,
   giftSetRowTotals,
+  giftSetRowKeepsSet,
+  dissolveGiftSetAssigns,
   type GiftSetCatalogs,
   type GiftSetChoice,
   type GiftSetBoxRow,
@@ -104,6 +107,7 @@ import {
 import {
   convertPickedDesignerItem,
   designerCreateLine,
+  designerProductForVariant,
   designerRowVariantId,
   designerUpdateLineFields,
   emptyWizardSublimationDraft,
@@ -2350,6 +2354,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const [stockPicker, setStockPicker] = useState<{ slotId: string; category: string | null } | null>(null);
   /** «Убрать набор» waiting for the in-app confirm: the row clicked, all rows of its set, the set name. */
   const [giftSetRemove, setGiftSetRemove] = useState<{ ids: string[]; name: string } | null>(null);
+  /**
+   * «Набор» (assembled): an item row about to leave its set — removed (`run`
+   * null) or changed to another product type / the client's item (`run` does
+   * the change). Confirmed → the set dissolves (`dissolveGiftSet`).
+   */
+  const [giftSetLeave, setGiftSetLeave] = useState<{ slotId: string; role: GiftSetRole; run: (() => void) | null } | null>(null);
   /** Rows whose «подсказка типа» was answered «Нет, это печать» (for this editing session). */
   const [dismissedTypeHints, setDismissedTypeHints] = useState<ReadonlySet<string>>(() => new Set());
 
@@ -4209,6 +4219,44 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     );
   }
 
+  /** Set badge + item label over an assembled set row's product picker. */
+  function renderGiftSetRowBadge(gs: GiftSetRowAssign) {
+    const g = t.giftSet;
+    const template = giftSetTemplates.find((x) => x.id === gs.templateId) ?? null;
+    return (
+      <div className="mb-1" data-testid="gift-set-row">
+        <GiftSetBadge label={g.badge(template?.name ?? gs.templateId, gs.quantity)} className="max-w-full whitespace-normal" />
+      </div>
+    );
+  }
+
+  /** Price + quantity cells of an assembled set row: its share of the set price, N sets (changed in «Изменить набор»). */
+  function renderGiftSetPriceQtyCells(s: AdminWizardSlot, gs: GiftSetRowAssign) {
+    const g = t.giftSet;
+    const total = slotLineTotalMdl(s.id);
+    return (
+      <>
+        <td className="min-w-0 px-1 py-2 align-top text-center tabular-nums">
+          <span className="py-1 text-[13px] font-medium text-gray-900" data-testid="gift-set-row-total">
+            {total > 0 ? formatAmountMdl(total, t.admin.currency) : "—"}
+          </span>
+          {gs.quantity > 0 && total > 0 ? (
+            <p className="text-[10px] leading-tight text-gray-500">{g.lineShare(String(Math.round((total / gs.quantity) * 100) / 100))}</p>
+          ) : null}
+        </td>
+        <td className="max-w-[4.75rem] px-1 py-2 align-top text-center">
+          <input
+            readOnly
+            aria-label={g.quantity}
+            title={g.quantityInSetDialog}
+            className="mx-auto block w-full min-w-[3.75rem] max-w-[4.5rem] rounded-md border border-gray-300 bg-gray-50 px-2 py-1 text-center text-sm tabular-nums text-gray-500"
+            value={String(gs.quantity)}
+          />
+        </td>
+      </>
+    );
+  }
+
   /** Stock item (variant) of a «Набор» row: the component, or the ready set's colour. */
   function giftSetRowItem(a: SlotAssign): UvStockItemJson | null {
     const gs = a.giftSet;
@@ -4244,7 +4292,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               >
                 {g.change}
               </button>
-              <button type="button" data-testid="gift-set-remove" className="text-gray-500 hover:text-red-600" onClick={() => removeSlot(s.id)}>
+              <button type="button" data-testid="gift-set-remove" className="text-gray-500 hover:text-red-600" onClick={() => removeGiftSet(s.id)}>
                 {g.remove}
               </button>
             </span>
@@ -4339,18 +4387,73 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   }
 
   /**
-   * Removes a row. A row of a «Набор» removes the whole set (after a
-   * confirm): a set without one of its items cannot be priced or packed.
+   * Removes a row. An item row of an assembled «Набор» leaves the set after a
+   * confirm: the set dissolves, the other rows go at their normal price, the
+   * box goes. A ready set's row removes the whole set (after a confirm): it
+   * is one bought-in item.
    */
   function removeSlot(slotId: string): void {
     const ids: string[] = giftSetGroupSlotIds(slotId, giftSetRows());
+    const gs = assignBySlot[slotId]?.giftSet;
+    if (ids.length > 1 && gs && gs.role !== "ready") {
+      setGiftSetLeave({ slotId, role: gs.role, run: null });
+      return;
+    }
     if (ids.length > 1) {
-      const gs = assignBySlot[slotId]?.giftSet;
-      const template = gs ? giftSetTemplates.find((x) => x.id === gs.templateId) : null;
-      setGiftSetRemove({ ids, name: template?.name ?? gs?.templateId ?? "" });
+      removeGiftSet(slotId);
       return;
     }
     removeSlotIds(ids);
+  }
+
+  /** «Убрать набор»: every row of the set goes (after a confirm). */
+  function removeGiftSet(slotId: string): void {
+    const ids: string[] = giftSetGroupSlotIds(slotId, giftSetRows());
+    const gs = assignBySlot[slotId]?.giftSet;
+    const template = gs ? giftSetTemplates.find((x) => x.id === gs.templateId) : null;
+    setGiftSetRemove({ ids, name: template?.name ?? gs?.templateId ?? "" });
+  }
+
+  /**
+   * A change of a row: runs at once, unless it takes an assembled set's item
+   * row out of its set (another product type, the client's own item) — then
+   * the manager confirms first and the set dissolves. `next` = what the row
+   * becomes (null: another type for sure). Another SKU of the same type keeps the set.
+   */
+  function guardSetRowChange(
+    slotId: string,
+    next: { productType: string | null; stockItem: boolean } | null,
+    run: () => void,
+  ): void {
+    const gs = assignBySlot[slotId]?.giftSet;
+    if (!gs || gs.role === "ready" || (next?.productType && giftSetRowKeepsSet(gs, { productType: next.productType, stockItem: next.stockItem }))) {
+      run();
+      return;
+    }
+    setGiftSetLeave({ slotId, role: gs.role, run });
+  }
+
+  /** Designer product (mug / notebook / pen) a stock menu entry becomes, else null. */
+  function stockEntryDesigner(entryId: string): string | null {
+    const entry: StockMenuEntry | undefined = stockEntries.find((e) => e.id === entryId);
+    if (!entry) return null;
+    for (const m of entry.methods) {
+      if (m === "dtf_apparel") continue;
+      const d = designerProductForVariant(designerCatalogs, m, entry.id);
+      if (d) return d;
+    }
+    return entry.methods[0] ?? null;
+  }
+
+  /**
+   * The set of this row dissolves: its rows become ordinary rows at their
+   * normal price, the box row goes (not written off). `remove`: the row itself goes too.
+   */
+  function dissolveGiftSet(slotId: string, remove: boolean): void {
+    const groupId = assignBySlot[slotId]?.giftSet?.groupId;
+    if (!groupId) return;
+    setAssignBySlot((prev) => dissolveGiftSetAssigns(prev, groupId));
+    if (remove) removeSlotIds([slotId]);
   }
 
   /** Drops these rows (a single row, or every row of a set). */
@@ -4415,6 +4518,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     const firstOld = slots.findIndex((x) => oldIds.includes(x.id));
     // A new set goes after the lines already there (sets read A, B, C in the order added); an edited set stays put.
     const isNewSet = !assignBySlot[slotId]?.giftSet;
+    // Edit: the price the saved set was sold at stays (unless the template / customer type changes).
+    const savedPrice = assignBySlot[slotId]?.giftSet?.savedPrice ?? null;
     setSlots((prev) => {
       const byId = new Map(prev.map((x) => [x.id, x]));
       const groupRows: AdminWizardSlot[] = planned.map(({ id }) => byId.get(id) ?? { id, sourceOrderLineId: null });
@@ -4440,6 +4545,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           role: plan.role,
           quantity: choice.quantity,
           manualUnitPriceMdl: choice.manualUnitPriceMdl,
+          ...(savedPrice ? { savedPrice } : {}),
           ...(plan.zoneId ? { zoneId: plan.zoneId, readyVariantId: plan.variantId } : {}),
         };
         if (plan.productType === "uv_print") {
@@ -5586,6 +5692,21 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         }}
         onClose={() => setGiftSetRemove(null)}
       />
+      <AdminConfirmDialog
+        open={giftSetLeave !== null}
+        title={t.giftSet.leaveConfirmTitle(giftSetLeave?.role ?? "mug", giftSetLeave?.run != null)}
+        description={t.giftSet.leaveConfirm}
+        confirmLabel={giftSetLeave?.run != null ? t.giftSet.leaveChange : t.giftSet.leaveRemove}
+        cancelLabel={t.giftSet.cancel}
+        onConfirm={() => {
+          if (giftSetLeave) {
+            dissolveGiftSet(giftSetLeave.slotId, giftSetLeave.run == null);
+            giftSetLeave.run?.();
+          }
+          setGiftSetLeave(null);
+        }}
+        onClose={() => setGiftSetLeave(null)}
+      />
       <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:py-8 text-gray-900">
       <header className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -5909,11 +6030,23 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               locale={locale}
                               costsIncludeVat={printEconomics?.purchaseCostsIncludeVat ?? true}
                               hideCosts={dealerMode}
-                              sell={{
-                                unitPriceMdl: parsedLinePriceMdl(a.linePriceStr) ?? designerUv.pricing.unitItemPriceMdl,
-                                manual: parsedLinePriceMdl(a.linePriceStr) != null,
-                                ...(a.productType === "pen" ? { totalMdl: slotLineTotalMdl(s.id) } : {}),
-                              }}
+                              sell={
+                                a.giftSet
+                                  ? {
+                                      // «Набор»: the row's share of the set price.
+                                      unitPriceMdl:
+                                        a.giftSet.quantity > 0
+                                          ? Math.round((slotLineTotalMdl(s.id) / a.giftSet.quantity) * 100) / 100
+                                          : 0,
+                                      manual: true,
+                                      totalMdl: slotLineTotalMdl(s.id),
+                                    }
+                                  : {
+                                      unitPriceMdl: parsedLinePriceMdl(a.linePriceStr) ?? designerUv.pricing.unitItemPriceMdl,
+                                      manual: parsedLinePriceMdl(a.linePriceStr) != null,
+                                      ...(a.productType === "pen" ? { totalMdl: slotLineTotalMdl(s.id) } : {}),
+                                    }
+                              }
                             />
                           ) : null;
                         let pricePlaceholder =
@@ -6153,7 +6286,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   )}
                               </div>
                             </td>
-                            {a.giftSet ? (
+                            {a.giftSet?.role === "ready" ? (
                               renderGiftSetCells(
                                 s,
                                 a,
@@ -6168,6 +6301,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 const menuState: RowMenuState = slotMenuState(a);
                                 return (
                                   <>
+                                    {/* An assembled «Набор» row: the set badge over the row's normal product picker. */}
+                                    {a.giftSet ? renderGiftSetRowBadge(a.giftSet) : null}
                                     <ProductTypeMenu
                                       className="w-full max-w-full min-w-0"
                                       value={adminProductMenuValue(a.productType)}
@@ -6175,7 +6310,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                       onChange={(pt) => {
                                         // Pen / notebook / mug rows are shown as their print method.
                                         if (pt === adminProductMenuValue(a.productType)) return;
-                                        updateSlot(s.id, { productType: pt });
+                                        // Another type takes a set row out of its set (confirm, the set dissolves).
+                                        guardSetRowChange(s.id, null, () => updateSlot(s.id, { productType: pt }));
                                       }}
                                       buttonClassName="text-sm"
                                       stockCategories={stockMenuTiles}
@@ -6187,10 +6323,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                       clientServices={clientServiceTiles}
                                       clientGroupLabel={t.productPicker.clientGroup}
                                       selectedClientService={menuState.kind === "client" ? (menuState.service ?? menuState.method) : null}
-                                      onPickClientService={(type) => pickSlotClientService(s.id, type)}
+                                      onPickClientService={(type) =>
+                                        guardSetRowChange(s.id, null, () => pickSlotClientService(s.id, type))
+                                      }
                                       current={slotMenuCurrent(menuState)}
                                       giftSetEntry={
-                                        giftSetTemplates.some((x) => x.active)
+                                        !a.giftSet && giftSetTemplates.some((x) => x.active)
                                           ? {
                                               title: t.giftSet.typeLabel,
                                               hint: t.giftSet.typeHint,
@@ -6228,7 +6366,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                 : "text-gray-500 hover:text-gray-800",
                                             )}
                                             onClick={() => {
-                                              if (m !== menuState.method) pickSlotStockItem(s.id, menuState.entry.id, m);
+                                              if (m === menuState.method) return;
+                                              const entryId = menuState.entry.id;
+                                              guardSetRowChange(
+                                                s.id,
+                                                {
+                                                  productType:
+                                                    m === "dtf_apparel" ? m : (designerProductForVariant(designerCatalogs, m, entryId) ?? m),
+                                                  stockItem: true,
+                                                },
+                                                () => pickSlotStockItem(s.id, entryId, m),
+                                              );
                                             }}
                                           >
                                             {methodTitle(m)}
@@ -6252,7 +6400,24 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                       : uvCatalog.items
                                   }
                                   variantId={designerRowVariantId(a)}
-                                  onPick={(pick) => pickSlotPrintMethodItem(s.id, pick)}
+                                  onPick={(pick) =>
+                                    // Another mug / notebook / pen keeps a set row in its set; anything else dissolves it (confirm).
+                                    guardSetRowChange(
+                                      s.id,
+                                      {
+                                        productType:
+                                          pick.source === "stock"
+                                            ? designerProductForVariant(
+                                                designerCatalogs,
+                                                printMethodForDesignerProduct(a.productType)!,
+                                                pick.variantId,
+                                              )
+                                            : null,
+                                        stockItem: pick.source === "stock",
+                                      },
+                                      () => pickSlotPrintMethodItem(s.id, pick),
+                                    )
+                                  }
                                   onOpenPicker={() => {
                                     const st: RowMenuState = slotMenuState(a);
                                     setStockPicker({ slotId: s.id, category: st.kind === "stock" ? st.entry.categoryCode : null });
@@ -7183,6 +7348,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   />
                                 )}
                             </td>
+                            {a.giftSet ? (
+                              renderGiftSetPriceQtyCells(s, a.giftSet)
+                            ) : (
+                            <>
                             <td className="min-w-0 px-1 py-2 align-top text-center tabular-nums">
                               <div className="flex flex-col items-center gap-0.5">
                                 {dealerMode ? (
@@ -7292,6 +7461,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 }}
                               />
                             </td>
+                            </>
+                            )}
                             </>
                             )}
                             <td className="py-2 text-right align-top">
@@ -7546,7 +7717,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           return st?.kind === "stock" ? st.entry.id : null;
         })()}
         onPick={(id) => {
-          if (stockPicker) pickSlotStockItem(stockPicker.slotId, id);
+          if (!stockPicker) return;
+          const slotId = stockPicker.slotId;
+          guardSetRowChange(slotId, { productType: stockEntryDesigner(id), stockItem: true }, () => pickSlotStockItem(slotId, id));
         }}
         customerType={customer.customerType}
         t={t}
@@ -7559,6 +7732,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           customerType={dealerMode ? "dealer" : customer.customerType}
           allowManualPrice={!dealerMode}
           initial={giftSetDialog.initial}
+          savedPrice={assignBySlot[giftSetDialog.slotId]?.giftSet?.savedPrice ?? null}
           reserved={giftSetReservedStock(
             slots.map((x) => {
               const row = assignBySlot[x.id];
