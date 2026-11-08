@@ -14,6 +14,17 @@ export interface RepeatFileJson {
   fileUrl: string;
   source: RepeatFileSource;
   libraryFileId: string | null;
+  /** Library items: title and file facts shown on the wizard row. */
+  library?: {
+    title: string;
+    sizeBytes: number | null;
+    pixelWidth: number | null;
+    pixelHeight: number | null;
+    dpi: number | null;
+    widthMm: number | null;
+    heightMm: number | null;
+    pageCount: number | null;
+  };
 }
 
 const PARALLEL = 6;
@@ -44,7 +55,20 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
           archivedAt: null,
           OR: [{ sourceFileId: { in: ids } }, ...(libKeys.length ? [{ storageKey: { in: libKeys } }] : [])],
         },
-        select: { id: true, storageKey: true, sourceFileId: true, fileName: true },
+        select: {
+          id: true,
+          storageKey: true,
+          sourceFileId: true,
+          fileName: true,
+          title: true,
+          sizeBytes: true,
+          pixelWidth: true,
+          pixelHeight: true,
+          dpi: true,
+          widthMm: true,
+          heightMm: true,
+          pageCount: true,
+        },
         orderBy: { createdAt: "desc" },
       })
     : [];
@@ -54,7 +78,14 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   for (const f of order.files) {
     const hit = lib.find((l) => l.storageKey === f.fileUrl) ?? lib.find((l) => l.sourceFileId === f.id);
     if (hit) {
-      files[f.id] = { fileName: f.fileName, fileUrl: hit.storageKey, source: "library", libraryFileId: hit.id };
+      const { title, sizeBytes, pixelWidth, pixelHeight, dpi, widthMm, heightMm, pageCount } = hit;
+      files[f.id] = {
+        fileName: f.fileName,
+        fileUrl: hit.storageKey,
+        source: "library",
+        libraryFileId: hit.id,
+        library: { title, sizeBytes, pixelWidth, pixelHeight, dpi, widthMm, heightMm, pageCount },
+      };
     } else if (/^https?:\/\//i.test(f.fileUrl)) {
       files[f.id] = { fileName: f.fileName, fileUrl: f.fileUrl, source: "link", libraryFileId: null };
     } else {
