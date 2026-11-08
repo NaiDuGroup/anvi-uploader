@@ -110,7 +110,6 @@ export const libraryRo: LibraryDictionary = {
   missingFileGone: "(șters din stocare)",
   expiredPhotos: (n) =>
     `Fotografiile machetei au fost șterse din stocare (${n}) — în editor macheta va fi fără ele. Fișierul de tipar nu se schimbă; pentru a modifica macheta, încărcați fotografiile din nou.`,
-  repeatLineFiles: (i, n) => `O singură poziție, ca în comanda anterioară · fișierul ${i} din ${n}`,
   repeatOrder: "Repetă comanda",
   repeatLoading: "Se încarcă pozițiile comenzii pentru repetare…",
   repeatMissing:

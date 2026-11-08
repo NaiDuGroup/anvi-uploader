@@ -104,7 +104,6 @@ export const libraryEn: LibraryDictionary = {
   missingFileGone: "(deleted from storage)",
   expiredPhotos: (n) =>
     `Layout photos were deleted from storage (${n}) — the editor will show the layout without them. The print file is unchanged; upload the photos again to change the layout.`,
-  repeatLineFiles: (i, n) => `One line, as in the previous order · file ${i} of ${n}`,
   repeatOrder: "Repeat order",
   repeatLoading: "Loading the order lines to repeat…",
   repeatMissing:

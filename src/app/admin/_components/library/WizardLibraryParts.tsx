@@ -38,12 +38,12 @@ export function WizardReuseInfo({ reuse, onClear }: { reuse: WizardReusedFile; o
         ? d.reuseLink
         : d.reuseStorage;
   return (
-    <div className="ml-7 flex min-w-0 items-center gap-1.5 text-[11px]">
+    <div className="ml-7 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
       <span
         className={
           reuse.source === "library"
-            ? "inline-flex min-w-0 items-center gap-1 truncate rounded bg-emerald-50 px-1.5 py-px font-medium text-emerald-700 ring-1 ring-emerald-200"
-            : "inline-flex min-w-0 items-center gap-1 truncate rounded bg-sky-50 px-1.5 py-px font-medium text-sky-800 ring-1 ring-sky-200"
+            ? "inline-flex min-w-0 max-w-full items-center gap-1 truncate rounded bg-emerald-50 px-1.5 py-px font-medium text-emerald-700 ring-1 ring-emerald-200"
+            : "inline-flex min-w-0 max-w-full items-center gap-1 truncate rounded bg-sky-50 px-1.5 py-px font-medium text-sky-800 ring-1 ring-sky-200"
         }
         title={from}
       >
