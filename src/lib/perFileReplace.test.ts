@@ -8,7 +8,7 @@ import { layoutIssueEn } from "@/lib/i18n/layoutIssue/en";
 import { cabinetReplaceButtons } from "@/lib/ownerLineFileReplace";
 import { staffReplaceBody, staffReplaceLineFile } from "@/lib/layoutIssueClient";
 import { LayoutIssueError } from "@/lib/orderLineLayoutIssue";
-import { describeEntry, replacedFileNames, type HistoryEntry } from "@/app/admin/_components/HistoryPanel";
+import { describeHistoryEntry, replacedFileNames, type HistoryEntry } from "@/lib/orderHistoryFormat";
 import StaffReplaceLayoutFileDialog, { initialReplaceFileId } from "@/app/admin/_components/StaffReplaceLayoutFileDialog";
 import { ReplaceLayoutFileDialog, replaceRequestBody } from "@/app/cabinet/orders/[id]/ReplaceLayoutFileDialog";
 
@@ -102,29 +102,23 @@ describe("history names the replaced file", () => {
     userRole: "customer",
   });
 
-  it("line_layout_fixed by the client: «Позиция #9781.1/2: файл IMG_1.jpg заменён на new.pdf клиентом…»", () => {
+  it("line_layout_fixed with both names: «заменил(а) файл в позиции #9781.1/2: IMG_1.jpg → new.pdf»", () => {
     expect(
-      describeEntry(entry("line_layout_fixed", { lineCode: "#9781.1/2", by: "client", replacedFileName: "IMG_1.jpg", newFileName: "new.pdf" }), ru),
-    ).toBe("Позиция #9781.1/2: файл IMG_1.jpg заменён на new.pdf клиентом, позиция снова ждёт печати");
+      describeHistoryEntry(entry("line_layout_fixed", { lineCode: "#9781.1/2", by: "client", replacedFileName: "IMG_1.jpg", newFileName: "new.pdf" }), ru).text,
+    ).toBe("заменил(а) файл в позиции #9781.1/2: IMG_1.jpg → new.pdf");
   });
-  it("line_layout_fixed by staff → «студией»", () => {
-    expect(
-      describeEntry(entry("line_layout_fixed", { lineCode: "#1.1/1", by: "staff", replacedFileName: "a", newFileName: "b" }), ru),
-    ).toContain("заменён на b студией");
-  });
-  it("line_file_replaced by a dealer / a client", () => {
+  it("line_file_replaced names both files; the actor (dealer / client) comes from the row", () => {
     const base = { lineCode: "#9781.2/2", replacedFileName: "IMG_1.jpg", newFileName: "IMG_2.jpg" };
-    expect(describeEntry(entry("line_file_replaced", { ...base, role: "dealer" }), ru)).toBe(
-      "Позиция #9781.2/2: файл IMG_1.jpg заменён на IMG_2.jpg дилером до начала печати",
-    );
-    expect(describeEntry(entry("line_file_replaced", { ...base, role: "client" }), ru)).toContain("клиентом");
+    const d = describeHistoryEntry(entry("line_file_replaced", { ...base, role: "dealer" }), ru);
+    expect(d.text).toBe("заменил(а) файл в позиции #9781.2/2: IMG_1.jpg → IMG_2.jpg");
+    expect(d.kind).toBe("file_replaced");
   });
-  it("older entries (whole-line swap, no names) keep the short text", () => {
-    expect(describeEntry(entry("line_layout_fixed", { lineCode: "#1.1/1", by: "client" }), ru)).toBe(
-      layoutIssueRu.historyFixed("#1.1/1", true),
+  it("older entries (whole-line swap, no names) keep a short text", () => {
+    expect(describeHistoryEntry(entry("line_layout_fixed", { lineCode: "#1.1/1", by: "client" }), ru).text).toBe(
+      "прислал(а) новый файл для позиции #1.1/1",
     );
-    expect(describeEntry(entry("line_file_replaced", { lineCode: "#1.1/1", role: "dealer" }), ru)).toBe(
-      layoutIssueRu.historyOwnerReplaced("#1.1/1", true),
+    expect(describeHistoryEntry(entry("line_file_replaced", { lineCode: "#1.1/1", role: "dealer" }), ru).text).toBe(
+      "заменил(а) файл в позиции #1.1/1",
     );
   });
   it("replacedFileNames needs both names as non-empty strings", () => {

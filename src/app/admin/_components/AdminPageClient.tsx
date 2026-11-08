@@ -1203,6 +1203,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
           <HistoryPanel
             orderId={historyOrderId}
             orderNumber={historyOrder.orderNumber}
+            currentStatus={historyOrder.status}
             t={t}
             onClose={() => setHistoryOrderId(null)}
           />

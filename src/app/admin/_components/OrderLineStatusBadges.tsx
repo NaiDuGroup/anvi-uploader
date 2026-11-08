@@ -18,7 +18,7 @@ type T = ReturnType<typeof useLanguageStore.getState>["t"];
  * order status), so both helpers render nothing outside it.
  */
 
-const BADGE_CLASS: Record<LineProductionStatus, string> = {
+export const LINE_STATUS_BADGE_CLASS: Record<LineProductionStatus, string> = {
   WAITING: "border-amber-200 bg-amber-50 text-amber-800",
   NEEDS_LAYOUT: "border-amber-300 bg-amber-50 text-amber-900",
   PRINTING: "border-orange-300 bg-orange-50 text-orange-800",
@@ -43,7 +43,7 @@ export function OrderLineStatusBadge({
       data-status={s}
       className={cn(
         "inline-flex items-center gap-0.5 rounded-full border px-1.5 py-px text-[10px] font-semibold normal-case leading-none tracking-normal",
-        BADGE_CLASS[s],
+        LINE_STATUS_BADGE_CLASS[s],
       )}
     >
       {s === "DONE" ? (

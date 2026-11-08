@@ -3,6 +3,7 @@ import type { FileMetaText } from "@/lib/files/fileMetaFormat";
 import type { UvDictionary } from "./uv/types";
 import type { LayoutIssueDictionary } from "./layoutIssue/types";
 import type { DealerUrgencyDictionary } from "./dealerUrgency/types";
+import type { OrderHistoryDictionary } from "./orderHistory/types";
 import type { LibraryDictionary } from "./library/types";
 import type { AnnouncementsDictionary } from "./announcements/types";
 import type { SublimationDictionary } from "./sublimation/types";
@@ -2722,6 +2723,7 @@ export interface TranslationDictionary {
   /** «Нужен макет» on an order line (board, studio orders, cabinet). */
   layoutIssue: LayoutIssueDictionary;
   dealerUrgency: DealerUrgencyDictionary;
+  orderHistory: OrderHistoryDictionary;
   /** «Сублимация» order lines. */
   sublimation: SublimationDictionary;
   /** «DTF / UV: прайс и нормы» pages. */

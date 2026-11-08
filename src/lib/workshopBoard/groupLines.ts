@@ -746,3 +746,27 @@ export function sheetFinishingRu(data: {
   if (f.roundedCorners) parts.push("скруглённые углы");
   return parts.length ? parts.join(" · ") : null;
 }
+
+/**
+ * Name + quantity of one order line as the staff see it on the board
+ * («Кружка 330 мл белая» ×10), for the order history edit diff. `optionsKey`
+ * changes when the line's print options change (size, zones, paper…);
+ * null when the line cannot be read (legacy rows).
+ */
+export function lineHistorySummary(
+  line: RawOrderLine,
+): { name: string; qty: number; optionsKey: string } | null {
+  const facts = extractLineFacts(line);
+  if (!facts) return null;
+  let name: string;
+  if (facts.kind === "paper") name = facts.data.label;
+  else if (facts.kind === "dtf") {
+    const garment = facts.data.garmentNames?.ru ?? facts.data.garmentName;
+    name = garment ? `DTF · ${garment}` : DTF_GROUP_LABEL;
+  } else name = groupLabel(facts);
+  const { quantity: _qty, ...rest } = facts.data as unknown as { quantity?: number } & Record<string, unknown>;
+  void _qty;
+  // DTF / UV facts carry file ids (replaced files show up as a file change instead).
+  const optionsKey = JSON.stringify(rest, (k, v) => (k === "fileId" || k === "fileIds" ? undefined : v));
+  return { name, qty: factsQty(facts), optionsKey };
+}

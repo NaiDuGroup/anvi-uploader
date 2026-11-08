@@ -6,6 +6,8 @@ import { isWorkshopPhaseStatus } from "@/lib/orderStatusFromLines";
 import { rederiveOrderStatusInTx } from "@/lib/orderLineStatusUpdate";
 import { markLayoutFixedLinesInTx } from "@/lib/orderLineLayoutIssue";
 import { LAYOUT_ISSUE_ARCHIVE_REASON } from "@/lib/layoutIssue";
+import { diffOrderEdit, type OrderEditChange, type OrderHistorySnapshot } from "@/lib/orderEditDiff";
+import { orderLineHistorySnapshot } from "@/lib/orderEditSnapshot";
 import type {
   AdminOrderLineInput,
   FileInput,
@@ -466,9 +468,22 @@ export async function syncAdminOrderStructureInTx(
      * previous version (dealer cabinet edits).
      */
     archiveRemovedFiles?: { reason: string };
+    /**
+     * Do not write the «order changed» history entry: the caller logs the
+     * returned `changes` itself (dealer cabinet edit → `dealer_edited`).
+     */
+    skipChangeLog?: boolean;
   },
-): Promise<{ archivedFiles: { id: string; fileName: string }[] }> {
+): Promise<{ archivedFiles: { id: string; fileName: string }[]; changes: OrderEditChange[] }> {
   const filesById = collectFilesById(order);
+  const before: OrderHistorySnapshot = {
+    lines: order.orderLines.map(orderLineHistorySnapshot),
+    price: order.price == null ? null : Number(order.price),
+    phone: order.phone,
+    clientId: order.clientId,
+    clientName: order.clientName,
+    notes: order.notes,
+  };
   const oldLineIds = new Set(order.orderLines.map((l) => l.id));
 
   // Rolls, paper, mugs / pens / notebooks: whatever the order still holds by the unified ledger
@@ -682,16 +697,33 @@ export async function syncAdminOrderStructureInTx(
     },
   });
 
-  await tx.orderLog.create({
-    data: {
-      orderId: order.id,
-      userId,
-      action: "field_updated",
-      field: "order_structure",
-      oldValue: "",
-      newValue: "updated",
-    },
+  // History: what this save changed (lines, quantities, price, client…); nothing → no entry.
+  const afterLines = await tx.orderLine.findMany({
+    where: { orderId: order.id },
+    orderBy: { sortOrder: "asc" },
+    include: { files: true },
   });
+  const changes = diffOrderEdit(before, {
+    lines: afterLines.map(orderLineHistorySnapshot),
+    price: scalarPatch.price,
+    phone: scalarPatch.phone,
+    clientId: scalarPatch.clientId,
+    clientName: scalarPatch.clientName,
+    notes: scalarPatch.notes,
+  });
+  if (changes.length > 0 && !opts?.skipChangeLog) {
+    await tx.orderLog.create({
+      data: {
+        orderId: order.id,
+        userId,
+        action: "field_updated",
+        field: "order_structure",
+        oldValue: "",
+        newValue: "updated",
+        metadata: { changes } as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
 
   // Flagged lines with a new file go back to WAITING (+ layoutFixedAt, logs).
   await markLayoutFixedLinesInTx(tx, {
@@ -716,5 +748,5 @@ export async function syncAdminOrderStructureInTx(
     await rederiveOrderStatusInTx(tx, order.id, userId);
   }
 
-  return { archivedFiles };
+  return { archivedFiles, changes };
 }

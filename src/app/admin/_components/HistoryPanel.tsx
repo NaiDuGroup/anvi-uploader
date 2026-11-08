@@ -1,234 +1,114 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import { Badge } from "@/components/ui/badge";
-import { Clock, X, RefreshCw } from "lucide-react";
-import { layoutIssueReasonLabel } from "@/lib/layoutIssueClient";
+import {
+  ArrowRightLeft,
+  CircleCheck,
+  CircleX,
+  Clock,
+  Coins,
+  FileMinus,
+  FilePlus,
+  Flame,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Replace,
+  Trash2,
+  TriangleAlert,
+  Truck,
+  Undo2,
+  UserRound,
+  Wallet,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  actorName,
+  actorRole,
+  describeHistoryEntry,
+  groupHistoryByDay,
+  historyStatusLabel,
+  historyTime,
+  visibleHistoryEntries,
+  type HistoryEntry,
+  type HistoryIconKind,
+} from "@/lib/orderHistoryFormat";
+import { STATUS_VARIANT_MAP, TRIGGER_COLORS } from "@/app/admin/_lib/orderStatus";
+import { LINE_STATUS_BADGE_CLASS } from "./OrderLineStatusBadges";
+import type { OrderStatus } from "@/lib/validations";
+import type { LineProductionStatus } from "@/lib/orderLineProductionStatus";
 
-export interface HistoryEntry {
-  id: string;
-  action: string;
-  field: string | null;
-  oldValue: string | null;
-  newValue: string | null;
-  metadata: Record<string, unknown> | null;
-  createdAt: string;
-  userName: string;
-  userRole: string;
-}
+export type { HistoryEntry } from "@/lib/orderHistoryFormat";
 
 type T = ReturnType<typeof useLanguageStore.getState>["t"];
 
-const FIELD_LABELS: Record<string, keyof T["admin"]> = {
-  price: "historyFieldPrice",
-  isPrio: "historyFieldPrio",
-  isPaid: "historyFieldPaid",
-  notes: "historyFieldNotes",
-  phone: "historyFieldPhone",
-  clientName: "historyFieldClientName",
-  clientId: "historyFieldClientId",
-  issueReason: "historyFieldIssueReason",
+const ICONS: Record<HistoryIconKind, { icon: LucideIcon; className: string }> = {
+  created: { icon: Plus, className: "bg-emerald-100 text-emerald-700" },
+  status: { icon: ArrowRightLeft, className: "bg-blue-100 text-blue-700" },
+  urgency: { icon: Flame, className: "bg-red-100 text-red-600" },
+  payment: { icon: Wallet, className: "bg-emerald-100 text-emerald-700" },
+  payment_problem: { icon: TriangleAlert, className: "bg-red-100 text-red-600" },
+  price: { icon: Coins, className: "bg-amber-100 text-amber-700" },
+  file_added: { icon: FilePlus, className: "bg-sky-100 text-sky-700" },
+  file_removed: { icon: FileMinus, className: "bg-rose-100 text-rose-600" },
+  file_replaced: { icon: Replace, className: "bg-violet-100 text-violet-700" },
+  problem: { icon: TriangleAlert, className: "bg-amber-100 text-amber-700" },
+  problem_cleared: { icon: CircleCheck, className: "bg-emerald-100 text-emerald-700" },
+  shipping: { icon: Truck, className: "bg-indigo-100 text-indigo-700" },
+  client: { icon: UserRound, className: "bg-slate-100 text-slate-600" },
+  edit: { icon: Pencil, className: "bg-gray-100 text-gray-600" },
+  deleted: { icon: Trash2, className: "bg-red-100 text-red-600" },
+  restored: { icon: Undo2, className: "bg-emerald-100 text-emerald-700" },
+  cancelled: { icon: CircleX, className: "bg-red-100 text-red-600" },
 };
 
-function formatValue(raw: string | null, field: string | null, t: T): string {
-  if (raw === null || raw === "") return t.admin.historyValueEmpty;
-  if (field === "isPrio" || field === "isPaid") {
-    return raw === "true" ? t.admin.historyValueTrue : t.admin.historyValueFalse;
+/** Same colours as the status dropdown in the orders list. */
+function statusChipClass(code: string, scope: "order" | "line"): string {
+  if (scope === "line") {
+    return LINE_STATUS_BADGE_CLASS[code as LineProductionStatus] ?? "border-gray-200 bg-gray-50 text-gray-700";
   }
-  if (field === "status") {
-    const statusKey = raw as keyof T["statuses"];
-    return t.statuses[statusKey] ?? raw;
-  }
-  return raw;
+  const variant = STATUS_VARIANT_MAP[code as OrderStatus] ?? "outline";
+  // Drop the hover colour: the chip is not a button here.
+  return (TRIGGER_COLORS[variant] ?? TRIGGER_COLORS.outline!).replace(/\s*hover:\S+/g, "");
 }
 
-function metaLineCode(entry: HistoryEntry): string {
-  const code = entry.metadata?.lineCode;
-  return typeof code === "string" && code.length > 0 ? code : "?";
-}
-
-/** Old / new file names of a per-file replace (`replacedFileName` / `newFileName`), null for older entries. */
-export function replacedFileNames(entry: Pick<HistoryEntry, "metadata">): { oldName: string; newName: string } | null {
-  const oldName = entry.metadata?.replacedFileName;
-  const newName = entry.metadata?.newFileName;
-  if (typeof oldName !== "string" || !oldName || typeof newName !== "string" || !newName) return null;
-  return { oldName, newName };
-}
-
-/** One history line (exported for tests). */
-export function describeEntry(entry: HistoryEntry, t: T): string {
-  switch (entry.action) {
-    case "order_created":
-      return t.admin.historyOrderCreated;
-    case "status_changed": {
-      const text = t.admin.historyStatusChanged(
-        formatValue(entry.oldValue, "status", t),
-        formatValue(entry.newValue, "status", t),
-      );
-      return entry.metadata?.derived === true ? `${text} ${t.lineStatus.historyDerived}` : text;
-    }
-    case "line_status_changed": {
-      const label = (v: string | null) =>
-        v && v in t.lineStatus ? (t.lineStatus[v as keyof typeof t.lineStatus] as string) : (v ?? "?");
-      return t.lineStatus.history(
-        (entry.metadata?.lineCode as string | undefined) ?? "?",
-        label(entry.oldValue),
-        label(entry.newValue),
-      );
-    }
-    case "line_layout_flagged": {
-      const note = entry.metadata?.note;
-      return t.layoutIssue.historyFlagged(
-        metaLineCode(entry),
-        layoutIssueReasonLabel(t.layoutIssue, entry.metadata?.reason as string | undefined),
-        typeof note === "string" && note.length > 0 ? note : null,
-      );
-    }
-    case "line_layout_cleared":
-      return t.layoutIssue.historyCleared(metaLineCode(entry));
-    case "line_layout_fixed": {
-      // Per-file replace: «файл A заменён на B»; older entries (whole-line swap) keep the short text.
-      const names = replacedFileNames(entry);
-      return names
-        ? t.layoutIssue.historyFixedFile(metaLineCode(entry), entry.metadata?.by === "client", names.oldName, names.newName)
-        : t.layoutIssue.historyFixed(metaLineCode(entry), entry.metadata?.by === "client");
-    }
-    case "line_file_replaced": {
-      const names = replacedFileNames(entry);
-      return names
-        ? t.layoutIssue.historyOwnerReplacedFile(metaLineCode(entry), entry.metadata?.role === "dealer", names.oldName, names.newName)
-        : t.layoutIssue.historyOwnerReplaced(metaLineCode(entry), entry.metadata?.role === "dealer");
-    }
-    case "field_updated": {
-      const labelKey = entry.field ? FIELD_LABELS[entry.field] : undefined;
-      const fieldLabel = labelKey
-        ? (t.admin[labelKey] as string)
-        : entry.field ?? "?";
-      return t.admin.historyFieldUpdated(
-        fieldLabel,
-        formatValue(entry.oldValue, entry.field, t),
-        formatValue(entry.newValue, entry.field, t),
-      );
-    }
-    case "file_added":
-      return t.admin.historyFileAdded(
-        (entry.metadata?.fileName as string) ?? "?",
-      );
-    case "file_removed":
-      return t.admin.historyFileRemoved(
-        (entry.metadata?.fileName as string) ?? "?",
-      );
-    case "file_updated":
-      return t.admin.historyFileUpdated(
-        (entry.metadata?.fileName as string) ?? "?",
-      );
-    case "deleted":
-      return t.admin.historyOrderDeleted;
-    case "restored":
-      return t.admin.historyOrderRestored;
-    case "payment_mismatch":
-      return t.admin.historyPaymentMismatch(
-        String(entry.metadata?.paidMdl ?? "?"),
-        String(entry.metadata?.totalMdl ?? entry.oldValue ?? "?"),
-        entry.newValue ?? "",
-      );
-    case "dealer_edited":
-      return `${t.dealerOrder.adminEditedBadge("")}`.trim() +
-        `: ${t.admin.historyFieldPrice} ${formatValue(entry.oldValue, "price", t)} → ${formatValue(entry.newValue, "price", t)}`;
-    case "cancelled_by_dealer":
-      return `${t.dealerOrder.adminCancelled("", "").trim()} — ${t.dealerOrder.adminCancelReason}: ${
-        (entry.metadata?.reason as string | undefined) ?? "—"
-      }`;
-    case "urgency_dealer_on":
-      return t.dealerUrgency.historyDealerOn(t.dealerUrgency.feeShort(metaFee(entry)));
-    case "urgency_dealer_off":
-      return t.dealerUrgency.historyDealerOff(t.dealerUrgency.feeShort(metaFee(entry)));
-    case "urgency_staff_off":
-      return t.dealerUrgency.historyStaffOff(t.dealerUrgency.amount(metaFee(entry)));
-    case "urgency_fee_waived":
-      return t.dealerUrgency.historyFeeWaived(t.dealerUrgency.amount(metaFee(entry)));
-    default:
-      return entry.action;
-  }
-}
-
-/** Fee of a dealer-urgency history entry (`metadata.feeMdl`), 0 when missing. */
-function metaFee(entry: HistoryEntry): number {
-  const fee = entry.metadata?.feeMdl;
-  return typeof fee === "number" && Number.isFinite(fee) ? fee : 0;
-}
-
-function actionColor(action: string): "default" | "info" | "success" | "destructive" | "warning" | "secondary" {
-  switch (action) {
-    case "order_created":
-      return "success";
-    case "status_changed":
-    case "line_status_changed":
-      return "info";
-    case "line_layout_flagged":
-      return "destructive";
-    case "line_layout_cleared":
-      return "secondary";
-    case "line_layout_fixed":
-      return "success";
-    case "line_file_replaced":
-      return "warning";
-    case "file_added":
-      return "success";
-    case "file_removed":
-      return "destructive";
-    case "file_updated":
-    case "field_updated":
-      return "warning";
-    case "deleted":
-      return "destructive";
-    case "restored":
-      return "success";
-    case "dealer_edited":
-      return "warning";
-    case "cancelled_by_dealer":
-    case "payment_mismatch":
-      return "destructive";
-    default:
-      return "secondary";
-  }
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const now = new Date();
-  const isToday =
-    d.getDate() === now.getDate() &&
-    d.getMonth() === now.getMonth() &&
-    d.getFullYear() === now.getFullYear();
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  if (isToday) return time;
-  return `${d.toLocaleDateString([], { day: "2-digit", month: "2-digit" })} ${time}`;
+function StatusChip({ code, scope, t }: { code: string | null; scope: "order" | "line"; t: T }) {
+  const label = historyStatusLabel(code, scope, t);
+  if (!code || !label) return null;
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusChipClass(code, scope)}`}>
+      {label}
+    </span>
+  );
 }
 
 export default function HistoryPanel({
   orderId,
   orderNumber,
+  currentStatus,
   t,
   onClose,
 }: {
   orderId: string;
   orderNumber: number;
+  /** Order status now («acum: …» under the title). */
+  currentStatus?: string | null;
   t: T;
   onClose: () => void;
 }) {
+  const locale = useLanguageStore((s) => s.locale);
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchHistory = useCallback(async () => {
     try {
       setLoading(true);
       const res = await fetch(`/api/orders/${orderId}/history`);
       if (res.ok) {
-        const data: HistoryEntry[] = await res.json();
-        setEntries(data);
+        const data: unknown = await res.json();
+        if (Array.isArray(data)) setEntries(data as HistoryEntry[]);
       }
     } catch {
       /* ignore */
@@ -241,99 +121,120 @@ export default function HistoryPanel({
     fetchHistory();
   }, [fetchHistory]);
 
-  const roleLabel = (role: string) =>
-    role === "workshop"
-      ? t.admin.roleWorkshop
-      : role === "client"
-        ? t.admin.historyClient
-        : role === "superadmin"
-          ? t.admin.roleSuperAdmin
-          : t.admin.roleAdmin;
+  const days = useMemo(
+    () => groupHistoryByDay(visibleHistoryEntries(entries), locale, t),
+    [entries, locale, t],
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white shadow-2xl flex flex-col h-full">
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
-          <div className="flex items-center gap-2">
-            <Clock className="w-5 h-5 text-gray-500" />
-            <h2 className="font-semibold text-gray-900">
-              {t.admin.history} — #{String(orderNumber).padStart(4, "0")}
-            </h2>
+      <div className="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
+        <div className="flex items-start justify-between gap-2 border-b bg-gray-50 px-4 py-3">
+          <div className="flex min-w-0 items-start gap-2">
+            <Clock className="mt-0.5 h-5 w-5 shrink-0 text-gray-500" />
+            <div className="min-w-0">
+              <h2 className="font-semibold text-gray-900">
+                {t.admin.history} — #{String(orderNumber).padStart(4, "0")}
+              </h2>
+              {currentStatus && historyStatusLabel(currentStatus, "order", t) ? (
+                <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-500">
+                  <span>{t.orderHistory.nowStatus}</span>
+                  <StatusChip code={currentStatus} scope="order" t={t} />
+                </div>
+              ) : null}
+            </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               onClick={fetchHistory}
-              className="text-gray-400 hover:text-gray-600 p-1"
+              className="p-1 text-gray-400 hover:text-gray-600"
               title={t.common.refresh}
+              aria-label={t.common.refresh}
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
-              <X className="w-5 h-5" />
+            <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600" aria-label="×">
+              <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="flex-1 overflow-y-auto px-4 py-4">
           {loading && entries.length === 0 && (
-            <p className="text-center text-sm text-gray-400 py-8">{t.common.loading}</p>
+            <p className="py-8 text-center text-sm text-gray-400">{t.common.loading}</p>
           )}
           {!loading && entries.length === 0 && (
-            <p className="text-center text-sm text-gray-400 py-8">{t.admin.noHistory}</p>
+            <p className="py-8 text-center text-sm text-gray-400">{t.admin.noHistory}</p>
           )}
 
-          <div className="relative">
-            {entries.length > 0 && (
-              <div className="absolute left-3 top-2 bottom-2 w-px bg-gray-200" />
-            )}
-            <div className="space-y-4">
-              {entries.map((entry) => (
-                <div key={entry.id} className="relative pl-8">
-                  <div className="absolute left-1.5 top-1.5 w-3 h-3 rounded-full bg-white border-2 border-gray-300 z-10" />
-                  <div className="bg-gray-50 rounded-lg px-3 py-2.5">
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <span className="text-xs font-medium text-gray-700">
-                        {entry.userName}
-                      </span>
-                      <Badge
-                        variant={
-                          entry.userRole === "workshop"
-                            ? "warning"
-                            : entry.userRole === "client"
-                              ? "outline"
-                              : "secondary"
-                        }
-                        className="text-[9px] px-1 py-0"
-                      >
-                        {roleLabel(entry.userRole)}
-                      </Badge>
-                      <Badge
-                        variant={actionColor(entry.action)}
-                        className="text-[9px] px-1 py-0 ml-auto"
-                      >
-                        {entry.action === "line_status_changed"
-                          ? t.lineStatus.historyAction
-                          : (t.admin.historyActionLabels[entry.action] ?? entry.action.replace(/_/g, " "))}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-gray-900 leading-snug">
-                      {describeEntry(entry, t)}
-                    </p>
-                    {entry.action === "dealer_edited" ? (
-                      <ArchivedFilesList metadata={entry.metadata} t={t} />
-                    ) : null}
-                    <span className="text-[10px] text-gray-400 mt-1 block">
-                      {formatDate(entry.createdAt)}
-                    </span>
-                  </div>
+          <div className="space-y-5">
+            {days.map((day) => (
+              <section key={day.key}>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{day.label}</h3>
+                <div className="relative">
+                  <div className="absolute bottom-3 left-[13px] top-3 w-px bg-gray-200" />
+                  <ul className="space-y-3">
+                    {day.entries.map((entry) => (
+                      <HistoryRow key={entry.id} entry={entry} locale={locale} t={t} />
+                    ))}
+                  </ul>
                 </div>
-              ))}
-            </div>
+              </section>
+            ))}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export function HistoryRow({ entry, locale, t }: { entry: HistoryEntry; locale: Parameters<typeof historyTime>[1]; t: T }) {
+  const d = describeHistoryEntry(entry, t);
+  const { icon: Icon, className } = ICONS[d.kind];
+  const role = actorRole(entry, t);
+  const hasChips =
+    d.status && (historyStatusLabel(d.status.from, d.status.scope, t) || historyStatusLabel(d.status.to, d.status.scope, t));
+  return (
+    <li className="relative flex gap-3">
+      <span className={`relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ring-4 ring-white ${className}`}>
+        <Icon className="h-3.5 w-3.5" aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="flex items-baseline gap-2">
+          <p className="min-w-0 flex-1 break-words text-sm leading-snug text-gray-900">
+            {d.showActor ? (
+              <>
+                <span className="font-semibold">{actorName(entry, t)}</span>
+                {role ? <span className="text-gray-500"> ({role})</span> : null} {d.text}
+              </>
+            ) : (
+              d.text
+            )}
+          </p>
+          <time className="shrink-0 text-[11px] tabular-nums text-gray-400" dateTime={entry.createdAt}>
+            {historyTime(entry.createdAt, locale)}
+          </time>
+        </div>
+        {hasChips && d.status ? (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <StatusChip code={d.status.from} scope={d.status.scope} t={t} />
+            {historyStatusLabel(d.status.from, d.status.scope, t) ? (
+              <span className="text-xs text-gray-400" aria-hidden>
+                →
+              </span>
+            ) : null}
+            <StatusChip code={d.status.to} scope={d.status.scope} t={t} />
+          </div>
+        ) : null}
+        {d.details.map((line, i) => (
+          <p key={i} className="mt-0.5 break-words text-xs text-gray-500">
+            {line}
+          </p>
+        ))}
+        {entry.action === "dealer_edited" ? <ArchivedFilesList metadata={entry.metadata} t={t} /> : null}
+      </div>
+    </li>
   );
 }
 
@@ -349,7 +250,7 @@ function ArchivedFilesList({ metadata, t }: { metadata: Record<string, unknown> 
   if (files.length === 0) return null;
   return (
     <div className="mt-1.5">
-      <p className="text-[11px] font-medium text-gray-500">{t.dealerOrder.adminArchivedFiles(files.length)}</p>
+      <p className="text-[11px] font-medium text-gray-500">{t.orderHistory.previousFiles(files.length)}</p>
       <ul className="mt-0.5 space-y-0.5">
         {files.map((f) => (
           <li key={f.id} className="truncate text-xs">

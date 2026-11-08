@@ -4,6 +4,7 @@ import { dtfEn } from "./dtf/en";
 import { uvEn } from "./uv/en";
 import { layoutIssueEn } from "./layoutIssue/en";
 import { dealerUrgencyEn } from "./dealerUrgency/en";
+import { orderHistoryEn } from "./orderHistory/en";
 import { sublimationEn } from "./sublimation/en";
 import { printMethodsEn } from "./printMethods/en";
 import { importsEn } from "./imports/en";
@@ -2450,6 +2451,7 @@ export const en: TranslationDictionary = {
   uv: uvEn,
   layoutIssue: layoutIssueEn,
   dealerUrgency: dealerUrgencyEn,
+  orderHistory: orderHistoryEn,
   sublimation: sublimationEn,
   printMethods: printMethodsEn,
   imports: importsEn,

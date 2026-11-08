@@ -53,7 +53,7 @@ import { GET as getCabinetOrder } from "@/app/api/cabinet/orders/[id]/route";
 import { ownerReplaceLayoutFile, ownerReplaceLineFile, staffReplaceLayoutFile } from "@/lib/orderLineLayoutIssue";
 import { deriveWorkshopOrderStatus } from "@/lib/orderStatusFromLines";
 import { checkLineStatusSync } from "@/lib/orderLineStatusCheck";
-import { describeEntry, type HistoryEntry } from "@/app/admin/_components/HistoryPanel";
+import { describeHistoryEntry, type HistoryEntry } from "@/lib/orderHistoryFormat";
 import { ru } from "@/lib/i18n/ru";
 import { cleanupTestMugs, createTestMug } from "./mugSeed";
 import { cleanupTestNotebook, createTestNotebook } from "./notebookSeed";
@@ -350,7 +350,7 @@ describe.skipIf(!isLocalDb)("integration: per-file replace on multi-file lines",
       userName: "u",
       userRole: "customer",
     };
-    return describeEntry(e, ru);
+    return describeHistoryEntry(e, ru).text;
   }
 
   /** The two files that were NOT replaced, byte-identical to before (every column incl. id and meta). */
@@ -540,17 +540,17 @@ describe.skipIf(!isLocalDb)("integration: per-file replace on multi-file lines",
         archivedFiles: [{ fileName: "mug-b.png" }],
         files: [{ fileName: "IMG_1.jpg" }],
       });
-      expect(history(log!)).toBe(`Позиция ${code(o, 1)}: файл mug-b.png заменён на IMG_1.jpg дилером до начала печати`);
+      expect(history(log!)).toBe(`заменил(а) файл в позиции ${code(o, 1)}: mug-b.png → IMG_1.jpg`);
     });
 
-    it("a retail client: same per-file replace, no «Изменён дилером», history says «клиентом»", async () => {
+    it("a retail client: same per-file replace, no «Изменён дилером», history names both files", async () => {
       const o = await fixture(retail);
       const before = await filesOf(o.banner);
       expect((await ownerReplace(o.id, o.banner, { kind: "replace", fileId: o.bf.b, files: [newFile("bb.png")] }, retail)).status).toBe(200);
       await expectOthersIdentical(o.banner, before, o.bf.b);
       expect((await orderRow(o.id)).dealerEditedAt).toBeNull();
       const [log] = await logs(o.id, "line_file_replaced");
-      expect(history(log!)).toContain("заменён на bb.png клиентом");
+      expect(history(log!)).toContain("→ bb.png");
     });
 
     it("a replaced file's old id no longer works (the new file has a new id) → 404, nothing more changed", async () => {
@@ -704,9 +704,7 @@ describe.skipIf(!isLocalDb)("integration: per-file replace on multi-file lines",
       const [log] = await logs(o.id, "line_layout_fixed");
       expect(log).toMatchObject({ oldValue: "mug-a.png", newValue: "IMG_1.jpg" });
       expect(log!.metadata).toMatchObject({ by: "client", reason: "lowQuality", replacedFileId: o.mf.a, replacedFileName: "mug-a.png" });
-      expect(history(log!)).toBe(
-        `Позиция ${code(o, 1)}: файл mug-a.png заменён на IMG_1.jpg клиентом, позиция снова ждёт печати`,
-      );
+      expect(history(log!)).toBe(`заменил(а) файл в позиции ${code(o, 1)}: mug-a.png → IMG_1.jpg`);
     });
   });
 
@@ -730,7 +728,7 @@ describe.skipIf(!isLocalDb)("integration: per-file replace on multi-file lines",
       expect(now.moves).toEqual(snap.moves);
       expect((await line(o.banner))).toMatchObject({ productionStatus: "WAITING", layoutFixedById: staff.workshop.id });
       const [log] = await logs(o.id, "line_layout_fixed");
-      expect(history(log!)).toBe(`Позиция ${code(o, 3)}: файл ban-b.png заменён на ban-b-v2.pdf студией, позиция снова ждёт печати`);
+      expect(history(log!)).toBe(`заменил(а) файл в позиции ${code(o, 3)}: ban-b.png → ban-b-v2.pdf`);
       await expectInvariant(o.id);
     });
 

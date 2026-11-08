@@ -255,7 +255,7 @@ export async function dealerEditOrder(params: {
     });
     const nextNotes = input.notes !== undefined ? input.notes?.trim() || null : order.notes;
 
-    const { archivedFiles } = await syncAdminOrderStructureInTx(
+    const { archivedFiles, changes } = await syncAdminOrderStructureInTx(
       tx,
       order,
       structure,
@@ -268,7 +268,7 @@ export async function dealerEditOrder(params: {
         notes: nextNotes,
         price: totalMdl,
       },
-      { archiveRemovedFiles: { reason: "dealer_edit" } },
+      { archiveRemovedFiles: { reason: "dealer_edit" }, skipChangeLog: true },
     );
 
     const editedAt = new Date();
@@ -311,7 +311,9 @@ export async function dealerEditOrder(params: {
           archivedFiles,
           notesChanged: nextNotes !== order.notes,
           urgencyFeeMdl: feeInPrice,
-        },
+          // What the dealer changed (lines, quantities, price…), for the staff history.
+          changes,
+        } as unknown as Prisma.InputJsonValue,
       },
     });
     return { totalMdl, state, feeInPrice, offer };
