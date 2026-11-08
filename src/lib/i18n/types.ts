@@ -3256,7 +3256,8 @@ export interface TranslationDictionary {
     /** Dialog: section title of the box. */
     boxSection: string;
     /** Ready set's stock line (the set item, e.g. «Набор с термосом · чёрный»): section and no-file note. */
-    readyUnitSection: string;
+    /** Dialog title of a ready set's stock unit: «Набор с термосом (коробка из Китая)». */
+    readyUnitSection: (label: string) => string;
     readyUnitNoFile: string;
     shortWarning: string;
     replaceFile: string;

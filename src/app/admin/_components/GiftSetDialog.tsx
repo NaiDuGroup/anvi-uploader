@@ -117,6 +117,7 @@ export function GiftSetDialog({
   reserved,
   boxStock,
   boxNames,
+  boxImages,
   t,
   onApply,
   onClose,
@@ -132,6 +133,8 @@ export function GiftSetDialog({
   boxStock?: Readonly<Record<string, number>>;
   /** Stock item names of the template boxes by SKU. */
   boxNames?: Readonly<Record<string, string>>;
+  /** Photo of each box by SKU (only boxes that have one). */
+  boxImages?: Readonly<Record<string, string>>;
   t: TranslationDictionary;
   onApply: (template: GiftSetTemplate, choice: GiftSetChoice) => void;
   onClose: () => void;
@@ -260,9 +263,9 @@ export function GiftSetDialog({
                 {readyItem ? (
                   // The set item itself: its own stock line of the order (no file, «входит в набор»).
                   <div data-testid="gift-set-ready-unit">
-                    <p className="mb-1.5 text-sm font-semibold text-gray-900">{g.readyUnitSection}</p>
+                    <p className="mb-1.5 text-sm font-semibold text-gray-900">{g.readyUnitSection(giftSetReadyUnitLabel(template))}</p>
                     <div className="flex items-center gap-2 text-xs text-gray-600">
-                      <GiftSetItemThumb imageUrl={readyItem.imageUrl} swatch={giftSetSwatchHex(readyItem)} alt={readyItem.sku} size="sm" />
+                      <GiftSetItemThumb imageUrl={readyItem.imageUrl} swatch={giftSetSwatchHex(readyItem)} alt={readyItem.sku} size="sm" icon="gift" />
                       <span className="flex flex-col leading-tight">
                         <span>
                           {giftSetReadyUnitLabel(template)}
@@ -302,7 +305,7 @@ export function GiftSetDialog({
                 {g.boxSection} — {boxNames?.[boxSku] ?? giftSetBoxName(boxSku)}
               </p>
               <div className="flex items-center gap-2 text-xs text-gray-600">
-                <GiftSetItemThumb imageUrl={null} swatch={null} alt={boxSku} size="sm" />
+                <GiftSetItemThumb imageUrl={boxImages?.[boxSku] ?? null} swatch={null} alt={boxSku} size="sm" icon="box" />
                 <span className="flex flex-col leading-tight">
                   <span>
                     {giftSetBoxName(boxSku)} · {boxSku}

@@ -11,7 +11,7 @@ import {
   type GiftSetTemplate,
   type GiftSetZone,
 } from "@/lib/giftSet/giftSet";
-import { readyZoneExpectedPx } from "@/lib/giftSet/giftSetReadyLines";
+import { readySetUvDescription, readyZoneExpectedPx } from "@/lib/giftSet/giftSetReadyLines";
 import {
   giftSetBoxRows,
   giftSetGroupSlotIds,
@@ -4118,9 +4118,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               <GiftSetItemThumb imageUrl={item.imageUrl} swatch={giftSetSwatchHex(item)} alt={item.itemNames.ru ?? item.name} />
               <span className="min-w-0">
                 <span className="block font-medium text-gray-900">
-                  {ready ? (item.variantLabel ?? item.itemNames.ru) : `${item.itemNames.ru}${item.variantLabel ? ` · ${item.variantLabel}` : ""}`}
+                  {ready
+                    ? zone
+                      ? readySetUvDescription(zone, item.variantLabel ?? null)
+                      : (item.variantLabel ?? item.itemNames.ru)
+                    : `${item.itemNames.ru}${item.variantLabel ? ` · ${item.variantLabel}` : ""}`}
                 </span>
-                <span className="block text-gray-400">{item.sku}</span>
+                {/* A ready set's print row is the component, not the set item: its SKU belongs to the set's stock row. */}
+                {ready ? null : <span className="block text-gray-400">{item.sku}</span>}
               </span>
             </span>
           ) : (
@@ -4216,7 +4221,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     const saved = savedSetUnitRef.current.get(box.groupId);
     const savedSame = Boolean(saved && ((saved.sku && saved.sku === box.boxSku) || (saved.variantId && saved.variantId === box.variantId)));
     const stock = onHand === undefined ? undefined : onHand + (savedSame ? saved!.quantity : 0);
-    const fullName = ready ? box.name : (bootstrap.giftSetBoxNames?.[box.boxSku] ?? box.name);
+    // Item column: the stock item's own name («Коробка 30×23×8,5 см (набор с кружкой)» / «Набор: ручка + блокнот + термос · чёрный»).
+    const fullName = ready
+      ? variantItem
+        ? `${variantItem.itemNames.ru ?? variantItem.name}${variantItem.variantLabel ? ` · ${variantItem.variantLabel}` : ""}`
+        : box.name
+      : (bootstrap.giftSetBoxNames?.[box.boxSku] ?? box.name);
+    const photo = ready ? (variantItem?.imageUrl ?? null) : (bootstrap.giftSetBoxImages?.[box.boxSku] ?? null);
     const setGs = slots.map((x) => assignBySlot[x.id]?.giftSet).find((x) => x?.groupId === box.groupId) ?? null;
     const setTemplate = setGs ? giftSetTemplates.find((x) => x.id === setGs.templateId) : undefined;
     const BoxIcon = ready ? PRODUCT_TYPE_ICONS.gift_set : PRODUCT_TYPE_ICONS.set_box;
@@ -4229,15 +4240,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           <GiftSetBadge label={g.badge(setTemplate?.name ?? "", box.quantity)} className="max-w-full whitespace-normal" />
           <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-gray-900">
             <BoxIcon className="h-4 w-4 shrink-0 text-gray-500" aria-hidden />
-            {ready ? g.readyUnitSection : g.boxSection}
+            {box.name}
           </p>
         </td>
         <td className="min-w-0 px-2.5 py-2 align-top text-xs text-gray-700">
           <span className="flex min-w-0 items-center gap-2">
             <GiftSetItemThumb
-              imageUrl={variantItem?.imageUrl ?? null}
+              imageUrl={photo}
               swatch={variantItem ? giftSetSwatchHex(variantItem) : null}
               alt={fullName}
+              icon={ready ? "gift" : "box"}
             />
             <span className="min-w-0">
               <span className="block font-medium text-gray-900">{fullName}</span>
@@ -5415,6 +5427,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         product = a.uv?.source === "stickers" ? t.productPicker.uvDtfStickers : t.uv.productType;
       else if (a?.productType === "sublimation_print") product = t.sublimation.productType;
       const setItem = a ? giftSetRowItem(a) : null;
+      const readyZone = gs?.role === "ready" ? readySetZone(gs) : null;
       const row: ConfirmLine = {
         id: s.id,
         name: slotArtworkName(s) ?? t.admin.newOrderPage.fileNotChosenPlaceholder,
@@ -5432,8 +5445,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               set: {
                 ...setInfo,
                 ...(setItem
-                  ? { item: `${setItem.itemNames.ru ?? setItem.name}${setItem.variantLabel ? ` · ${setItem.variantLabel}` : ""}`, imageUrl: setItem.imageUrl, swatch: giftSetSwatchHex(setItem) }
+                  ? {
+                      item:
+                        gs?.role === "ready" && readyZone
+                          ? readySetUvDescription(readyZone, setItem.variantLabel ?? null)
+                          : `${setItem.itemNames.ru ?? setItem.name}${setItem.variantLabel ? ` · ${setItem.variantLabel}` : ""}`,
+                      imageUrl: setItem.imageUrl,
+                      swatch: giftSetSwatchHex(setItem),
+                    }
                   : {}),
+                // «Термос из набора · чёрный» already names the component.
+                ...(gs?.role === "ready" && readyZone && setItem ? { role: "" } : {}),
               },
             }
           : {}),
@@ -5448,17 +5470,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         {
           id: `box-${box.groupId}`,
           name: ready ? t.giftSet.readyUnitNoFile : t.giftSet.boxNoFile,
-          product: ready ? box.name : (bootstrap.giftSetBoxNames?.[box.boxSku] ?? box.name),
+          // Shown after the role («Набор с термосом · чёрный» / «Коробка набора · 30×23×8,5»): its SKU / the box item's own name.
+          product: ready ? box.boxSku : (bootstrap.giftSetBoxNames?.[box.boxSku] ?? box.boxSku),
           copies: String(box.quantity),
           set: {
             first: false,
             label: setInfo.label,
-            role: ready ? t.giftSet.readyUnitSection : t.giftSet.boxSection,
+            role: box.name,
             note: null,
             box: true,
             item: box.boxSku,
-            imageUrl: variantItem?.imageUrl ?? null,
+            imageUrl: ready ? (variantItem?.imageUrl ?? null) : (bootstrap.giftSetBoxImages?.[box.boxSku] ?? null),
             swatch: variantItem ? giftSetSwatchHex(variantItem) : null,
+            icon: ready ? "gift" : "box",
           },
         },
       ];
@@ -7466,6 +7490,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           )}
           boxStock={bootstrap.giftSetBoxStock}
           boxNames={bootstrap.giftSetBoxNames}
+          boxImages={bootstrap.giftSetBoxImages}
           t={t}
           onClose={() => setGiftSetDialog(null)}
           onApply={(template, choice) => {
@@ -7547,6 +7572,8 @@ interface ConfirmSetInfo {
   item?: string;
   imageUrl?: string | null;
   swatch?: string | null;
+  /** Stock row without a photo: box / gift icon instead of the colour dot. */
+  icon?: "box" | "gift";
 }
 
 /** One row of the confirm table. */
@@ -7626,10 +7653,10 @@ function MultiConfirmStep({
                   <td className="px-3 py-2">
                     {row.set ? (
                       <span className="flex min-w-0 items-center gap-2">
-                        <GiftSetItemThumb imageUrl={row.set.imageUrl} swatch={row.set.swatch} alt={row.set.item ?? row.set.role} size="sm" />
+                        <GiftSetItemThumb imageUrl={row.set.imageUrl} swatch={row.set.swatch} alt={row.set.item ?? row.set.role} size="sm" icon={row.set.icon} />
                         <span className="min-w-0">
                           <span className="block">
-                            <span className="text-fuchsia-800">{row.set.role} · </span>
+                            {row.set.role ? <span className="text-fuchsia-800">{row.set.role} · </span> : null}
                             {row.set.box ? row.product : row.set.item ?? row.product}
                           </span>
                           <span className="mt-0.5 block">

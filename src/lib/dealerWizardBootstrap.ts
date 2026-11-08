@@ -82,5 +82,6 @@ export function toDealerWizardBootstrap(data: WizardBootstrapData): WizardBootst
     // Set prices only (retail + dealer), no costs.
     giftSetTemplates: data.giftSetTemplates,
     giftSetBoxNames: data.giftSetBoxNames,
+    giftSetBoxImages: data.giftSetBoxImages,
   };
 }

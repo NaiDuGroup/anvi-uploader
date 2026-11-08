@@ -40,6 +40,7 @@ import {
   lfLineSummaryPartsFromRaw,
   type LfLineSummaryParts,
 } from "@/lib/largeFormat/lfLineSummaryLabel";
+import { isGiftSetSku } from "@/lib/giftSet/giftSet";
 import {
   toSheetLinePublicSummary,
   type SheetLinePublicSummary,
@@ -672,8 +673,4 @@ export function OrderFileSpecs({
       ))}
     </div>
   );
-}
-/** Notebook / pen of a ready gift set carry the set's SKU (for board grouping); it means nothing to the workshop. */
-function isGiftSetSku(sku: string): boolean {
-  return sku.startsWith("GIFT-SET-");
 }

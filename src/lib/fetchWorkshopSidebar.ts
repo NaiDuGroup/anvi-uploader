@@ -75,6 +75,15 @@ const ORDER_LINE_LIST_SELECT = {
   penProductSnapshot: true,
   largeFormatMaterialId: true,
   largeFormatLineData: true,
+  // The panel renders the same line summaries as the main list (UV item / zones,
+  // DTF, sublimation, sheets, shop print, «Набор» badge + set grouping).
+  sheetPaperId: true,
+  businessCardLineData: true,
+  dtfLineData: true,
+  uvLineData: true,
+  sublimationLineData: true,
+  shopLineData: true,
+  setData: true,
   productionStatus: true,
   ...LAYOUT_ISSUE_LINE_SELECT,
 } as const satisfies Prisma.OrderLineSelect;

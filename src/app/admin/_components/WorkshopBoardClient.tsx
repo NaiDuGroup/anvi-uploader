@@ -1,6 +1,7 @@
 "use client";
 
 import { GiftSetBadge } from "@/components/orders/GiftSetBadge";
+import { isGiftSetSku } from "@/lib/giftSet/giftSet";
 import React, {
   createContext,
   useCallback,
@@ -402,8 +403,13 @@ function BoardLineCard({
             <span className="font-medium text-gray-800 truncate max-w-[14rem]" title={displayName}>
               {displayName}
             </span>
-            <span className="text-gray-300" aria-hidden>·</span>
-            <span className="font-mono text-gray-500">{sku}</span>
+            {/* A ready set's pen carries the set's SKU (grouping only): «Ручка из набора · чёрный» says it all. */}
+            {!isGiftSetSku(sku) && (
+              <>
+                <span className="text-gray-300" aria-hidden>·</span>
+                <span className="font-mono text-gray-500">{sku}</span>
+              </>
+            )}
             <span className="text-gray-300" aria-hidden>·</span>
             <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-pink-200 bg-pink-50 px-1.5 py-0.5 text-[11px] font-semibold text-pink-800 leading-none">
               {t.admin.orderSkuPiecesBadge(quantity)}

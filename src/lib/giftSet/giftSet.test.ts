@@ -6,6 +6,8 @@ import {
   giftSetBoxWriteOffs,
   giftSetPackNote,
   giftSetStockLineName,
+  giftSetBoxName,
+  isGiftSetSku,
   giftSetUnitPrice,
   isLegacyReadySetLine,
   parseGiftSetTemplates,
@@ -144,7 +146,7 @@ describe("planGiftSets", () => {
     expect(d.map((x) => x.role)).toEqual(["mug", "notebook", "pen", "box"]);
     // The box is written off through its own line, once per set — never on the first line too.
     expect(d.map((x) => x.boxSku)).toEqual([null, null, null, "EW-BOX-300X230X85"]);
-    expect(d[3]).toMatchObject({ roleLabel: "Коробка", lineTotalMdl: 0, quantity: 3 });
+    expect(d[3]).toMatchObject({ roleLabel: "Коробка набора", lineTotalMdl: 0, quantity: 3 });
     expect(giftSetBoxWriteOffs(d)).toEqual([{ sku: "EW-BOX-300X230X85", quantity: 3 }]);
   });
 
@@ -441,5 +443,25 @@ describe("box line production status (follows its set)", () => {
     expect(giftSetBoxLineStatuses([l("th", "uv_print", "NEEDS_LAYOUT"), l("nb", "notebook", "WAITING"), l("pen", "pen", "WAITING"), l("u", "set_box", "PRINTING")])).toEqual(
       new Map([["u", "WAITING"]]),
     );
+  });
+});
+
+describe("set stock line names / set SKUs", () => {
+  it("names an A/B box «Коробка набора · size», a C set item by its colour", () => {
+    expect(giftSetBoxName("EW-BOX-300X230X85")).toBe("Коробка набора · 30×23×8,5");
+    expect(giftSetBoxName("BOX-PLAIN")).toBe("Коробка набора · BOX-PLAIN");
+    expect(giftSetStockLineName({ kind: "assembled", boxSku: "EW-BOX-215X200X30", roleLabel: "Коробка", readyColourLabel: undefined })).toBe(
+      "Коробка набора · 21,5×20×3",
+    );
+    expect(giftSetStockLineName({ kind: "ready", boxSku: "GIFT-SET-THERMOS-RED", roleLabel: "Набор с термосом", readyColourLabel: "красный" })).toBe(
+      "Набор с термосом · красный",
+    );
+  });
+
+  it("recognises the ready set's variant SKUs (hidden on its print lines)", () => {
+    expect(isGiftSetSku("GIFT-SET-THERMOS-BLACK")).toBe(true);
+    expect(isGiftSetSku("gift-set-thermos-blue")).toBe(true);
+    expect(isGiftSetSku("ARDENES_BLUE")).toBe(false);
+    expect(isGiftSetSku(null)).toBe(false);
   });
 });

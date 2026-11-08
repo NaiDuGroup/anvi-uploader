@@ -87,6 +87,8 @@ export interface WizardBootstrapData {
   giftSetBoxStock?: Record<string, number>;
   /** «Набор»: stock item name of each template box by SKU (the set's box row). */
   giftSetBoxNames?: Record<string, string>;
+  /** «Набор»: public photo URL of each template box by SKU (only boxes that have one). */
+  giftSetBoxImages?: Record<string, string>;
 }
 
 export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
@@ -116,7 +118,7 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
   const giftSetTemplates = parseGiftSetTemplates(acct.giftSetTemplates);
   const boxSkus = [...new Set(giftSetTemplates.map((t) => t.boxSku).filter((s): s is string => Boolean(s)))];
   const boxRows = boxSkus.length
-    ? await prisma.stockVariant.findMany({ where: { sku: { in: boxSkus } }, select: { sku: true, stockQuantity: true, item: { select: { nameRu: true } } } })
+    ? await prisma.stockVariant.findMany({ where: { sku: { in: boxSkus } }, select: { sku: true, stockQuantity: true, item: { select: { nameRu: true, imageUrl: true } } } })
     : [];
   const printableMap = await lfMaterialPrintableWidthByIdsRaw(
     prisma,
@@ -187,5 +189,11 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
     giftSetTemplates,
     giftSetBoxStock: Object.fromEntries(boxRows.map((b) => [b.sku, Number(b.stockQuantity.toString())])),
     giftSetBoxNames: Object.fromEntries(boxRows.map((b) => [b.sku, b.item.nameRu])),
+    giftSetBoxImages: Object.fromEntries(
+      boxRows.flatMap((b) => {
+        const url = publicAssetUrlFromStorageKey(b.item.imageUrl);
+        return url ? [[b.sku, url] as const] : [];
+      }),
+    ),
   };
 }

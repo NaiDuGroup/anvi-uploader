@@ -311,7 +311,7 @@ export function parseGiftSetTemplates(raw: unknown): GiftSetTemplate[] {
 }
 
 /** Label of the box line of a set. */
-export const GIFT_SET_BOX_LABEL = "Коробка";
+export const GIFT_SET_BOX_LABEL = "Коробка набора";
 
 /** Name of a ready set's stock unit: «Набор с термосом» (a thermos set), else «Готовый набор». */
 export function giftSetReadyUnitLabel(template: Pick<GiftSetTemplate, "zones">): string {
@@ -673,9 +673,18 @@ export function giftSetBoxLineStatuses(
   return out;
 }
 
-/** «Коробка 30×23×8,5» of a box SKU (the box line's name). */
+/** «Коробка набора · 30×23×8,5» of a box SKU (the box line's name). */
 export function giftSetBoxName(boxSku: string): string {
-  return `${GIFT_SET_BOX_LABEL} ${boxSizeFromSku(boxSku) ?? boxSku}`;
+  return `${GIFT_SET_BOX_LABEL} · ${boxSizeFromSku(boxSku) ?? boxSku}`;
+}
+
+/**
+ * SKU of a ready set's colour variant («GIFT-SET-THERMOS-BLACK»): the set's
+ * notebook / pen / thermos print lines carry it for board grouping, but it
+ * names the set item, not the component — never shown on those lines.
+ */
+export function isGiftSetSku(sku: string | null | undefined): boolean {
+  return typeof sku === "string" && sku.toUpperCase().startsWith("GIFT-SET-");
 }
 
 /**

@@ -246,7 +246,7 @@ describe("box row of a set (withGiftSetBoxLines / giftSetBoxRows)", () => {
       groupId: "a",
       afterSlotId: "s2",
       boxSku: "EW-BOX-300X230X85",
-      name: "Коробка 30×23×8,5",
+      name: "Коробка набора · 30×23×8,5",
       quantity: 2,
       kind: "assembled",
     });
