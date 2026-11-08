@@ -83,6 +83,8 @@ export default async function RootLayout({
             richColors
             closeButton
             toastOptions={{ duration: 5000 }}
+            // Clear the mobile bottom bars (admin, shop).
+            mobileOffset={{ bottom: 84 }}
           />
         </LocaleInitializer>
       </body>
