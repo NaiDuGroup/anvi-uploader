@@ -19,6 +19,10 @@ import { cn } from "@/lib/utils";
 type OwnerFilter = "all" | "common" | "client";
 
 const PAGE_SIZE = 48;
+/** How long «Отменить» stays after archive / restore. */
+const UNDO_MS = 6000;
+
+type Notice = { text: string; tone: "info" | "error"; undo?: () => Promise<void> };
 
 /**
  * «Библиотека макетов»: artwork staff saved on purpose from orders. Copies
@@ -49,7 +53,7 @@ export default function LibraryPageClient({
   const [deleting, setDeleting] = useState<LibraryItem | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [rowBusy, setRowBusy] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState<LibraryItem | null>(null);
   const reqSeq = useRef(0);
 
   useEffect(() => {
@@ -62,6 +66,7 @@ export default function LibraryPageClient({
       const seq = ++reqSeq.current;
       setLoading(true);
       setError(null);
+      if (!append) setPage(0);
       const sp = new URLSearchParams({ page: String(nextPage), limit: String(PAGE_SIZE) });
       if (debounced) sp.set("search", debounced);
       if (owner === "common") sp.set("owner", "common");
@@ -103,21 +108,63 @@ export default function LibraryPageClient({
   const replaceItem = (next: LibraryItem) =>
     setItems((prev) => prev.map((i) => (i.id === next.id ? next : i)));
 
-  const setArchivedFlag = async (item: LibraryItem, value: boolean) => {
-    setRowBusy(item.id);
-    const res = await libraryFetch<{ item: LibraryItem }>(`/api/admin/library/${item.id}`, {
+  // Notice under the filters; «Отменить» for a few seconds after archive / restore.
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showNotice = useCallback((next: Notice | null) => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = null;
+    setNotice(next);
+    if (next?.undo) noticeTimer.current = setTimeout(() => setNotice(null), UNDO_MS);
+  }, []);
+  useEffect(() => () => {
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+  }, []);
+
+  const patchArchived = (item: LibraryItem, value: boolean) =>
+    libraryFetch<{ item: LibraryItem }>(`/api/admin/library/${item.id}`, {
       method: "PATCH",
       body: JSON.stringify({ archived: value }),
     });
+
+  /** Archive (after the confirm) or restore; the item leaves the current view and «Отменить» brings it back. */
+  const setArchivedFlag = async (item: LibraryItem, value: boolean) => {
+    setRowBusy(item.id);
+    const res = await patchArchived(item, value);
     setRowBusy(null);
     if (!res.ok) {
-      setNotice(res.error);
+      showNotice({ text: res.error, tone: "error" });
       return;
     }
-    // It leaves the current view (active ↔ archive).
+    const index = items.findIndex((i) => i.id === item.id);
     setItems((prev) => prev.filter((i) => i.id !== item.id));
     setTotal((n) => Math.max(0, n - 1));
-    setNotice(value ? d.archivedNotice(item.title) : d.restoredNotice(item.title));
+    showNotice({
+      text: value ? d.archivedNotice(item.title) : d.restoredNotice(item.title),
+      tone: "info",
+      undo: async () => {
+        showNotice(null);
+        const back = await patchArchived(item, !value);
+        if (!back.ok) {
+          showNotice({ text: back.error, tone: "error" });
+          return;
+        }
+        setItems((prev) => {
+          if (prev.some((i) => i.id === item.id)) return prev;
+          const next = [...prev];
+          next.splice(index < 0 ? 0 : Math.min(index, next.length), 0, back.data.item);
+          return next;
+        });
+        setTotal((n) => n + 1);
+      },
+    });
+  };
+
+  const confirmArchive = async () => {
+    if (!archiving) return;
+    const item = archiving;
+    setArchiving(null);
+    await setArchivedFlag(item, true);
   };
 
   const hardDelete = async () => {
@@ -126,13 +173,13 @@ export default function LibraryPageClient({
     const res = await libraryFetch<{ ok: true }>(`/api/admin/library/${deleting.id}`, { method: "DELETE" });
     setDeleteBusy(false);
     if (!res.ok) {
-      setNotice(res.error);
+      showNotice({ text: res.error, tone: "error" });
       setDeleting(null);
       return;
     }
     setItems((prev) => prev.filter((i) => i.id !== deleting.id));
     setTotal((n) => Math.max(0, n - 1));
-    setNotice(d.deletedNotice(deleting.title));
+    showNotice({ text: d.deletedNotice(deleting.title), tone: "info" });
     setDeleting(null);
   };
 
@@ -149,6 +196,10 @@ export default function LibraryPageClient({
       {label}
     </button>
   );
+
+  const iconBtn = "inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100";
+  /** First load or a filter change: skeleton instead of «Найдено: 0» / stale results. */
+  const showSkeleton = loading && (items.length === 0 || page === 0);
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 py-6">
@@ -207,18 +258,39 @@ export default function LibraryPageClient({
       </div>
 
       {notice ? (
-        <div className="mb-3 flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <span>{notice}</span>
-          <button type="button" onClick={() => setNotice(null)} className="shrink-0 text-amber-800" aria-label={d.close}>
-            <X className="h-4 w-4" />
-          </button>
+        <div
+          role="status"
+          className={cn(
+            "mb-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm",
+            notice.tone === "error" ? "border-red-200 bg-red-50 text-red-800" : "border-amber-200 bg-amber-50 text-amber-900",
+          )}
+          data-testid="library-notice"
+        >
+          <span className="min-w-0">{notice.text}</span>
+          <span className="flex shrink-0 items-center gap-1">
+            {notice.undo ? (
+              <button
+                type="button"
+                onClick={() => void notice.undo?.()}
+                className="h-8 rounded-md px-2.5 text-sm font-semibold text-amber-800 ring-1 ring-amber-300 hover:bg-amber-100"
+                data-testid="library-undo"
+              >
+                {d.undo}
+              </button>
+            ) : null}
+            <button type="button" onClick={() => showNotice(null)} className="inline-flex h-8 w-8 items-center justify-center rounded-md" aria-label={d.close}>
+              <X className="h-4 w-4" />
+            </button>
+          </span>
         </div>
       ) : null}
       {error ? <p className="mb-3 text-sm text-red-700">{error}</p> : null}
 
       {owner === "client" && !client ? (
         <p className="py-10 text-center text-sm text-gray-500">{d.pickClientFirst}</p>
-      ) : !loading && items.length === 0 ? (
+      ) : showSkeleton ? (
+        <LibrarySkeleton />
+      ) : items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-300 bg-white py-12 text-center text-sm text-gray-500">
           {archived
             ? d.emptyArchive
@@ -233,20 +305,33 @@ export default function LibraryPageClient({
       ) : (
         <>
           <p className="mb-2 text-xs text-gray-500">{d.found(total)}</p>
-          <ul className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" data-testid="library-grid">
+          <ul className={GRID_CLASS} data-testid="library-grid">
             {items.map((item) => (
-              <li key={item.id} className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <a href={libraryFileUrl(item.id)} target="_blank" rel="noopener noreferrer" className="block" title={d.openFile}>
-                  <LibraryThumb item={item} className="aspect-[4/3] w-full border-b border-gray-100" />
+              <li
+                key={item.id}
+                className="flex flex-row gap-3 overflow-hidden rounded-xl border border-gray-200 bg-white p-2 shadow-sm sm:flex-col sm:gap-0 sm:p-0"
+                data-testid="library-item"
+              >
+                <a
+                  href={libraryFileUrl(item.id)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block shrink-0"
+                  title={d.openFile}
+                >
+                  <LibraryThumb
+                    item={item}
+                    className="h-20 w-20 rounded-lg border border-gray-100 sm:aspect-[4/3] sm:h-auto sm:w-full sm:rounded-none sm:border-0 sm:border-b"
+                  />
                 </a>
-                <div className="flex flex-1 flex-col gap-1.5 p-3">
-                  <p className="line-clamp-2 text-sm font-semibold text-gray-900" title={item.title}>
+                <div className="flex min-w-0 flex-1 flex-col gap-1 sm:gap-1.5 sm:p-3">
+                  <p className="line-clamp-2 text-sm font-semibold leading-snug text-gray-900" title={item.title}>
                     {item.title}
                   </p>
-                  <p className="truncate text-xs text-gray-500" title={item.fileName}>
+                  <p className="hidden truncate text-xs text-gray-500 sm:block" title={item.fileName}>
                     {item.fileName}
                   </p>
-                  <div className="flex flex-wrap items-center gap-1">
+                  <div className="flex min-w-0 flex-wrap items-center gap-1">
                     <span
                       className={cn(
                         "max-w-full truncate rounded px-1.5 py-0.5 text-[11px] font-medium",
@@ -267,59 +352,60 @@ export default function LibraryPageClient({
                       </button>
                     ))}
                   </div>
-                  <p className="text-[11px] text-gray-500">{libraryMetaText(item, d.meta) || "—"}</p>
-                  <p className="text-[11px] text-gray-500">
+                  <p className="truncate text-[11px] text-gray-500 sm:whitespace-normal">{libraryMetaText(item, d.meta) || "—"}</p>
+                  <p className="truncate text-[11px] text-gray-500 sm:whitespace-normal">
                     {d.uses(item.useCount)}
                     {item.sourceOrderNumber ? ` · ${d.fromOrder(libraryOrderNumber(item.sourceOrderNumber))}` : null}
                   </p>
-                  <div className="mt-auto flex flex-wrap items-center gap-1 pt-1">
+                  <div className="-ml-2 mt-auto flex flex-wrap items-center gap-0.5 sm:ml-0 sm:gap-1 sm:pt-1">
                     <a
                       href={libraryFileUrl(item.id, true)}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-blue-600"
+                      className={cn(iconBtn, "hover:text-blue-600")}
                       title={d.download}
                       aria-label={d.download}
                     >
                       <Download className="h-4 w-4" />
                     </a>
                     {canManage ? (
-                    <>
-                    <button
-                      type="button"
-                      onClick={() => setEditing(item)}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-amber-700"
-                      title={d.edit}
-                      aria-label={d.edit}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void setArchivedFlag(item, !archived)}
-                      disabled={rowBusy === item.id}
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 disabled:opacity-50"
-                      title={archived ? d.restore : d.archive}
-                      aria-label={archived ? d.restore : d.archive}
-                    >
-                      {rowBusy === item.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : archived ? (
-                        <ArchiveRestore className="h-4 w-4" />
-                      ) : (
-                        <Archive className="h-4 w-4" />
-                      )}
-                    </button>
-                    {archived ? (
-                      <button
-                        type="button"
-                        onClick={() => setDeleting(item)}
-                        className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
-                        title={d.deleteForever}
-                        aria-label={d.deleteForever}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    ) : null}
-                    </>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setEditing(item)}
+                          className={cn(iconBtn, "hover:text-amber-700")}
+                          title={d.edit}
+                          aria-label={d.edit}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => (archived ? void setArchivedFlag(item, false) : setArchiving(item))}
+                          disabled={rowBusy === item.id}
+                          className={cn(iconBtn, "hover:text-gray-800 disabled:opacity-50")}
+                          title={archived ? d.restore : d.archive}
+                          aria-label={archived ? d.restore : d.archive}
+                          data-testid={archived ? "library-restore" : "library-archive"}
+                        >
+                          {rowBusy === item.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : archived ? (
+                            <ArchiveRestore className="h-4 w-4" />
+                          ) : (
+                            <Archive className="h-4 w-4" />
+                          )}
+                        </button>
+                        {archived ? (
+                          <button
+                            type="button"
+                            onClick={() => setDeleting(item)}
+                            className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-600"
+                            title={d.deleteForever}
+                            aria-label={d.deleteForever}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        ) : null}
+                      </>
                     ) : null}
                   </div>
                 </div>
@@ -341,11 +427,6 @@ export default function LibraryPageClient({
           ) : null}
         </>
       )}
-      {loading && items.length === 0 ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-        </div>
-      ) : null}
 
       {editing ? (
         <EditLibraryItemDialog
@@ -358,15 +439,52 @@ export default function LibraryPageClient({
         />
       ) : null}
       <AdminConfirmDialog
+        open={archiving !== null}
+        title={d.archiveConfirmTitle}
+        description={archiving ? d.archiveConfirmText(archiving.title) : ""}
+        confirmLabel={d.archiveConfirm}
+        cancelLabel={d.cancel}
+        onConfirm={() => void confirmArchive()}
+        onClose={() => setArchiving(null)}
+      />
+      <AdminConfirmDialog
         open={deleting !== null}
         title={d.deleteConfirmTitle}
         description={deleting ? d.deleteConfirmText(deleting.title) : ""}
         confirmLabel={d.deleteConfirm}
         cancelLabel={d.cancel}
+        confirmVariant="destructive"
         busy={deleteBusy}
         onConfirm={() => void hardDelete()}
         onClose={() => setDeleting(null)}
       />
     </main>
+  );
+}
+
+/** Phones: compact rows (thumb left); from `sm`: cards. */
+const GRID_CLASS =
+  "grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+
+function LibrarySkeleton() {
+  return (
+    <div aria-busy="true" data-testid="library-skeleton">
+      <div className="mb-2 h-3 w-24 animate-pulse rounded bg-gray-200" />
+      <ul className={GRID_CLASS}>
+        {Array.from({ length: 10 }, (_, i) => (
+          <li
+            key={i}
+            className="flex animate-pulse flex-row gap-3 overflow-hidden rounded-xl border border-gray-200 bg-white p-2 sm:flex-col sm:gap-0 sm:p-0"
+          >
+            <div className="h-20 w-20 shrink-0 rounded-lg bg-gray-100 sm:aspect-[4/3] sm:h-auto sm:w-full sm:rounded-none" />
+            <div className="flex flex-1 flex-col gap-2 py-1 sm:p-3">
+              <div className="h-3.5 w-3/4 rounded bg-gray-200" />
+              <div className="h-3 w-1/2 rounded bg-gray-100" />
+              <div className="h-3 w-2/3 rounded bg-gray-100" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
