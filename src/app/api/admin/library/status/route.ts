@@ -3,13 +3,16 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireLibraryStaff } from "@/lib/library/libraryAuth";
 import { canManageLibrary } from "@/lib/roles";
-import { isLibraryKey } from "@/lib/library/libraryKeys";
+import { isLibraryKey, libraryStatusOf } from "@/lib/library/libraryKeys";
 
 const bodySchema = z.object({ ids: z.array(z.string().uuid()).min(1).max(200) });
 
 /**
  * Which order files are «В библиотеке»: saved from that file, or the file
- * itself points at a library key. `{ inLibrary: { [fileId]: libraryFileId } }`.
+ * itself points at a library key. `{ inLibrary: { [fileId]: libraryFileId },
+ * archived: { [fileId]: libraryFileId } }` — `archived` only for files whose
+ * copy sits in the library archive (no active copy), so the UI offers
+ * «Восстановить» instead of a second copy. `canManage`: may restore.
  */
 export async function POST(request: NextRequest) {
   const { user, denied } = await requireLibraryStaff();
@@ -21,18 +24,9 @@ export async function POST(request: NextRequest) {
   const files = await prisma.file.findMany({ where: { id: { in: ids } }, select: { id: true, fileUrl: true } });
   const libKeys = files.filter((f) => isLibraryKey(f.fileUrl)).map((f) => f.fileUrl);
   const rows = await prisma.libraryFile.findMany({
-    where: {
-      archivedAt: null,
-      OR: [{ sourceFileId: { in: ids } }, ...(libKeys.length ? [{ storageKey: { in: libKeys } }] : [])],
-    },
-    select: { id: true, sourceFileId: true, storageKey: true },
+    where: { OR: [{ sourceFileId: { in: ids } }, ...(libKeys.length ? [{ storageKey: { in: libKeys } }] : [])] },
+    select: { id: true, sourceFileId: true, storageKey: true, archivedAt: true },
+    orderBy: { createdAt: "asc" },
   });
-  const byKey = new Map(rows.map((r) => [r.storageKey, r.id]));
-  const inLibrary: Record<string, string> = {};
-  for (const r of rows) if (r.sourceFileId) inLibrary[r.sourceFileId] = r.id;
-  for (const f of files) {
-    const hit = byKey.get(f.fileUrl);
-    if (hit) inLibrary[f.id] = hit;
-  }
-  return NextResponse.json({ inLibrary, canManage: canManageLibrary(user.role) });
+  return NextResponse.json({ ...libraryStatusOf(files, rows), canManage: canManageLibrary(user.role) });
 }

@@ -152,3 +152,22 @@ export function thumbKindOf(fileName: string): "pdf" | "raster" | null {
   if (ext === "pdf") return "pdf";
   return RASTER_THUMB_EXTS.has(ext) ? "raster" : null;
 }
+
+/**
+ * Library state of order files from the matching library rows (saved from the
+ * file, or the file's own key): the active copy wins over archived ones.
+ */
+export function libraryStatusOf(
+  files: ReadonlyArray<{ id: string; fileUrl: string }>,
+  rows: ReadonlyArray<{ id: string; sourceFileId: string | null; storageKey: string; archivedAt: Date | string | null }>,
+): { inLibrary: Record<string, string>; archived: Record<string, string> } {
+  const inLibrary: Record<string, string> = {};
+  const archived: Record<string, string> = {};
+  for (const f of files) {
+    const hits = rows.filter((r) => r.storageKey === f.fileUrl || r.sourceFileId === f.id);
+    const active = hits.find((r) => !r.archivedAt);
+    if (active) inLibrary[f.id] = active.id;
+    else if (hits.length) archived[f.id] = hits[hits.length - 1]!.id;
+  }
+  return { inLibrary, archived };
+}

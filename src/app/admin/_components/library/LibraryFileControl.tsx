@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { BookmarkCheck, BookmarkPlus } from "lucide-react";
+import { ArchiveRestore, BookmarkCheck, BookmarkPlus, Loader2 } from "lucide-react";
 import { isLibraryKey } from "@/lib/library/libraryKeys";
-import { useInLibrary } from "./useLibraryStatus";
+import { markInLibrary, useArchivedInLibrary, useCanManageLibrary, useInLibrary } from "./useLibraryStatus";
+import { libraryFetch, type LibraryItem } from "./libraryClient";
 import { SaveToLibraryDialog } from "./SaveToLibraryDialog";
 import type { LibraryOwner } from "./LibraryOwnerField";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -19,6 +20,8 @@ export function InLibraryBadge({
 }) {
   const d = useLanguageStore((s) => s.t.library);
   const libId = useInLibrary(fileId);
+  const archivedId = useArchivedInLibrary(fileId);
+  if (!libId && archivedId) return <ArchivedInLibraryBadge fileId={fileId} libraryId={archivedId} />;
   if (!libId && !isLibraryKey(fileUrl)) return null;
   return (
     <Link
@@ -30,6 +33,55 @@ export function InLibraryBadge({
       <BookmarkCheck className="h-3 w-3" aria-hidden />
       {d.inLibraryBadge}
     </Link>
+  );
+}
+
+/**
+ * The file's library copy is archived: say so (instead of offering a second
+ * copy) and let admins «Восстановить» it in place.
+ */
+function ArchivedInLibraryBadge({ fileId, libraryId }: { fileId: string; libraryId: string }) {
+  const d = useLanguageStore((s) => s.t.library);
+  const canManage = useCanManageLibrary();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const restore = async () => {
+    setBusy(true);
+    setError(null);
+    const res = await libraryFetch<{ item: LibraryItem }>(`/api/admin/library/${libraryId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ archived: false }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      setError(res.error || d.restoreFailed);
+      return;
+    }
+    markInLibrary([{ fileId, libraryId }]);
+  };
+  return (
+    <span className="inline-flex items-center gap-1" data-testid="archived-in-library">
+      <span
+        className="inline-flex items-center gap-0.5 rounded bg-gray-100 px-1.5 py-px text-[10px] font-semibold text-gray-600 ring-1 ring-gray-200"
+        title={d.archivedTitle}
+      >
+        <BookmarkCheck className="h-3 w-3" aria-hidden />
+        {d.archivedBadge}
+      </span>
+      {canManage ? (
+        <button
+          type="button"
+          onClick={() => void restore()}
+          disabled={busy}
+          className="inline-flex items-center gap-0.5 rounded px-1 py-px text-[10px] font-semibold text-amber-700 hover:bg-amber-50 hover:text-amber-900 disabled:opacity-50"
+          data-testid="restore-from-library-archive"
+        >
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <ArchiveRestore className="h-3 w-3" aria-hidden />}
+          {d.restore}
+        </button>
+      ) : null}
+      {error ? <span className="text-[10px] font-medium text-red-600">{error}</span> : null}
+    </span>
   );
 }
 
@@ -49,9 +101,10 @@ export function SaveFileToLibraryButton({
 }) {
   const d = useLanguageStore((s) => s.t.library);
   const libId = useInLibrary(fileId);
+  const archivedId = useArchivedInLibrary(fileId);
   const [open, setOpen] = useState(false);
   // The dialog stays mounted after a save (its «done» screen) although the button hides.
-  const showButton = !libId && libId !== undefined && !isLibraryKey(fileUrl);
+  const showButton = !libId && libId !== undefined && !archivedId && !isLibraryKey(fileUrl);
   if (!showButton && !open) return null;
   return (
     <>

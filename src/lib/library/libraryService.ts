@@ -106,7 +106,8 @@ export type SaveToLibraryError =
   | "is_link"
   | "source_missing"
   | "client_not_found"
-  | "already_in_library";
+  | "already_in_library"
+  | "archived_in_library";
 
 /** Russian messages for the admin UI. */
 export const SAVE_TO_LIBRARY_ERROR_RU: Record<SaveToLibraryError, string> = {
@@ -115,15 +116,17 @@ export const SAVE_TO_LIBRARY_ERROR_RU: Record<SaveToLibraryError, string> = {
   source_missing: "Файл уже удалён из хранилища",
   client_not_found: "Клиент не найден",
   already_in_library: "Этот файл уже в библиотеке",
+  archived_in_library: "Копия этого файла в архиве библиотеки — восстановите её",
 };
 
-/** Non-archived library item made from (or used by) this order file, if any. */
+/**
+ * Library item made from (or used by) this order file, if any: an active one
+ * first, else an archived one (restored instead of copying the file again).
+ */
 export async function findLibraryItemForFile(file: { id: string; fileUrl: string }): Promise<LibraryFile | null> {
   return prisma.libraryFile.findFirst({
-    where: {
-      archivedAt: null,
-      OR: [{ sourceFileId: file.id }, { storageKey: file.fileUrl }],
-    },
+    where: { OR: [{ sourceFileId: file.id }, { storageKey: file.fileUrl }] },
+    orderBy: [{ archivedAt: { sort: "desc", nulls: "first" } }, { createdAt: "desc" }],
   });
 }
 
@@ -165,7 +168,11 @@ export async function saveOrderFileToLibrary(input: {
       where: { id: existing.id },
       include: { client: { select: LIBRARY_CLIENT_SELECT } },
     });
-    return { ok: false, error: "already_in_library", item: withClient ? serializeLibraryFile(withClient) : undefined };
+    return {
+      ok: false,
+      error: existing.archivedAt ? "archived_in_library" : "already_in_library",
+      item: withClient ? serializeLibraryFile(withClient) : undefined,
+    };
   }
 
   if (input.clientId) {

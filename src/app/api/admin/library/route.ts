@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
   try {
     const res = await saveOrderFileToLibrary({ ...parsed.data, actorId: user.id });
     if (!res.ok) {
-      const status = res.error === "file_not_found" ? 404 : res.error === "source_missing" ? 410 : res.error === "already_in_library" ? 409 : 400;
+      const status = res.error === "file_not_found" ? 404 : res.error === "source_missing" ? 410 : res.error === "already_in_library" || res.error === "archived_in_library" ? 409 : 400;
       return NextResponse.json({ error: SAVE_TO_LIBRARY_ERROR_RU[res.error], code: res.error, item: res.item }, { status });
     }
     return NextResponse.json({ item: res.item }, { status: 201 });

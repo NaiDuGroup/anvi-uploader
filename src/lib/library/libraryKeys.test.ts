@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  libraryStatusOf,
   libraryThumbKeys,
   thumbKindOf,
   LIBRARY_PREFIX,
@@ -156,5 +157,24 @@ describe("library thumbnails", () => {
     expect(thumbKindOf("logo.psd")).toBeNull();
     expect(thumbKindOf("files.zip")).toBeNull();
     expect(thumbKindOf("noext")).toBeNull();
+  });
+});
+
+describe("libraryStatusOf", () => {
+  const files = [
+    { id: "f1", fileUrl: "uploads/a.pdf" },
+    { id: "f2", fileUrl: "uploads/b.pdf" },
+    { id: "f3", fileUrl: "library/common/x-c.pdf" },
+    { id: "f4", fileUrl: "uploads/d.pdf" },
+  ];
+  it("reports active copies, archived-only copies, and nothing for the rest", () => {
+    const res = libraryStatusOf(files, [
+      { id: "L1", sourceFileId: "f1", storageKey: "library/common/1-a.pdf", archivedAt: new Date() },
+      { id: "L2", sourceFileId: "f1", storageKey: "library/common/2-a.pdf", archivedAt: null },
+      { id: "L3", sourceFileId: "f2", storageKey: "library/common/3-b.pdf", archivedAt: "2026-11-01T00:00:00Z" },
+      { id: "L4", sourceFileId: null, storageKey: "library/common/x-c.pdf", archivedAt: null },
+    ]);
+    expect(res.inLibrary).toEqual({ f1: "L2", f3: "L4" });
+    expect(res.archived).toEqual({ f2: "L3" });
   });
 });

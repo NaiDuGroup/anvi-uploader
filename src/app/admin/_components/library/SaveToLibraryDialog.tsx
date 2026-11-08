@@ -8,7 +8,7 @@ import { LibrarySheet, sheetCancelClass, sheetInputClass, sheetPrimaryClass } fr
 import { LibraryOwnerField, libraryOwnerIncomplete, type LibraryOwner } from "./LibraryOwnerField";
 import { libraryFetch, libraryOrderNumber, type LibraryItem } from "./libraryClient";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import { markInLibrary } from "./useLibraryStatus";
+import { markArchivedInLibrary, markInLibrary } from "./useLibraryStatus";
 import { LibraryThumb, ThumbImage, orderFileThumbUrl } from "./LibraryThumb";
 
 export type SaveToLibraryTarget =
@@ -46,7 +46,8 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
       setBusy(false);
       if (!res.ok) {
         const item = (res.body as { item?: LibraryItem } | undefined)?.item;
-        if (item) markInLibrary([{ fileId: target.fileId, libraryId: item.id }]);
+        if (item && res.code === "archived_in_library") markArchivedInLibrary(target.fileId, item.id);
+        else if (item) markInLibrary([{ fileId: target.fileId, libraryId: item.id }]);
         setError(res.error);
         return;
       }
