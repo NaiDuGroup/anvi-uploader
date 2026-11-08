@@ -2365,7 +2365,7 @@ export const en: TranslationDictionary = {
     historyDownload: "Download",
     historyDelete: "Delete",
     historyDeleteConfirm:
-      "The layout disappears from history. The file auto-deletes after 7 days anyway.",
+      "The layout disappears from history. The file auto-deletes 7 days after it was created anyway.",
     historyDeleteTitle: "Remove from history?",
     historyDeleteError: "Could not delete. Please try again.",
     historyLoadError: "Could not load history",
