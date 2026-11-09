@@ -3035,7 +3035,7 @@ export const ro: TranslationDictionary = {
     leaveChange: "Da, schimbă",
     quantityInSetDialog: "Numărul de seturi se schimbă din «Modifică setul»",
     contents: "Ce intră în set",
-    contentsHint: "Cana, agenda și pixul se pot schimba apoi în rândul comenzii — prețul setului rămâne același.",
+    contentsHint: "Orice articol se poate schimba apoi în rândul lui din comandă — prețul setului rămâne același.",
     keptOldPrice: (p) => `Prețul comenzii se păstrează. Conform șablonului acum: ${p} MDL.`,
     settingsPriceNote: "Prețul nou se aplică comenzilor noi, comenzile vechi își păstrează prețul.",
     fileFor: (label) => `Machetă: ${label}`,

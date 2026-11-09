@@ -3022,7 +3022,7 @@ export const en: TranslationDictionary = {
     leaveChange: "Yes, change",
     quantityInSetDialog: "The number of sets is changed in «Change set»",
     contents: "What the set includes",
-    contentsHint: "The mug, notebook and pen can be changed later in the order row — the set price stays the same.",
+    contentsHint: "Any item can be changed later in its order row — the set price stays the same.",
     keptOldPrice: (p) => `The order keeps its price. Template price now: ${p} MDL.`,
     settingsPriceNote: "A new price applies to new orders; old orders keep their price.",
     fileFor: (label) => `Artwork: ${label}`,
