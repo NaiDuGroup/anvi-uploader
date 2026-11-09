@@ -25,6 +25,9 @@ import {
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { formatPaperTypeLabel } from "@/lib/paperTypeLabel";
+import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
+import { dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
+import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { mugProductDisplayNameFromSnapshot } from "@/lib/mug/mugProductLabels";
@@ -572,12 +575,15 @@ export function OrderFileSpecs({
   isMug,
   productType,
   compact = false,
+  dtfLineDataRaw,
 }: {
   files: SpecFile[];
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   isMug?: boolean;
   /** Line product type: sticker artwork tags read «Макет наклейки», not a card face. */
   productType?: string;
+  /** DTF line data: a zone file reads «DTF · Полная спина» instead of just «DTF». */
+  dtfLineDataRaw?: unknown;
   /**
    * One line per distinct colour / format / copies, without file names
    * (the customer list shows the files in their own column).
@@ -599,6 +605,15 @@ export function OrderFileSpecs({
         f.copies === files[0].copies,
     );
 
+  const dtfZones = productType === "dtf_apparel" ? (parseDtfLineData(dtfLineDataRaw)?.zones ?? []) : [];
+  const paperLabel = (paper: string | null): string => {
+    const zoneId = dtfZoneIdFromPaperType(paper);
+    const zone = zoneId ? dtfZones.find((z) => z.id === zoneId) : undefined;
+    return zone
+      ? t.dtf.editor.zoneFile.fileTag(dtfZoneLabel(zone, t.dtf.placements))
+      : formatPaperTypeLabel(paper, t.upload, productType);
+  };
+
   const specBadge = (color: string, paper: string | null, copies: number) => (
     <span className="inline-flex items-center gap-1.5 text-[11px] text-gray-600">
       {color === "color" ? (
@@ -613,7 +628,7 @@ export function OrderFileSpecs({
         </span>
       )}
       <span className="text-gray-300">·</span>
-      {formatPaperTypeLabel(paper, t.upload, productType)}
+      {paperLabel(paper)}
       {copies > 1 && (
         <>
           <span className="text-gray-300">·</span>

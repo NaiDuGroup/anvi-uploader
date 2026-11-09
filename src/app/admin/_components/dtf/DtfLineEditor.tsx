@@ -1,7 +1,7 @@
 "use client";
 
 import { isDtfOneSize } from "@/lib/dtf/dtfSizesText";
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 import {
   DTF_GARMENT_SOURCES,
@@ -92,6 +92,13 @@ export interface DtfLineEditorProps {
   onSameLayoutChange?: (otherId: string | null) => void;
   /** Dealer cabinet: show the price without costs and profit. */
   hideCosts?: boolean;
+  /**
+   * Order wizard: the artwork control of a zone (which file prints there),
+   * shown on its own line under the zone.
+   */
+  renderZoneFile?: (zone: DtfZoneDraft, index: number) => ReactNode;
+  /** False hides a zone's «×» (the wizard keeps a zone for the row's own file). */
+  canRemoveZone?: (zoneId: string) => boolean;
 }
 
 export interface DtfLayoutChoice {
@@ -118,6 +125,8 @@ export function DtfLineEditor({
   sameLayoutAs = null,
   onSameLayoutChange,
   hideCosts = false,
+  renderZoneFile,
+  canRemoveZone,
 }: DtfLineEditorProps) {
   const e = t.dtf.editor;
   const garment: DtfGarmentJson | undefined =
@@ -358,7 +367,7 @@ export function DtfLineEditor({
                   {(zoneData.runDiscountPct ?? 0) > 0 && ` · ${e.runDiscount(zoneData.runDiscountPct ?? 0)}`}
                 </span>
               )}
-              {value.zones.length > 1 && (
+              {value.zones.length > 1 && (canRemoveZone?.(z.id) ?? true) && (
                 <button
                   type="button"
                   aria-label={e.removeZone}
@@ -371,6 +380,7 @@ export function DtfLineEditor({
               {z.placement === "other" && !z.placementNote?.trim() && (
                 <p className="basis-full text-[11px] text-amber-700">{e.placementNoteHint}</p>
               )}
+              {renderZoneFile?.(z, i)}
             </div>
           );
         })}

@@ -1640,6 +1640,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                   files={line.files}
                   t={t}
                   productType={line.productType}
+                  dtfLineDataRaw={line.dtfLineData}
                   isMug={
                     isCatalogSkuLine(line.productType) ||
                     line.productType === "large_format_print"

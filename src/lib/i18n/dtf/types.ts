@@ -37,6 +37,23 @@ export interface DtfDictionary {
     placementNote: string;
     placementNotePlaceholder: string;
     placementNoteHint: string;
+    /** Artwork of a zone (several prints on one garment). */
+    zoneFile: {
+      /** Label before the file control. */
+      label: string;
+      upload: string;
+      /** Picker of other DTF rows' files (the picked row goes away). */
+      fromUploaded: string;
+      fromUploadedHint: string;
+      /** «строка 2» in the picker. */
+      row: (position: number) => string;
+      /** The zone the row's own file prints in. */
+      rowFile: string;
+      missing: string;
+      remove: string;
+      /** Zone name next to «DTF» on the order's file list. */
+      fileTag: (zone: string) => string;
+    };
     preset: string;
     customSize: string;
     widthCm: string;

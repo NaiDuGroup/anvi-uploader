@@ -40,7 +40,7 @@ import { GiftSetDialog } from "@/app/admin/_components/GiftSetDialog";
 import { GiftSetBadge } from "@/components/orders/GiftSetBadge";
 import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
 import { PRODUCT_TYPE_ICONS } from "@/lib/productTypeIcons";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronLeft, Flame, Link2, Loader2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -98,6 +98,17 @@ import {
   paperPrintFromStoredFile,
   wizardRowFilesForLine,
 } from "./adminOrderWizardHydrate";
+import {
+  canRemoveDtfZone,
+  dtfRowZoneId,
+  dtfZoneFileName,
+  dtfZoneFileSpecs,
+  dtfZoneFilesNeedUpload,
+  dtfZoneFileHasArtwork,
+  reconcileDtfZoneFiles,
+  type WizardDtfZoneFile,
+  type WizardDtfZoneFiles,
+} from "./dtfZoneFiles";
 import {
   wizardLineKey,
   minimalUploadReadyMugLayout,
@@ -179,6 +190,7 @@ import {
 import type { AdminLargeFormatMaterialJson } from "@/lib/largeFormat/toAdminLargeFormatMaterialJson";
 import type { WizardBootstrapData } from "@/lib/wizardBootstrap";
 import { DtfLineEditor } from "@/app/admin/_components/dtf/DtfLineEditor";
+import { DtfZoneFileField, type DtfZoneFileCandidate } from "@/app/admin/_components/dtf/DtfZoneFileField";
 import { ProductTypeMenu } from "@/app/admin/_components/ProductTypeMenu";
 import type { DtfCatalogJson } from "@/lib/dtf/dtfDto";
 import type { DtfLineInput } from "@/lib/dtf/dtfLineInput";
@@ -196,6 +208,7 @@ import {
   quoteDtfDraft,
   withDtfGarment,
   type DtfDraft,
+  type DtfZoneDraft,
   type DtfQuote,
 } from "@/lib/dtf/dtfDraft";
 import { isDtfErrorCode, type DtfErrorCode } from "@/lib/dtf/dtfErrors";
@@ -668,6 +681,14 @@ interface SlotAssign {
   postcard?: PostcardDraft | null;
   /** DTF on apparel: garment, sizes and print zones (null until the row becomes DTF). */
   dtf: DtfDraft | null;
+  /**
+   * DTF: artwork of the other zones (front + back on one garment). The row's
+   * own file prints in `dtfRowZoneId`; each other zone may carry its file here,
+   * so the line is one garment with several prints, not one per file.
+   */
+  dtfZoneFiles?: WizardDtfZoneFiles | null;
+  /** DTF: zone the row's own file prints in; unset = its stored tag, else the first zone. */
+  dtfRowZoneId?: string | null;
   /** UV print: stock or client item, quantity and print zones (null until the row becomes UV). */
   uv: UvDraft | null;
   /** Sublimation: stock blank and quantity (null until the row becomes sublimation). */
@@ -763,7 +784,17 @@ function withDtfDraft(a: SlotAssign, catalog: DtfCatalogJson): SlotAssign {
   const dtf: DtfDraft = a.dtf ?? emptyDtfDraft(catalog);
   const pieces: number = dtfDraftTotalPieces(dtf);
   const copiesStr: string = String(Math.max(1, pieces));
-  return dtf === a.dtf && copiesStr === a.copiesStr ? a : { ...a, dtf, copiesStr };
+  // Zones removed: their files go; a removed row zone moves the row file to a free zone.
+  const zoneFix = reconcileDtfZoneFiles(dtf.zones, a.dtfRowZoneId, a.dtfZoneFiles);
+  if (
+    dtf === a.dtf &&
+    copiesStr === a.copiesStr &&
+    zoneFix.dtfZoneFiles === a.dtfZoneFiles &&
+    zoneFix.dtfRowZoneId === a.dtfRowZoneId
+  ) {
+    return a;
+  }
+  return { ...a, dtf, copiesStr, ...zoneFix };
 }
 
 /**
@@ -837,15 +868,31 @@ function requireDtfInput(a: SlotAssign): DtfLineInput {
   return input;
 }
 
-/** Artwork tag for a DTF file: kept when it already names a zone, else the first zone. */
+/**
+ * Artwork tag for a DTF row's own file: the row zone (`dtfRowZoneId`), else
+ * the zone the stored file already names, else the first zone.
+ */
 function dtfFilePaperType(a: SlotAssign, existingPaperType: string | null): string {
-  const taggedZoneId: string | null = dtfZoneIdFromPaperType(existingPaperType);
-  if (taggedZoneId && a.dtf?.zones.some((z) => z.id === taggedZoneId)) {
-    return dtfZoneFilePaperType(taggedZoneId);
-  }
-  const firstZoneId: string | undefined = a.dtf?.zones[0]?.id;
-  if (!firstZoneId) throw new Error("dtf_details_required");
-  return dtfZoneFilePaperType(firstZoneId);
+  const zoneId: string | null = slotDtfRowZoneId(a, existingPaperType);
+  if (!zoneId) throw new Error("dtf_details_required");
+  return dtfZoneFilePaperType(zoneId);
+}
+
+/** Zone a DTF row's own file prints in (null when the row has no zones). */
+function slotDtfRowZoneId(a: SlotAssign, existingPaperType: string | null): string | null {
+  return dtfRowZoneId(a.dtf?.zones ?? [], a.dtfRowZoneId, existingPaperType);
+}
+
+/** Paper tag the row file is checked against (DTF: its zone; others: the stored tag). */
+function slotRowFilePaperType(a: SlotAssign, existingPaperType: string | null): string | null {
+  if (a.productType !== "dtf_apparel") return existingPaperType;
+  const zoneId: string | null = slotDtfRowZoneId(a, existingPaperType);
+  return zoneId ? dtfZoneFilePaperType(zoneId) : existingPaperType;
+}
+
+/** Print size of one DTF zone (cm), for the artwork check of its file. */
+function dtfZoneDeclaredSize(a: SlotAssign, zoneId: string, dtfCatalog: DtfCatalogJson): PrintSizeCm | null {
+  return slotDeclaredSize(a, dtfZoneFilePaperType(zoneId), dtfCatalog);
 }
 
 /**
@@ -1948,6 +1995,34 @@ async function measureSlotLayout(
   return null;
 }
 
+/**
+ * Files of a DTF row's other zones on an update payload, tagged to their
+ * zones. Fresh uploads report progress on the row's checklist entry.
+ */
+async function dtfZoneUpdateFiles(
+  slot: AdminWizardSlot,
+  a: SlotAssign,
+  existingPaperType: string | null,
+  copies: number,
+  uploadArtwork: (file: File) => Promise<UploadResult>,
+  onFileStatus?: (slotId: string, status: "uploading" | "done") => void,
+): Promise<AdminOrderUpdateLineInput["files"]> {
+  const uploads: boolean = dtfZoneFilesNeedUpload(a.dtfZoneFiles);
+  if (uploads) onFileStatus?.(slot.id, "uploading");
+  const specs = await dtfZoneFileSpecs(
+    a.dtf?.zones ?? [],
+    slotDtfRowZoneId(a, existingPaperType),
+    a.dtfZoneFiles,
+    uploadArtwork,
+  );
+  if (uploads) onFileStatus?.(slot.id, "done");
+  return specs.map((f) =>
+    "fileId" in f
+      ? { fileId: f.fileId, copies, color: "color" as const, paperType: f.paperType }
+      : { fileName: f.fileName, fileUrl: f.fileUrl, copies, color: "color" as const, paperType: f.paperType },
+  );
+}
+
 async function buildAdminOrderUpdateLines(
   slots: AdminWizardSlot[],
   assignBySlot: Record<string, SlotAssign>,
@@ -2129,6 +2204,7 @@ async function buildAdminOrderUpdateLines(
             color: "color",
             paperType: dtfFilePaperType(a, null),
           });
+          files.push(...(await dtfZoneUpdateFiles(slot, a, null, copies, uploadArtwork, onFileStatus)));
         } else if (a.productType === "uv_print") {
           const copies = parseAdminCopiesInput(a.copiesStr);
           if (copies === null) throw new Error("Invalid copies");
@@ -2162,6 +2238,9 @@ async function buildAdminOrderUpdateLines(
             color: "color",
             paperType: dtfFilePaperType(a, slot.existingFile.paperType),
           });
+          files.push(
+            ...(await dtfZoneUpdateFiles(slot, a, slot.existingFile.paperType, copies, uploadArtwork, onFileStatus)),
+          );
         } else if (a.productType === "uv_print") {
           files.push({
             fileId: slot.existingFile.id,
@@ -2820,12 +2899,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             const k = z ? (lineSet?.zoneIds ?? []).indexOf(z) : -1;
             return k === -1 ? 99 : k;
           };
-          const { rowFiles, businessCardBack } = wizardRowFilesForLine(
-            line.productType,
-            [...line.files].sort((a, b) =>
-              lineSet?.kind === "ready" ? zoneRank(a) - zoneRank(b) : a.fileName.localeCompare(b.fileName),
-            ),
-          );
+          const { rowFiles, businessCardBack, dtfZoneFiles: storedZoneFiles, dtfRowZoneId: storedRowZoneId } =
+            wizardRowFilesForLine(
+              line.productType,
+              [...line.files].sort((a, b) =>
+                lineSet?.kind === "ready" ? zoneRank(a) - zoneRank(b) : a.fileName.localeCompare(b.fileName),
+              ),
+              {
+                // DTF: one garment with a print per zone comes back as one row.
+                dtfZoneIds:
+                  line.productType === "dtf_apparel"
+                    ? (parseDtfLineData(line.dtfLineData)?.zones.map((z) => z.id) ?? [])
+                    : [],
+              },
+            );
           storedLineTypesRef.current.set(line.id, line.productType);
           for (const [rowIdx, f] of rowFiles.entries()) {
             const sid = newSlotId();
@@ -3030,6 +3117,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               if (dtfData) {
                 base.dtf = dtfDraftFromLineData(dtfData, dtfCatalogRef.current);
                 base.lfCustomerType = dtfData.customerType;
+              }
+              if (rowIdx === 0 && storedRowZoneId) {
+                // The other zones' files ride on the line's first row (a repeat reuses what is still stored).
+                base.dtfRowZoneId = storedRowZoneId;
+                const zoneFiles: WizardDtfZoneFiles = {};
+                for (const { zoneId, file: zf } of storedZoneFiles ?? []) {
+                  const entry: WizardDtfZoneFile | null = repeatFiles
+                    ? repeatFiles[zf.id]
+                      ? { reuse: repeatFiles[zf.id]! }
+                      : null
+                    : { existing: { id: zf.id, fileName: zf.fileName, paperType: zf.paperType } };
+                  if (entry) zoneFiles[zoneId] = entry;
+                }
+                base.dtfZoneFiles = zoneFiles;
               }
               nextAssign[sid] = withDtfDraft(base, dtfCatalogRef.current);
               continue;
@@ -4460,6 +4561,84 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     if (remove) removeSlotIds([slotId]);
   }
 
+  /** Sets (or clears, with null) the artwork of one DTF zone of a row. */
+  function setDtfZoneFile(slotId: string, zoneId: string, entry: WizardDtfZoneFile | null): void {
+    const cur = assignBySlot[slotId];
+    if (!cur) return;
+    const next: WizardDtfZoneFiles = { ...(cur.dtfZoneFiles ?? {}) };
+    if (entry) next[zoneId] = entry;
+    else delete next[zoneId];
+    updateSlot(slotId, { dtfZoneFiles: next });
+  }
+
+  /**
+   * «Из загруженных»: another DTF row's file becomes this zone's artwork and
+   * that row goes — one garment with two prints instead of two garments.
+   */
+  function moveSlotFileToDtfZone(targetSlotId: string, zoneId: string, sourceSlotId: string): void {
+    const src = slots.find((x) => x.id === sourceSlotId);
+    if (!src || src.id === targetSlotId) return;
+    const entry: WizardDtfZoneFile | null = src.file
+      ? { file: src.file }
+      : src.existingFile
+        ? { existing: { id: src.existingFile.id, fileName: src.existingFile.fileName, paperType: src.existingFile.paperType } }
+        : src.reuse
+          ? { reuse: src.reuse }
+          : null;
+    if (!entry) return;
+    setDtfZoneFile(targetSlotId, zoneId, entry);
+    removeSlotIds([sourceSlotId]);
+  }
+
+  /** Other DTF rows whose only file may move into a zone of `selfId`. */
+  function dtfZoneFileCandidates(selfId: string): DtfZoneFileCandidate[] {
+    return slots.flatMap((o, oi) => {
+      const oa = assignBySlot[o.id];
+      if (o.id === selfId || oa?.productType !== "dtf_apparel" || oa.giftSet) return [];
+      if (o.linkUrl || !(o.file || o.existingFile || o.reuse)) return [];
+      if (Object.values(oa.dtfZoneFiles ?? {}).some(dtfZoneFileHasArtwork)) return [];
+      return [
+        {
+          slotId: o.id,
+          position: oi + 1,
+          fileName: slotArtworkName(o) ?? "",
+          file: o.file ?? null,
+          fileId: o.file ? null : (o.existingFile?.id ?? null),
+        },
+      ];
+    });
+  }
+
+  /** File control of one zone of a DTF row (the row zone just names the row's file). */
+  function renderDtfZoneFile(s: AdminWizardSlot, a: SlotAssign, zone: DtfZoneDraft): ReactNode {
+    const zones = a.dtf?.zones ?? [];
+    const zt = t.dtf.editor.zoneFile;
+    if (zone.id === slotDtfRowZoneId(a, s.existingFile?.paperType ?? null)) {
+      if (zones.length < 2) return null;
+      return (
+        <p className="basis-full truncate pl-1 text-[11px] text-gray-500" title={slotArtworkName(s) ?? undefined}>
+          {zt.rowFile}: {slotArtworkName(s) ?? "—"}
+        </p>
+      );
+    }
+    const entry = a.dtfZoneFiles?.[zone.id];
+    return (
+      <DtfZoneFileField
+        fileName={dtfZoneFileHasArtwork(entry) ? dtfZoneFileName(entry) : null}
+        file={entry?.file ?? null}
+        fileId={entry?.file ? null : (entry?.existing?.id ?? null)}
+        metaText={entry?.reuse?.metaText ?? null}
+        declared={dtfZoneDeclaredSize(a, zone.id, dtfCatalog)}
+        metaEndpoint={dealerMode ? CABINET_FILE_META_ENDPOINT : undefined}
+        candidates={dtfZoneFileCandidates(s.id)}
+        onUpload={(file) => setDtfZoneFile(s.id, zone.id, { file })}
+        onPick={(sourceId) => moveSlotFileToDtfZone(s.id, zone.id, sourceId)}
+        onClear={() => setDtfZoneFile(s.id, zone.id, null)}
+        t={t}
+      />
+    );
+  }
+
   /** Drops these rows (a single row, or every row of a set). */
   function removeSlotIds(ids: string[]): void {
     if (stockPicker && ids.includes(stockPicker.slotId)) {
@@ -5190,6 +5369,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         if (dtfCopies === null) throw new Error("Invalid copies");
         const dtf: DtfLineInput = requireDtfInput(a);
         const { fileName, fileUrl } = await upload(localFile);
+        // One garment, one print per zone: the other zones' files ride on this line.
+        const zoneFiles = await dtfZoneFileSpecs(a.dtf?.zones ?? [], slotDtfRowZoneId(a, null), a.dtfZoneFiles, upload);
         lines.push({
           productType: "dtf_apparel",
           customerType: a.lfCustomerType,
@@ -5203,6 +5384,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               color: "color",
               paperType: dtfFilePaperType(a, null),
             },
+            ...zoneFiles.map((f) => {
+              // A new order has no stored files: an edit-only entry cannot reach here.
+              if ("fileId" in f) throw new Error("Missing file");
+              return { fileName: f.fileName, fileUrl: f.fileUrl, copies: dtfCopies, color: "color" as const, paperType: f.paperType };
+            }),
           ],
         });
       } else if (a.productType === "uv_print") {
@@ -5284,7 +5470,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         );
         // Only rows with a NEW local file get uploaded on save; rows backed by
         // an already-stored file are reused. Track just those for the checklist.
-        const uploadSlotIds = slots.filter((s) => s.file).map((s) => s.id);
+        const uploadSlotIds = slots
+          .filter((s) => s.file || (assignBySlot[s.id]?.productType === "dtf_apparel" && dtfZoneFilesNeedUpload(assignBySlot[s.id]?.dtfZoneFiles)))
+          .map((s) => s.id);
         if (uploadSlotIds.length > 0) {
           setUploadPhase("uploading");
           setUploadStatuses(
@@ -5426,6 +5614,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       if (s.reuse && !s.file) keys.add(s.reuse.fileUrl);
       const back = assignBySlot[s.id]?.bcBackReuse;
       if (back && assignBySlot[s.id]?.bcSides === "two") keys.add(back.fileUrl);
+      for (const zf of Object.values(assignBySlot[s.id]?.dtfZoneFiles ?? {})) {
+        if (zf.reuse && !zf.file) keys.add(zf.reuse.fileUrl);
+      }
     }
     return keys;
   }, [slots, assignBySlot]);
@@ -6196,7 +6387,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     declared={
                                       a.giftSet
                                         ? giftSetDeclaredSize(a)
-                                        : slotDeclaredSize(a, s.existingFile?.paperType ?? null, dtfCatalog)
+                                        : slotDeclaredSize(a, slotRowFilePaperType(a, s.existingFile?.paperType ?? null), dtfCatalog)
                                     }
                                     itemSize={!a.giftSet && a.productType === "uv_print" && a.uv ? uvDraftItemSize(a.uv) : null}
                                   />
@@ -7307,6 +7498,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                       : null
                                   }
                                   onSameLayoutChange={(otherId) => setDtfSameLayout(s.id, otherId)}
+                                  renderZoneFile={(zone) => renderDtfZoneFile(s, a, zone)}
+                                  canRemoveZone={(zoneId) =>
+                                    canRemoveDtfZone(
+                                      a.dtf?.zones ?? [],
+                                      slotDtfRowZoneId(a, s.existingFile?.paperType ?? null),
+                                      a.dtfZoneFiles,
+                                      zoneId,
+                                    )
+                                  }
                                   t={t}
                                   locale={locale}
                                 />
