@@ -5,6 +5,7 @@
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth";
 import { normalizedPhoneForDb } from "../src/lib/studioClient";
+import { ANNOUNCEMENTS, hintKey } from "../src/lib/announcements";
 
 const prisma = new PrismaClient();
 
@@ -15,6 +16,17 @@ const TEST_USERS = [
 ];
 
 const TEST_PASSWORD = "testpass123";
+
+/**
+ * Every «Что нового» announcement id + hint key, marked as seen for the staff
+ * test users: otherwise the one-time announcement modal (fixed overlay)
+ * intercepts clicks in every staff E2E test. Read from the registry, so new
+ * announcements are covered automatically.
+ */
+const ALL_SEEN_ANNOUNCEMENTS = ANNOUNCEMENTS.flatMap((a) => [
+  a.id,
+  ...((a as { hints?: readonly string[] }).hints ?? []).map((h) => hintKey(a.id, h)),
+]);
 
 /** Cabinet (customer portal) logins: phone + TEST_PASSWORD. Local / test DBs only. */
 const TEST_CUSTOMERS = [
@@ -30,10 +42,12 @@ async function main() {
     if (existing) {
       await prisma.user.update({
         where: { id: existing.id },
-        data: { role, password: hashed },
+        data: { role, password: hashed, seenAnnouncements: ALL_SEEN_ANNOUNCEMENTS },
       });
     } else {
-      await prisma.user.create({ data: { name, role, password: hashed } });
+      await prisma.user.create({
+        data: { name, role, password: hashed, seenAnnouncements: ALL_SEEN_ANNOUNCEMENTS },
+      });
     }
     console.log(`Upserted ${role}: ${name}`);
   }
