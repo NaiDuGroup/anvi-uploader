@@ -55,6 +55,7 @@ export const uvEn: UvDictionary = {
     zones: "Print zones",
     addZone: "Add zone",
     removeZone: "Remove zone",
+    zoneFileTag: (zone) => `UV · ${zone}`,
     placement: "Place",
     placementLabel: "Where exactly",
     widthCm: "W, cm",

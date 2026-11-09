@@ -55,6 +55,7 @@ export const uvRo: UvDictionary = {
     zones: "Zone de imprimare",
     addZone: "Adaugă zonă",
     removeZone: "Elimină zona",
+    zoneFileTag: (zone) => `UV · ${zone}`,
     placement: "Loc",
     placementLabel: "Unde anume",
     widthCm: "L, cm",

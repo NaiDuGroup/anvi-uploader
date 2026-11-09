@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Camera, Loader2, Plus, X } from "lucide-react";
 import { uploadFile } from "@/app/admin/_components/orderForms/uploadHelpers";
 import { useInkBox } from "@/lib/files/localInkBox";
@@ -68,6 +68,13 @@ export interface UvLineEditorProps {
   requireItemDetails?: boolean;
   /** The row's artwork: a picked file, or a stored one (`url` to fetch it) — for the ink-area hint. */
   artwork?: { file?: File | null; url?: string | null; fileName?: string | null } | null;
+  /**
+   * Order wizard: the artwork control of a zone (which file prints there),
+   * shown on its own line under the zone.
+   */
+  renderZoneFile?: (zone: UvZoneDraft, index: number) => ReactNode;
+  /** False hides a zone's «×» (the wizard keeps a zone for the row's own file). */
+  canRemoveZone?: (zoneId: string) => boolean;
 }
 
 const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp";
@@ -95,6 +102,8 @@ export function UvLineEditor({
   hideCosts = false,
   requireItemDetails = false,
   artwork,
+  renderZoneFile,
+  canRemoveZone,
 }: UvLineEditorProps) {
   const e = t.uv.editor;
   const photoInput = useRef<HTMLInputElement>(null);
@@ -398,7 +407,7 @@ export function UvLineEditor({
                     ` · ${e.primerTotal} +${formatMoney(zoneData.unitPrimerSurchargeMdl ?? 0, locale)}`}
                 </span>
               )}
-              {value.zones.length > 1 && (
+              {value.zones.length > 1 && (canRemoveZone?.(z.id) ?? true) && (
                 <button
                   type="button"
                   aria-label={e.removeZone}
@@ -431,6 +440,7 @@ export function UvLineEditor({
                 {inkBox.whiteBackground && <span className="text-gray-500">· {e.inkBoxWhiteNote}</span>}
               </p>
             )}
+            {renderZoneFile?.(z, i)}
             </div>
           );
         })}

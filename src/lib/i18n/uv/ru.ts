@@ -55,6 +55,7 @@ export const uvRu: UvDictionary = {
     zones: "Зоны печати",
     addZone: "Добавить зону",
     removeZone: "Убрать зону",
+    zoneFileTag: (zone) => `UV · ${zone}`,
     placement: "Место",
     placementLabel: "Где именно",
     widthCm: "Ш, см",

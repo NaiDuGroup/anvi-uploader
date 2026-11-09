@@ -1641,6 +1641,8 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                   t={t}
                   productType={line.productType}
                   dtfLineDataRaw={line.dtfLineData}
+                  // «Набор» files keep their plain «UV» tag.
+                  uvLineDataRaw={line.setData == null ? line.uvLineData : undefined}
                   isMug={
                     isCatalogSkuLine(line.productType) ||
                     line.productType === "large_format_print"

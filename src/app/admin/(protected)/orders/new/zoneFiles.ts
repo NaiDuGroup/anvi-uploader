@@ -1,13 +1,15 @@
 import { dtfZoneFilePaperType, dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
+import { uvZoneFilePaperType, uvZoneIdFromPaperType } from "@/lib/uv/uvConstants";
 import type { WizardReusedFile } from "@/app/admin/_components/library/wizardReuse";
 
 /**
- * Artwork of one more DTF zone on a wizard row (front + back on one T-shirt).
- * The row's own file prints in the row zone; every other zone may carry its
- * file here, so the line is one garment with several prints instead of one
- * T-shirt per file. Same three sources as a business-card reverse.
+ * Artwork of one more print zone on a wizard row: DTF front + back on one
+ * T-shirt, UV on both sides of one mug / notebook. The row's own file prints
+ * in the row zone; every other zone may carry its file here, so the line is
+ * one item with several prints instead of one item per file. Same three
+ * sources as a business-card reverse.
  */
-export interface WizardDtfZoneFile {
+export interface WizardZoneFile {
   /** Fresh upload. */
   file?: File;
   /** Edit mode: file already stored on the order. */
@@ -17,13 +19,36 @@ export interface WizardDtfZoneFile {
 }
 
 /** Zone id → its artwork. */
-export type WizardDtfZoneFiles = Record<string, WizardDtfZoneFile>;
+export type WizardZoneFiles = Record<string, WizardZoneFile>;
 
-export function dtfZoneFileHasArtwork(e: WizardDtfZoneFile | null | undefined): boolean {
+/** How a product's files name their zone in `File.paperType` (`dtf:<id>`, `uv:<id>`). */
+export interface ZoneFileTag {
+  paperType: (zoneId: string) => string;
+  zoneIdOf: (paperType: string | null | undefined) => string | null;
+}
+
+export const DTF_ZONE_FILE_TAG: ZoneFileTag = {
+  paperType: dtfZoneFilePaperType,
+  zoneIdOf: dtfZoneIdFromPaperType,
+};
+
+export const UV_ZONE_FILE_TAG: ZoneFileTag = {
+  paperType: uvZoneFilePaperType,
+  zoneIdOf: uvZoneIdFromPaperType,
+};
+
+/** Zone tag of a product whose line may carry a file per zone (DTF, UV); null otherwise. */
+export function zoneFileTagFor(productType: string): ZoneFileTag | null {
+  if (productType === "dtf_apparel") return DTF_ZONE_FILE_TAG;
+  if (productType === "uv_print") return UV_ZONE_FILE_TAG;
+  return null;
+}
+
+export function zoneFileHasArtwork(e: WizardZoneFile | null | undefined): boolean {
   return Boolean(e && (e.file || e.existing || e.reuse));
 }
 
-export function dtfZoneFileName(e: WizardDtfZoneFile | null | undefined): string | null {
+export function zoneFileName(e: WizardZoneFile | null | undefined): string | null {
   return e?.file?.name ?? e?.existing?.fileName ?? e?.reuse?.fileName ?? null;
 }
 
@@ -31,27 +56,28 @@ export function dtfZoneFileName(e: WizardDtfZoneFile | null | undefined): string
  * Zone the row's own file prints in: the row's chosen zone, else the zone the
  * stored file is tagged to, else the first zone. Null when the row has no zone.
  */
-export function dtfRowZoneId(
+export function rowZoneId(
   zones: readonly { id: string }[],
   rowZoneHint: string | null | undefined,
   existingPaperType: string | null,
+  tag: ZoneFileTag,
 ): string | null {
   if (rowZoneHint && zones.some((z) => z.id === rowZoneHint)) return rowZoneHint;
-  const tagged: string | null = dtfZoneIdFromPaperType(existingPaperType);
+  const tagged: string | null = tag.zoneIdOf(existingPaperType);
   if (tagged && zones.some((z) => z.id === tagged)) return tagged;
   return zones[0]?.id ?? null;
 }
 
 /** Zone files that will be sent: zones still on the row, with artwork, not the row zone, in zone order. */
-export function dtfZoneFileEntries(
+export function zoneFileEntries(
   zones: readonly { id: string }[],
-  rowZoneId: string | null,
-  zoneFiles: WizardDtfZoneFiles | null | undefined,
-): { zoneId: string; entry: WizardDtfZoneFile }[] {
+  rowZone: string | null,
+  zoneFiles: WizardZoneFiles | null | undefined,
+): { zoneId: string; entry: WizardZoneFile }[] {
   if (!zoneFiles) return [];
   return zones.flatMap((z) => {
     const entry = zoneFiles[z.id];
-    return z.id !== rowZoneId && entry && dtfZoneFileHasArtwork(entry) ? [{ zoneId: z.id, entry }] : [];
+    return z.id !== rowZone && entry && zoneFileHasArtwork(entry) ? [{ zoneId: z.id, entry }] : [];
   });
 }
 
@@ -60,11 +86,11 @@ export function dtfZoneFileEntries(
  * when the row zone itself went, the row file moves to the first zone without
  * a file. Returns the inputs unchanged when nothing needs to move.
  */
-export function reconcileDtfZoneFiles(
+export function reconcileZoneFiles(
   zones: readonly { id: string }[],
   rowZoneHint: string | null | undefined,
-  zoneFiles: WizardDtfZoneFiles | null | undefined,
-): { dtfRowZoneId: string | null | undefined; dtfZoneFiles: WizardDtfZoneFiles | null | undefined } {
+  zoneFiles: WizardZoneFiles | null | undefined,
+): { rowZoneId: string | null | undefined; zoneFiles: WizardZoneFiles | null | undefined } {
   let files = zoneFiles;
   if (files) {
     const kept = Object.entries(files).filter(([id]) => zones.some((z) => z.id === id));
@@ -74,49 +100,50 @@ export function reconcileDtfZoneFiles(
   const hintOk: boolean = hint != null && zones.some((z) => z.id === hint);
   const fallback: string | undefined = zones[0]?.id;
   const current: string | undefined = hintOk ? hint! : fallback;
-  if (current && files && dtfZoneFileHasArtwork(files[current])) {
+  if (current && files && zoneFileHasArtwork(files[current])) {
     // The row zone went and the next zone already has its own file.
-    const free = zones.find((z) => !dtfZoneFileHasArtwork(files![z.id]));
+    const free = zones.find((z) => !zoneFileHasArtwork(files![z.id]));
     if (free) hint = free.id;
   } else if (hint != null && !hintOk) {
     hint = undefined;
   }
-  return { dtfRowZoneId: hint, dtfZoneFiles: files };
+  return { rowZoneId: hint, zoneFiles: files };
 }
 
 /**
  * Whether a zone may be removed: the row's file needs a zone without its own
  * file to move to when its zone goes.
  */
-export function canRemoveDtfZone(
+export function canRemoveFileZone(
   zones: readonly { id: string }[],
-  rowZoneId: string | null,
-  zoneFiles: WizardDtfZoneFiles | null | undefined,
+  rowZone: string | null,
+  zoneFiles: WizardZoneFiles | null | undefined,
   zoneId: string,
 ): boolean {
   if (zones.length <= 1) return false;
-  if (zoneId !== rowZoneId) return true;
-  return zones.some((z) => z.id !== zoneId && !dtfZoneFileHasArtwork(zoneFiles?.[z.id]));
+  if (zoneId !== rowZone) return true;
+  return zones.some((z) => z.id !== zoneId && !zoneFileHasArtwork(zoneFiles?.[z.id]));
 }
 
 /** One zone file of a line payload: a new stored key, or a file already on the order. */
-export type DtfZoneFileSpec =
+export type ZoneFileSpec =
   | { fileName: string; fileUrl: string; paperType: string }
   | { fileId: string; paperType: string };
 
 /**
- * Line file specs of the row's zone files (uploads the fresh ones through
- * `upload`, which may be a placeholder for a dry-run price).
+ * Line file specs of the row's zone files, tagged with `tag` (uploads the
+ * fresh ones through `upload`, which may be a placeholder for a dry-run price).
  */
-export async function dtfZoneFileSpecs(
+export async function zoneFileSpecs(
   zones: readonly { id: string }[],
-  rowZoneId: string | null,
-  zoneFiles: WizardDtfZoneFiles | null | undefined,
+  rowZone: string | null,
+  zoneFiles: WizardZoneFiles | null | undefined,
+  tag: ZoneFileTag,
   upload: (file: File) => Promise<{ fileName: string; fileUrl: string }>,
-): Promise<DtfZoneFileSpec[]> {
-  const out: DtfZoneFileSpec[] = [];
-  for (const { zoneId, entry } of dtfZoneFileEntries(zones, rowZoneId, zoneFiles)) {
-    const paperType: string = dtfZoneFilePaperType(zoneId);
+): Promise<ZoneFileSpec[]> {
+  const out: ZoneFileSpec[] = [];
+  for (const { zoneId, entry } of zoneFileEntries(zones, rowZone, zoneFiles)) {
+    const paperType: string = tag.paperType(zoneId);
     if (entry.file) {
       const { fileName, fileUrl } = await upload(entry.file);
       out.push({ fileName, fileUrl, paperType });
@@ -130,6 +157,6 @@ export async function dtfZoneFileSpecs(
 }
 
 /** True when the row's zone files include a fresh upload (for the upload checklist). */
-export function dtfZoneFilesNeedUpload(zoneFiles: WizardDtfZoneFiles | null | undefined): boolean {
+export function zoneFilesNeedUpload(zoneFiles: WizardZoneFiles | null | undefined): boolean {
   return Object.values(zoneFiles ?? {}).some((e) => Boolean(e.file));
 }

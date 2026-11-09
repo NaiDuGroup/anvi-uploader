@@ -28,6 +28,8 @@ import { formatPaperTypeLabel } from "@/lib/paperTypeLabel";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import { dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
 import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
+import { parseUvLineData } from "@/lib/uv/parseUvLineData";
+import { uvZoneIdFromPaperType } from "@/lib/uv/uvConstants";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { mugProductDisplayNameFromSnapshot } from "@/lib/mug/mugProductLabels";
@@ -576,6 +578,7 @@ export function OrderFileSpecs({
   productType,
   compact = false,
   dtfLineDataRaw,
+  uvLineDataRaw,
 }: {
   files: SpecFile[];
   t: ReturnType<typeof useLanguageStore.getState>["t"];
@@ -584,6 +587,8 @@ export function OrderFileSpecs({
   productType?: string;
   /** DTF line data: a zone file reads «DTF · Полная спина» instead of just «DTF». */
   dtfLineDataRaw?: unknown;
+  /** UV line data: a zone file reads «UV · Сторона 2» instead of just «UV». */
+  uvLineDataRaw?: unknown;
   /**
    * One line per distinct colour / format / copies, without file names
    * (the customer list shows the files in their own column).
@@ -606,12 +611,15 @@ export function OrderFileSpecs({
     );
 
   const dtfZones = productType === "dtf_apparel" ? (parseDtfLineData(dtfLineDataRaw)?.zones ?? []) : [];
+  const uvZones = productType === "uv_print" ? (parseUvLineData(uvLineDataRaw)?.zones ?? []) : [];
   const paperLabel = (paper: string | null): string => {
     const zoneId = dtfZoneIdFromPaperType(paper);
     const zone = zoneId ? dtfZones.find((z) => z.id === zoneId) : undefined;
-    return zone
-      ? t.dtf.editor.zoneFile.fileTag(dtfZoneLabel(zone, t.dtf.placements))
-      : formatPaperTypeLabel(paper, t.upload, productType);
+    if (zone) return t.dtf.editor.zoneFile.fileTag(dtfZoneLabel(zone, t.dtf.placements));
+    const uvZoneId = uvZones.length > 0 ? uvZoneIdFromPaperType(paper) : null;
+    const uvZone = uvZoneId ? uvZones.find((z) => z.id === uvZoneId) : undefined;
+    if (uvZone) return t.uv.editor.zoneFileTag(uvZone.placementLabel ?? t.uv.placements[uvZone.placement]);
+    return formatPaperTypeLabel(paper, t.upload, productType);
   };
 
   const specBadge = (color: string, paper: string | null, copies: number) => (

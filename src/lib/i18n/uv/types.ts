@@ -28,6 +28,8 @@ export interface UvDictionary {
     zones: string;
     addZone: string;
     removeZone: string;
+    /** Zone name next to «UV» on the order's file list. */
+    zoneFileTag: (zone: string) => string;
     placement: string;
     placementLabel: string;
     widthCm: string;

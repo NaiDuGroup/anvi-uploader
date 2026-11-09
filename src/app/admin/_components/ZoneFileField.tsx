@@ -7,8 +7,8 @@ import { FileDropzone } from "@/components/upload/FileDropzone";
 import type { PrintSizeCm } from "@/lib/files/declaredPrintSize";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 
-/** Another DTF row's only file, offered for this zone. */
-export interface DtfZoneFileCandidate {
+/** Another DTF / UV row's only file, offered for this zone. */
+export interface ZoneFileCandidate {
   slotId: string;
   /** 1-based row number in the order. */
   position: number;
@@ -18,11 +18,11 @@ export interface DtfZoneFileCandidate {
 }
 
 /**
- * File control inside a DTF zone row: the zone's artwork (name, size line,
+ * File control inside a DTF / UV zone row: the zone's artwork (name, size line,
  * check against the zone size, ×) or, while it has none, a calm hint with
  * «Загрузить» and «Из загруженных ▾» (another row's file moves here).
  */
-export function DtfZoneFileField({
+export function ZoneFileField({
   fileName,
   file,
   fileId,
@@ -42,12 +42,13 @@ export function DtfZoneFileField({
   metaText?: string | null;
   declared: PrintSizeCm | null;
   metaEndpoint?: string;
-  candidates: readonly DtfZoneFileCandidate[];
+  candidates: readonly ZoneFileCandidate[];
   onUpload: (file: File) => void;
   onPick: (slotId: string) => void;
   onClear: () => void;
   t: TranslationDictionary;
 }) {
+  // Texts shared by DTF and UV zone files.
   const zt = t.dtf.editor.zoneFile;
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -70,7 +71,7 @@ export function DtfZoneFileField({
 
   if (fileName !== null) {
     return (
-      <div className="basis-full pl-1" data-testid="dtf-zone-file">
+      <div className="basis-full pl-1" data-testid="zone-file">
         <div className="flex min-w-0 items-center gap-1.5 text-[12px]">
           <span className="shrink-0 text-gray-500">{zt.label}:</span>
           <span className="min-w-0 truncate text-gray-800" title={fileName}>
@@ -96,7 +97,7 @@ export function DtfZoneFileField({
   }
 
   return (
-    <div className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 pl-1 text-[12px]" data-testid="dtf-zone-file-empty">
+    <div className="flex basis-full flex-wrap items-center gap-x-2 gap-y-1 pl-1 text-[12px]" data-testid="zone-file-empty">
       <span className="inline-flex items-center gap-1 text-amber-700">
         <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
         {zt.missing}

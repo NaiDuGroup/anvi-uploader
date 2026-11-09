@@ -42,7 +42,7 @@ export interface DtfDictionary {
       /** Label before the file control. */
       label: string;
       upload: string;
-      /** Picker of other DTF rows' files (the picked row goes away). */
+      /** Picker of other DTF / UV rows' files (the picked row goes away); shared by UV zone files. */
       fromUploaded: string;
       fromUploadedHint: string;
       /** «строка 2» in the picker. */
