@@ -33,7 +33,8 @@ import {
 } from "@/app/admin/_components/library/LibraryFileControl";
 import { LibraryCompletionHint, type LibraryHintOrder } from "@/app/admin/_components/library/LibraryCompletionHint";
 import { LIBRARY_HINT_STATUSES, libraryHintCandidateIds } from "@/lib/library/libraryHint";
-import { ShopOrderBadge, ShopOrderRow } from "@/app/admin/_components/ShopOrderPanel";
+import { isShopOrder, ShopAutoNotes, ShopOrderBadge, ShopOrderRow } from "@/app/admin/_components/ShopOrderPanel";
+import { splitShopOrderNotes } from "@/lib/shop/orderFlags";
 import { playNotificationSound } from "@/lib/notificationSound";
 import {
   RefreshCw,
@@ -1966,6 +1967,8 @@ function OrderNotesRow({
               </Button>
             </div>
           </div>
+        ) : isShopOrder(order) && splitShopOrderNotes(order.notes).auto ? (
+          <ShopAutoNotes notes={order.notes ?? ""} onEdit={startEdit} editTitle={t.admin.notesEdit} isCard={isCard} />
         ) : (
           <button
             type="button"
@@ -2205,6 +2208,8 @@ function AdminOrderCard({
         </div>
       )}
 
+      <ShopOrderRow as="div" order={order} />
+
       <OrderNotesRow
         as="div"
         order={order}
@@ -2213,8 +2218,6 @@ function AdminOrderCard({
         saving={savingKind === "notes"}
         onSave={onSaveNotes}
       />
-
-      <ShopOrderRow as="div" order={order} />
 
       {/* Primary actions */}
       <div className={cn("mt-2 grid gap-2 border-t border-gray-100 pt-2", isWorkshop ? "grid-cols-2" : "grid-cols-3")}>
@@ -2734,6 +2737,7 @@ const OrderTable = memo(function OrderTable({
                   </div>
                 </td>
               </tr>
+              <ShopOrderRow order={order} rowClass={order.isPrio ? "bg-red-50/60" : ""} />
               <OrderNotesRow
                 order={order}
                 t={t}
@@ -2752,7 +2756,6 @@ const OrderTable = memo(function OrderTable({
                 }
                 onSave={onSaveNotes}
               />
-              <ShopOrderRow order={order} rowClass={order.isPrio ? "bg-red-50/60" : ""} />
               {Boolean(order.approvalFeedback?.trim()) && (
                 <tr className={order.isPrio ? "bg-red-50/60" : ""}>
                   <td colSpan={6} className="px-4 pb-2.5 pt-0">

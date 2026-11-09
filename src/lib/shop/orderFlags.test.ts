@@ -3,6 +3,7 @@ import {
   countsTowardClientDebt,
   isShopTestOrder,
   isUnpaidShopOrder,
+  splitShopOrderNotes,
   SHOP_TEST_ORDER_NOTE_PREFIX,
   UNPAID_SHOP_ORDER_WHERE,
 } from "./orderFlags";
@@ -35,5 +36,36 @@ describe("client debt", () => {
   });
   it("Prisma condition matches the same orders", () => {
     expect(UNPAID_SHOP_ORDER_WHERE).toEqual({ source: "shop", paymentStatus: { not: "paid" } });
+  });
+});
+
+describe("splitShopOrderNotes", () => {
+  it("recognises the checkout summary and keeps nothing prominent", () => {
+    const p = splitShopOrderNotes("Сайт · Самовывоз\n1) Баннер 150×100 см, баннер Frontlit 440 г — 1 шт.");
+    expect(p.auto).toBe(true);
+    expect(p.comments).toEqual([]);
+    expect(p.extra).toEqual([]);
+    expect(p.summary).toContain("1) Баннер");
+  });
+  it("strips the test prefix, picks customer line notes and promo/tail rows", () => {
+    const p = splitShopOrderNotes(
+      "[ТЕСТ сайт] Сайт · Курьер по Кишинёву, Кишинёв, ул. Мира 1 (домофон 12)\n1) Визитки — 100 шт. — прим.: матовые, пожалуйста\n2) Флаер\n…и ещё 2 позиции\nПромокод X: −50 MDL",
+    );
+    expect(p.auto).toBe(true);
+    expect(p.comments).toEqual(["матовые, пожалуйста"]);
+    expect(p.extra).toEqual([]);
+  });
+  it("keeps staff-written lines visible", () => {
+    const p = splitShopOrderNotes("Сайт · Самовывоз\n1) Баннер — 1 шт.\nклиент заберёт в пятницу");
+    expect(p.extra).toEqual(["клиент заберёт в пятницу"]);
+  });
+  it("treats notes rewritten by staff as ordinary notes", () => {
+    expect(splitShopOrderNotes("позвонить перед выдачей")).toEqual({
+      auto: false,
+      summary: "",
+      comments: [],
+      extra: ["позвонить перед выдачей"],
+    });
+    expect(splitShopOrderNotes(null).auto).toBe(false);
   });
 });
