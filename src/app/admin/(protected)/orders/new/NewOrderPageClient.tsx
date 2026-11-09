@@ -2803,7 +2803,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             heldSet && isLegacyReadySetLine(heldSet) ? (parseUvLineData(line.uvLineData)?.item?.variantId ?? null) : null;
           const heldVariantId = line.stockVariantId ?? legacyVariantId;
           const heldShort = Boolean(heldVariantId && shortVariantIds.has(heldVariantId));
-          if (line.setGroupId && heldSet && (heldSku || legacyVariantId) && !heldShort) {
+          // Only an edit gets this order's stock back; a repeat is a new order.
+          if (editOrderId && line.setGroupId && heldSet && (heldSku || legacyVariantId) && !heldShort) {
             savedSetUnitRef.current.set(line.setGroupId, { sku: heldSku, variantId: heldVariantId, quantity: heldSet.quantity });
           }
           // «Набор»: the stock line is not a row (no file) — the wizard sends it again with its set.
