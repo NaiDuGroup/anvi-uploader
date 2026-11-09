@@ -1,4 +1,5 @@
 import { applyGiftSetsToResolved } from "@/lib/giftSet/giftSetServer";
+import { uvErrorCodeFromZodIssues } from "@/lib/uv/uvErrors";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAdminOrderSchema } from "@/lib/validations";
@@ -157,6 +158,8 @@ export async function POST(request: NextRequest) {
     }
     console.error("Failed to create admin order:", error);
     if (error instanceof Error && error.name === "ZodError") {
+      const uvCode = uvErrorCodeFromZodIssues((error as { issues?: { message?: unknown }[] }).issues);
+      if (uvCode) return NextResponse.json({ error: uvCode, code: uvCode }, { status: 400 });
       return NextResponse.json(
         { error: "Validation failed", details: error },
         { status: 400 },

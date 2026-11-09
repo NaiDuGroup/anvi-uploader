@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { uvErrorCodeFromZodIssues } from "@/lib/uv/uvErrors";
 import { giftSetStockHeldForOrder } from "@/lib/giftSet/giftSetStock";
 import { isStaffOrderFileUrl, orderFileUrlIssues } from "@/lib/library/libraryKeys";
 import { chargedUrgencyFeeMdl, staffPriceToStored } from "@/lib/dealerUrgency";
@@ -267,6 +268,8 @@ export async function PATCH(
     }
     console.error("Failed to update admin order:", error);
     if (error instanceof Error && error.name === "ZodError") {
+      const uvCode = uvErrorCodeFromZodIssues((error as { issues?: { message?: unknown }[] }).issues);
+      if (uvCode) return NextResponse.json({ error: uvCode, code: uvCode }, { status: 400 });
       return NextResponse.json(
         { error: "Validation failed", details: error },
         { status: 400 },

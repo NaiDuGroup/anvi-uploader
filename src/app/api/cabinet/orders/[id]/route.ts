@@ -19,6 +19,7 @@ import { dealerModifyErrorResponse } from "@/lib/orderCreate/dealerOrderModifyHt
 import { AdminOrderResolveError, OrderLineLimitError } from "@/lib/adminOrderCreateHelpers";
 import { AdminOrderUpdateError } from "@/lib/adminOrderUpdateHelpers";
 import { ZodError } from "zod";
+import { uvErrorCodeFromZodIssues } from "@/lib/uv/uvErrors";
 import { chargedUrgencyFeeMdl, orderUrgencyState } from "@/lib/dealerUrgency";
 
 /**
@@ -252,6 +253,8 @@ export async function PUT(
       return NextResponse.json({ error: error.message, code: "invalid_lines" }, { status: 400 });
     }
     if (error instanceof ZodError) {
+      const uvCode = uvErrorCodeFromZodIssues(error.issues);
+      if (uvCode) return NextResponse.json({ error: uvCode, code: uvCode }, { status: 400 });
       return NextResponse.json({ error: "Validation failed", details: error.issues }, { status: 400 });
     }
     if (error instanceof SyntaxError) {

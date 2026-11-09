@@ -10,6 +10,7 @@ import { uvDealerClientItemIssue, uvDealerLinesIssue } from "./uvDealerClientIte
 import { quoteUvDraft, uvDraftFromLineData, uvDraftToInput, type UvDraft } from "./uvDraft";
 import { uvInputFromLineData } from "./uvInputFromLineData";
 import { uvLineInputSchema, uvPrintFitsItem, type UvLineInput } from "./uvLineInput";
+import { uvErrorCodeFromZodIssues } from "./uvErrors";
 import { CATALOG, INK_COSTS, SETTINGS } from "./uvTestFixtures";
 
 /** Prod-like rates: 400 lei/m² dealer, line minimum 100, no zone minimum. */
@@ -134,6 +135,8 @@ describe("print size inside the item size", () => {
     });
     expect(parsed.success).toBe(false);
     expect(parsed.error?.issues[0]?.message).toBe("uv_print_larger_than_item");
+    // The order APIs answer with the code, so the wizard shows the translated message.
+    expect(uvErrorCodeFromZodIssues(parsed.error?.issues)).toBe("uv_print_larger_than_item");
     // Without an item size (admin, optional) nothing to compare.
     expect(quoteUvDraft({ ...big, itemWidthStr: "", itemHeightStr: "" }, "retail", PROD_CATALOG).ok).toBe(true);
   });
@@ -142,5 +145,15 @@ describe("print size inside the item size", () => {
     const base = uvDraftToInput(lidDraft()) as UvLineInput;
     const parsed = uvLineInputSchema.safeParse({ ...base, clientItem: { ...base.clientItem, itemHeightCm: undefined } });
     expect(parsed.error?.issues[0]?.message).toBe("uv_item_size_required");
+  });
+});
+
+describe("uvErrorCodeFromZodIssues", () => {
+  it("finds a UV code among the issues and ignores other messages", () => {
+    expect(uvErrorCodeFromZodIssues([{ message: "Required" }, { message: "uv_item_photo_invalid" }])).toBe(
+      "uv_item_photo_invalid",
+    );
+    expect(uvErrorCodeFromZodIssues([{ message: "Required" }])).toBeNull();
+    expect(uvErrorCodeFromZodIssues(undefined)).toBeNull();
   });
 });

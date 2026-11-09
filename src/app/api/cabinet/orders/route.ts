@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isDealerOrderFileUrl, orderFileUrlIssues } from "@/lib/library/libraryKeys";
 import { nanoid } from "nanoid";
 import { ZodError } from "zod";
+import { uvErrorCodeFromZodIssues } from "@/lib/uv/uvErrors";
 import { prisma } from "@/lib/prisma";
 import { getCustomerSessionUser } from "@/lib/auth";
 import {
@@ -421,6 +422,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message, code: error.message }, { status: 400 });
     }
     if (error instanceof ZodError) {
+      const uvCode = uvErrorCodeFromZodIssues(error.issues);
+      if (uvCode) return NextResponse.json({ error: uvCode, code: uvCode }, { status: 400 });
       return NextResponse.json({ error: "Validation failed", details: error.issues }, { status: 400 });
     }
     console.error("Failed to create dealer wizard order:", error);

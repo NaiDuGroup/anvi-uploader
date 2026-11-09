@@ -25,3 +25,16 @@ export type UvErrorCode = (typeof UV_ERROR_CODES)[number];
 export function isUvErrorCode(value: string): value is UvErrorCode {
   return (UV_ERROR_CODES as readonly string[]).includes(value);
 }
+
+/**
+ * The UV code a Zod validation error carries (schema refinements use the code
+ * as the issue message, e.g. `uv_print_larger_than_item`), so an order API can
+ * answer `{ error: code, code }` and the wizard shows the translated message
+ * instead of «Validation failed». Null when no issue is a UV code.
+ */
+export function uvErrorCodeFromZodIssues(issues: readonly { message?: unknown }[] | undefined): UvErrorCode | null {
+  for (const issue of issues ?? []) {
+    if (typeof issue.message === "string" && isUvErrorCode(issue.message)) return issue.message;
+  }
+  return null;
+}
