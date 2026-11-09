@@ -5,6 +5,7 @@ import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { UvLineFacts, UvZoneFacts } from "@/lib/workshopBoard/types";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { UvItemPhotoThumb } from "@/app/admin/_components/uv/UvItemPhotoThumb";
+import { uvSizeCmLabel } from "@/lib/uv/uvSizeLabel";
 
 function zoneText(z: UvZoneFacts, t: TranslationDictionary, giftSetItem: boolean): string {
   const place: string = z.placementLabel ?? t.uv.placements[z.placement];
@@ -66,7 +67,7 @@ export function UvBoardLineSummary({ facts }: { facts: UvLineFacts }) {
           {facts.clientItemPhoto && <UvItemPhotoThumb photo={facts.clientItemPhoto} label={t.uv.workshop.itemPhoto} />}
           {facts.clientItemWidthCm != null && facts.clientItemHeightCm != null && (
             <span className="font-medium tabular-nums text-gray-700">
-              {t.uv.workshop.itemSize(`${facts.clientItemWidthCm}×${facts.clientItemHeightCm} см`)}
+              {t.uv.workshop.itemSize(uvSizeCmLabel(facts.clientItemWidthCm, facts.clientItemHeightCm, t.uv.editor.cm))}
             </span>
           )}
         </div>

@@ -11,16 +11,17 @@ export type UvPublicSummary = {
   giftSetItem?: boolean;
   /** Staff notes on the client's item; production views only. */
   clientItemNotes?: string | null;
-  /** Real size of the client's item, «33.8×26.2 см» (the zones are the print size inside it). */
-  clientItemSizeLabel?: string | null;
+  /** Real size of the client's item (the zones are the print size inside it); the unit comes from the UI language. */
+  clientItemSize?: { widthCm: number; heightCm: number } | null;
   /** Photo of the client's item (the customer's own upload, so shown in the cabinet too). */
   clientItemPhoto?: { fileUrl: string; fileName: string } | null;
   quantity: number;
   zones: {
     placement: UvLineData["zones"][number]["placement"];
     placementLabel: string | null;
-    /** «14.5×21 см». */
-    sizeLabel: string;
+    /** Print size; rendered as «14.5×21 см / cm» with the UI language's unit. */
+    widthCm: number;
+    heightCm: number;
     /** White underbase layers; production views only. */
     whiteLayers?: number;
     /** Varnish is a finish the customer chose, so it is always shown. */
@@ -29,11 +30,6 @@ export type UvPublicSummary = {
     primer?: boolean;
   }[];
 };
-
-/** Print size of a zone, «14.5×21 см». */
-export function uvZoneSizeLabel(z: Pick<UvLineData["zones"][number], "widthCm" | "heightCm">): string {
-  return `${z.widthCm}×${z.heightCm} см`;
-}
 
 /**
  * Customer-safe by default; `production: true` (staff views) adds the white underbase / primer
@@ -62,10 +58,7 @@ export function toUvPublicSummary(
     ...(production ? { clientItemNotes: data.clientItem?.notes ?? null } : {}),
     ...(data.clientItem?.itemWidthCm != null && data.clientItem.itemHeightCm != null
       ? {
-          clientItemSizeLabel: uvZoneSizeLabel({
-            widthCm: data.clientItem.itemWidthCm,
-            heightCm: data.clientItem.itemHeightCm,
-          }),
+          clientItemSize: { widthCm: data.clientItem.itemWidthCm, heightCm: data.clientItem.itemHeightCm },
         }
       : {}),
     ...(data.clientItem?.photo
@@ -75,7 +68,8 @@ export function toUvPublicSummary(
     zones: data.zones.map((z) => ({
       placement: z.placement,
       placementLabel: z.placementLabel,
-      sizeLabel: uvZoneSizeLabel(z),
+      widthCm: z.widthCm,
+      heightCm: z.heightCm,
       ...(production ? { whiteLayers: z.whiteLayers } : {}),
       varnish: z.varnish,
       ...(production ? { primer: z.primer === true } : {}),

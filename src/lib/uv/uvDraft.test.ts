@@ -140,6 +140,9 @@ describe("parseUvLineData", () => {
     const s = toUvPublicSummary(priced(emptyUvDraft(CATALOG)))!;
     expect(s).toMatchObject({ source: "stock", quantity: 1, clientItemDescription: null });
     expect(JSON.stringify(s)).not.toMatch(/Mdl|cost/i);
+    // Sizes stay numbers: the unit («см» / «cm») is added by the view in the UI language.
+    expect(s.zones[0]).toMatchObject({ widthCm: expect.any(Number), heightCm: expect.any(Number) });
+    expect(JSON.stringify(s)).not.toContain("см");
   });
 });
 
