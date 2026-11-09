@@ -28,7 +28,7 @@ export const SHOP_ON_DELIVERY_PROVIDER = "on_delivery";
 /**
  * A storefront order paid on delivery (cash / card at hand-over): placed while
  * «Оплата только при получении» was on. It goes to work at once, like a studio
- * order; staff mark it paid (DELIVERED does it too).
+ * order; staff mark it paid by hand (DELIVERED does not).
  */
 export function isPayOnDeliveryShopOrder(order: { source?: string | null; paymentProvider?: string | null }): boolean {
   return order.source === "shop" && order.paymentProvider === SHOP_ON_DELIVERY_PROVIDER;

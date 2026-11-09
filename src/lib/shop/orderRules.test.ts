@@ -21,8 +21,8 @@ describe("deliveredAutoMarksPaid", () => {
     expect(deliveredAutoMarksPaid({ source: "shop", clientIsDealer: true })).toBe(false);
   });
 
-  it("pay-on-delivery storefront orders are marked paid on DELIVERED (paid at hand-over)", () => {
-    expect(deliveredAutoMarksPaid({ source: "shop", paymentProvider: "on_delivery" })).toBe(true);
+  it("pay-on-delivery storefront orders stay unpaid on DELIVERED (staff mark them paid by hand)", () => {
+    expect(deliveredAutoMarksPaid({ source: "shop", paymentProvider: "on_delivery" })).toBe(false);
     expect(deliveredAutoMarksPaid({ source: "shop", paymentProvider: "paynet" })).toBe(false);
     expect(deliveredAutoMarksPaid({ source: "shop", paymentProvider: "on_delivery", clientIsDealer: true })).toBe(false);
   });

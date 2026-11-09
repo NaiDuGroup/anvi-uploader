@@ -8,8 +8,9 @@ import { isPayOnDeliveryShopOrder } from "./orderFlags";
 /**
  * Setting DELIVERED marks a studio order paid (cash at hand-over). Storefront
  * orders are prepaid online: their paid flag comes from the payment provider,
- * so delivery never flips it — except pay-on-delivery storefront orders
- * (`paymentProvider='on_delivery'`), paid at hand-over like studio orders.
+ * so delivery never flips it. Pay-on-delivery storefront orders
+ * (`paymentProvider='on_delivery'`) too: the courier hands the cash over
+ * later, so staff mark them paid by hand (owner, 2026-11-09).
  * Dealers pay once a month for what has accumulated: their orders stay
  * unpaid until staff mark them paid by hand.
  */
@@ -20,8 +21,7 @@ export function deliveredAutoMarksPaid(order: {
   clientIsDealer?: boolean | null;
 }): boolean {
   if (order.clientIsDealer === true) return false;
-  if (order.source === "shop") return isPayOnDeliveryShopOrder(order);
-  return true;
+  return order.source !== "shop";
 }
 
 /** Days a finished storefront order keeps its files, counted from the order's creation. */
