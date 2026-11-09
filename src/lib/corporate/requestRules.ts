@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { checkCorporateFile } from "./fileTypes";
+import { hasDotSegment } from "@/lib/uploads/keyPath";
 
 /**
  * «Pentru companii» quote requests: the form's field rules, the status flow
@@ -52,7 +53,7 @@ const fileSchema = z
       .min(1)
       .max(500)
       // Only fresh uploads (`/api/upload-url`, scope «corporate» / «order»).
-      .refine((k) => k.startsWith("uploads/") && !k.includes(".."), "bad_key"),
+      .refine((k) => k.startsWith("uploads/") && !hasDotSegment(k), "bad_key"),
     fileName: text(200).min(1),
     sizeBytes: z.number().int().nonnegative().optional(),
   })

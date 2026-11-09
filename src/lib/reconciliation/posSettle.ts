@@ -1,3 +1,4 @@
+import { hasDotSegment } from "@/lib/uploads/keyPath";
 /**
  * Manual POS / cash settlement of open fiscal invoices from the debtors list.
  */
@@ -32,7 +33,7 @@ export function buildManualReceiptRef(
 /** True when the photo key looks like our receipts/ upload path. */
 export function isReceiptPhotoKey(key: string): boolean {
   const t = key.trim();
-  if (!t || t.includes("..") || t.startsWith("/") || t.includes("\\")) {
+  if (!t || hasDotSegment(t) || t.startsWith("/") || t.includes("\\")) {
     return false;
   }
   return t.startsWith("receipts/");

@@ -45,6 +45,7 @@ import {
   BUSINESS_EXPENSE_TYPES,
   productionCostsConfigSchema,
 } from "@/lib/accounting/types";
+import { hasDotSegment } from "@/lib/uploads/keyPath";
 
 /**
  * Shared shape for MDL money values that map to `Decimal(12, 2)` DB
@@ -1665,7 +1666,7 @@ export const settlePosSchema = z.object({
     .trim()
     .min(1)
     .max(500)
-    .refine((k) => k.startsWith("receipts/") && !k.includes(".."), {
+    .refine((k) => k.startsWith("receipts/") && !hasDotSegment(k), {
       message: "invalid_photo_key",
     }),
   note: z.string().trim().max(500).nullable().optional(),

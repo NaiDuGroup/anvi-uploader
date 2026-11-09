@@ -63,6 +63,15 @@ describe("isStaffOrderFileUrl", () => {
     expect(isStaffOrderFileUrl("designs/1700000000000-abcdefgh-a.png")).toBe(false);
     expect(isStaffOrderFileUrl("uploads/")).toBe(false);
     expect(isStaffOrderFileUrl("uploads/../library/x")).toBe(false);
+    expect(isStaffOrderFileUrl("uploads/..")).toBe(false);
+    expect(isStaffOrderFileUrl("uploads/./x")).toBe(false);
+    expect(isStaffOrderFileUrl("uploads/..\\x")).toBe(false);
+    expect(isStaffOrderFileUrl("uploads/a\u0001.png")).toBe(false);
+  });
+
+  it("accepts file names with double dots (already uploaded keys)", () => {
+    expect(isStaffOrderFileUrl("uploads/1700000000000-abcdefgh-a..png")).toBe(true);
+    expect(isStaffOrderFileUrl("uploads/1700000000000-abcdefgh-DTF_spate_ A3_tricou_negru_L....png")).toBe(true);
     expect(isStaffOrderFileUrl("pending-upload")).toBe(false);
     expect(isStaffOrderFileUrl("javascript:alert(1)")).toBe(false);
     expect(isStaffOrderFileUrl("")).toBe(false);
@@ -76,6 +85,8 @@ describe("isDealerOrderFileUrl", () => {
     expect(isDealerOrderFileUrl(`library/${CLIENT}/abcDEF1234-a.pdf`)).toBe(false);
     expect(isDealerOrderFileUrl("library/common/abcDEF1234-a.pdf")).toBe(false);
     expect(isDealerOrderFileUrl("shop-orders/1700000000000-abcdefgh-a.pdf")).toBe(false);
+    expect(isDealerOrderFileUrl("uploads/1700000000000-abcdefgh-a..png")).toBe(true);
+    expect(isDealerOrderFileUrl("uploads/../library/x")).toBe(false);
   });
 
   it("allows the dry-run placeholder only in a dry run", () => {

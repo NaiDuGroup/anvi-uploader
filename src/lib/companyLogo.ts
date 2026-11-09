@@ -6,6 +6,7 @@ import {
   isLocalObjectStorage,
   type BucketKind,
 } from "@/lib/r2";
+import { hasDotSegment } from "@/lib/uploads/keyPath";
 
 function bucketForStorageKey(key: string): BucketKind {
   return key.startsWith("catalog/") || key.startsWith("company/")
@@ -42,7 +43,7 @@ export async function resolveCompanyLogoBuffer(
     }
   }
 
-  if (raw.includes("..")) return null;
+  if (hasDotSegment(raw)) return null;
 
   if (isLocalObjectStorage()) {
     const data = await readLocalFile(raw);

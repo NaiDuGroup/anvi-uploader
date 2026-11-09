@@ -18,6 +18,7 @@ import {
   type StudioSurface,
   type StudioTextLayer,
 } from "./document";
+import { hasDotSegment } from "@/lib/uploads/keyPath";
 
 /**
  * «Datele mele» / «Мои данные»: the customer's details, typed once, filled
@@ -72,7 +73,7 @@ export const studioFieldsSchema = z
           .string()
           .max(500)
           .regex(LOGO_KEY)
-          .refine((k) => !k.includes(".."))
+          .refine((k) => !hasDotSegment(k))
           .optional(),
         localId: z.string().max(80).optional(),
         naturalW: z.number().finite().min(1).max(100_000),

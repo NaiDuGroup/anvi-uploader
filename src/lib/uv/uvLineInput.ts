@@ -12,6 +12,7 @@ import {
   UV_PLACEMENTS,
   UV_TECHNIQUES,
 } from "@/lib/uv/uvConstants";
+import { isSafeKeyPath } from "@/lib/uploads/keyPath";
 
 export const uvZoneInputSchema = z.object({
   id: z.string().min(1).max(40),
@@ -32,9 +33,7 @@ export function isUvItemPhotoKey(value: string): boolean {
   return (
     value.startsWith("uploads/") &&
     value.length > "uploads/".length &&
-    !value.includes("..") &&
-    !value.includes("\\") &&
-    !/[\u0000-\u001f\u007f]/.test(value)
+    isSafeKeyPath(value)
   );
 }
 

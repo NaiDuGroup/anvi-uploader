@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { readLocalFile } from "@/lib/local-storage";
 import { isLocalObjectStorage } from "@/lib/r2";
+import { hasDotSegment } from "@/lib/uploads/keyPath";
 
 export const runtime = "nodejs";
 
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
   }
 
   const key = request.nextUrl.searchParams.get("key")?.trim() ?? "";
-  if (!key.startsWith("layouts/") || key.includes("..")) {
+  if (!key.startsWith("layouts/") || hasDotSegment(key)) {
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 

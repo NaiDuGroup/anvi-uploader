@@ -111,12 +111,14 @@ export type UploadDecision =
 
 /**
  * Strip any path component and control characters from a client file name so
- * it cannot escape the server-chosen prefix (`../`, `/`, `\`). Keeps Unicode
- * (Cyrillic / Romanian names are common) and caps the length.
+ * it cannot escape the server-chosen prefix (`../`, `/`, `\`). Runs of dots
+ * collapse to one (`tricou_L....png` → `tricou_L.png`) so keys never contain
+ * `..`. Keeps Unicode (Cyrillic / Romanian names are common) and caps the
+ * length. Only the storage key uses this; the displayed `fileName` stays as is.
  */
 export function sanitizeUploadFileName(name: string): string {
   const base = name.split(/[/\\]/).pop() ?? "";
-  const cleaned = base.replace(/[\u0000-\u001f\u007f]/g, "").trim();
+  const cleaned = base.replace(/[\u0000-\u001f\u007f]/g, "").replace(/\.{2,}/g, ".").trim();
   const safe = cleaned === "." || cleaned === ".." ? "" : cleaned;
   if (safe.length <= 200) return safe || "file";
   const dot = safe.lastIndexOf(".");
