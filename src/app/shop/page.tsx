@@ -18,6 +18,7 @@ import type { ShopProduct } from "@/lib/storefront/types";
 import { loadShopContacts } from "@/lib/storefront/contacts";
 import { localBusinessJsonLd, shopPageMetadata } from "@/lib/storefront/shopSeo";
 import { safeHttpUrl } from "@/lib/studioInfo/studioInfo";
+import { isShopPayOnDelivery } from "@/lib/shop/payOnDelivery";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +77,7 @@ export default async function ShopHomePage() {
           <h1 className="m-0 text-[32px] leading-[1.08] font-extrabold tracking-[-0.02em] sm:text-[44px] lg:text-[52px]">
             {t("heroTitle")}
           </h1>
-          <p className="m-0 max-w-[520px] text-base leading-relaxed text-(--muted) sm:text-lg">{t("heroText")}</p>
+          <p className="m-0 max-w-[520px] text-base leading-relaxed text-(--muted) sm:text-lg">{t((await isShopPayOnDelivery()) ? "heroTextOnDelivery" : "heroText")}</p>
           <div className="flex flex-wrap gap-3">
             <a href="#popular" className="shop-btn-dark rounded-xl bg-(--ink) px-6 py-3.5 font-bold no-underline">
               {t("heroCta")}

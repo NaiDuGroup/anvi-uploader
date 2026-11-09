@@ -7,6 +7,7 @@ import { alertShopOrderCreated } from "@/lib/notify/staffAlerts";
 import { getShopCustomer } from "@/lib/shop/account/session";
 import { runShopCheckout } from "@/lib/shop/checkout";
 import { hasShopTesterCookie } from "@/lib/shop/testerAccess";
+import { isShopPayOnDelivery } from "@/lib/shop/payOnDelivery";
 import { guardShopTurnstile } from "@/lib/turnstile/guard";
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -17,7 +18,8 @@ export const maxDuration = 60;
 /**
  * Storefront checkout (see `src/lib/shop/checkout.ts`): re-prices the cart on
  * the server, creates one prepaid order (source 'shop') and starts the
- * payment. 201 → `{ orderId, orderNumber, publicToken, total, deliveryPrice,
+ * payment (or, with «Оплата только при получении» on, none: the order goes
+ * straight to work and `payment.redirectUrl` is its page). 201 → `{ orderId, orderNumber, publicToken, total, deliveryPrice,
  * subtotal, payment: { provider, redirectUrl } }`; 503 `payment_unavailable`
  * (no order is created) when the caller has no way to pay — production
  * without a tester pass / staff session; 503 `payment_not_configured` keeps
@@ -49,12 +51,14 @@ export async function POST(request: NextRequest) {
   try {
     const tester = staff != null || (await hasShopTesterCookie());
     const account = await getShopCustomer();
-    const { status, body } = await runShopCheckout(raw, process.env, { tester, customerId: account?.id ?? null });
+    const payOnDelivery = await isShopPayOnDelivery();
+    const { status, body } = await runShopCheckout(raw, process.env, { tester, payOnDelivery, customerId: account?.id ?? null });
     // «Comanda primită» (with a «Plătește» link and a one-time login link), after the response.
     const orderId = typeof body.orderId === "string" ? body.orderId : null;
     if (orderId) {
       runAfter(() => notifyShopOrder(orderId, "created"));
-      // Staff Telegram alert for unpaid orders: off unless TELEGRAM_ALERT_UNPAID_ORDERS is set.
+      // Staff Telegram alert: always for pay-on-delivery orders (they go straight to work);
+      // for unpaid online orders only with TELEGRAM_ALERT_UNPAID_ORDERS set.
       runAfter(() => alertShopOrderCreated(orderId));
     }
     return NextResponse.json(body, { status, headers: NO_STORE });

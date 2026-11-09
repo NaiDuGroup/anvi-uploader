@@ -163,7 +163,7 @@ export function PrintView({ editId = null }: { editId?: string | null }) {
 }
 
 function PrintEditor({ editLine }: { editLine: CartLine | null }) {
-  const { t, lang, href, paymentLive } = useShopLang();
+  const { t, lang, href, paymentLive, payOnDelivery } = useShopLang();
   const router = useRouter();
   const init = useMemo(() => initialLists(editLine), [editLine]);
   const [mode, setMode] = useState<ShopPrintMode>(init.mode);
@@ -533,7 +533,7 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
           <div className="flex flex-col gap-2 text-sm text-(--muted)">
             <span>{t("readyIn")}</span>
             <span>{t("deliveryLine")}</span>
-            <span>{paymentLive ? t("paymentLine") : t("paymentLineSoon")}</span>
+            <span>{t(paymentLive ? "paymentLine" : payOnDelivery ? "paymentLineOnDelivery" : "paymentLineSoon")}</span>
           </div>
         </div>
         <PriceList mode={mode} t={t} lang={lang} />

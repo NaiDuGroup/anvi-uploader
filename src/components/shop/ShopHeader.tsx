@@ -50,13 +50,13 @@ export function AccountButton() {
 }
 
 export function ShopHeader() {
-  const { t, href, paymentLive } = useShopLang();
+  const { t, href, paymentLive, payOnDelivery } = useShopLang();
   return (
     <header className="relative border-b border-(--line) bg-white">
       <div className="hidden flex-wrap justify-center gap-x-7 gap-y-1 bg-(--ink) px-6 py-2 text-[13px] text-white sm:flex">
         <span>{t("topDeliveryCity")}</span>
         <span>{t("topDeliveryCountry")}</span>
-        <span>{paymentLive ? t("topPayment") : t("topPaymentSoon")}</span>
+        <span>{t(paymentLive ? "topPayment" : payOnDelivery ? "topPaymentOnDelivery" : "topPaymentSoon")}</span>
       </div>
       <div className="mx-auto flex max-w-[1320px] items-center gap-3 px-4 py-3 sm:gap-6 sm:px-6 sm:py-4">
         <Link href={href("/shop")} className="flex shrink-0 items-center gap-2.5 no-underline" aria-label={`ANVI — ${t("home")}`}>

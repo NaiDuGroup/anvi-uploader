@@ -11,7 +11,11 @@ export type OrderSource = (typeof ORDER_SOURCES)[number];
 export const SHOP_PAYMENT_STATUSES = ["unpaid", "pending", "paid", "failed", "refunded"] as const;
 export type ShopPaymentStatus = (typeof SHOP_PAYMENT_STATUSES)[number];
 
-export const SHOP_PAYMENT_PROVIDERS = ["test", "paynet"] as const;
+/**
+ * `Order.paymentProvider`: `on_delivery` = paid at hand-over (cash or card), set
+ * while «Оплата только при получении» is on (`shopPayOnDelivery`).
+ */
+export const SHOP_PAYMENT_PROVIDERS = ["test", "paynet", "on_delivery"] as const;
 export type ShopPaymentProvider = (typeof SHOP_PAYMENT_PROVIDERS)[number];
 
 export const SHOP_DELIVERY_METHODS = ["pickup", "courier_chisinau", "courier_moldova"] as const;

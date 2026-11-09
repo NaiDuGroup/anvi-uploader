@@ -27,6 +27,17 @@ describe("shopCustomerStatus", () => {
     expect(shopCustomerStatus({ ...base, status: "DELIVERED" })).toBe("delivered");
     expect(shopCustomerStatus({ ...paid, status: "ISSUE" })).toBe("issue");
   });
+  it("pay on delivery: never «awaiting payment» — accepted, then worked on and shipped unpaid", () => {
+    const pod = { ...base, paymentProvider: "on_delivery" };
+    expect(shopCustomerStatus(pod)).toBe("accepted");
+    expect(shopCustomerStatus({ ...pod, status: "IN_PROGRESS" })).toBe("in_production");
+    expect(shopCustomerStatus({ ...pod, status: "WORKSHOP_READY", shippedAt: new Date() })).toBe("shipped");
+    expect(shopCustomerStatus({ ...pod, status: "DELIVERED" })).toBe("delivered");
+    expect(shopCustomerStatus({ ...pod, paymentStatus: "paid", isPaid: true })).toBe("paid");
+    // The switch on: an old online order is shown the same way.
+    expect(shopCustomerStatus({ ...base, paymentProvider: "paynet", payOnDelivery: true })).toBe("accepted");
+    expect(shopCustomerStatus({ ...base, paymentStatus: "failed", payOnDelivery: true })).toBe("accepted");
+  });
 });
 
 describe("buildShopOrderView", () => {
@@ -91,6 +102,7 @@ describe("buildShopOrderView", () => {
       delivery: { method: "courier_chisinau", city: "Chișinău" },
       customerName: "Ion",
       canPay: false,
+      payOnDelivery: false,
       canAddFiles: true,
       lines: [{ title: "Cană", optionsText: "albă", quantity: 2, total: 300 }],
     });
@@ -120,10 +132,37 @@ describe("buildShopOrderView", () => {
       (q) => ((q as { productId?: string }).productId === "v1" ? { title: "Белая кружка", optionsText: "320 мл" } : null),
     );
     expect(view.canPay).toBe(true);
+    expect(view.payOnDelivery).toBe(false);
     expect(view.status).toBe("pending_payment");
     expect(view.lines.map((l) => [l.title, l.optionsText])).toEqual([
       ["Белая кружка", "320 мл"],
       ["Pix", undefined],
     ]);
+  });
+
+  it("pay on delivery: no «Plătește», marked payOnDelivery until paid", () => {
+    const o = {
+      orderNumber: 8,
+      createdAt: new Date("2026-11-09T10:00:00Z"),
+      status: "NEW",
+      paymentStatus: "pending",
+      paymentProvider: "on_delivery",
+      isPaid: false,
+      shippedAt: null,
+      price: 150,
+      deliveryPriceMdl: 0,
+      deliveryMethod: "pickup",
+      deliveryCity: null,
+      trackingNumber: null,
+      customerName: "Ana",
+      clientName: null,
+      orderLines: [],
+    };
+    const view = buildShopOrderView(o);
+    expect(view).toMatchObject({ status: "accepted", canPay: false, payOnDelivery: true });
+    expect(buildShopOrderView({ ...o, paymentStatus: "paid", isPaid: true })).toMatchObject({ status: "paid", payOnDelivery: false });
+    // Switch on: an unpaid Paynet order is not offered online payment either.
+    expect(buildShopOrderView({ ...o, paymentProvider: "paynet", payOnDelivery: true })).toMatchObject({ canPay: false, payOnDelivery: true });
+    expect(buildShopOrderView({ ...o, paymentProvider: "paynet" })).toMatchObject({ canPay: true, payOnDelivery: false });
   });
 });

@@ -373,6 +373,8 @@ export function buildShopStaffNotes(
   req: ShopCheckoutRequest,
   opts: {
     test?: boolean;
+    /** «Оплата при получении» in the head line (the order is not paid online). */
+    payOnDelivery?: boolean;
     lines?: readonly (ShopStaffNoteLine | null | undefined)[];
     /** Promo code line («Промокод X: −50 MDL»), kept whole at the end. */
     promo?: string | null;
@@ -380,7 +382,7 @@ export function buildShopStaffNotes(
 ): string {
   const d = req.delivery;
   const delivery = [DELIVERY_LABEL_RU[d.method], d.city, d.address].filter(Boolean).join(", ");
-  const head = `Сайт · ${delivery}${d.note ? ` (${d.note})` : ""}`;
+  const head = `Сайт · ${opts.payOnDelivery ? "Оплата при получении · " : ""}${delivery}${d.note ? ` (${d.note})` : ""}`;
   const rows = req.lines.map((l, i) => {
     const info = opts.lines?.[i];
     const n = `${i + 1}) `;
@@ -821,6 +823,11 @@ export interface ShopCheckoutOptions {
   /** Caller holds a tester pass or a staff session (may use the test payment in production). */
   tester?: boolean;
   /**
+   * «Оплата только при получении» is on (`isShopPayOnDelivery`): no online
+   * payment, the order (`paymentProvider='on_delivery'`) goes straight to work.
+   */
+  payOnDelivery?: boolean;
+  /**
    * Signed-in storefront account (`shop_session`): the order is linked to it
    * and its stored files (`shop-orders/…`, «Repetă comanda») may be reused.
    * Without it the order is linked to the account of the checkout e-mail
@@ -870,7 +877,7 @@ export async function runShopCheckout(
   env: Env = process.env,
   opts: ShopCheckoutOptions = {},
 ): Promise<ShopCheckoutResponse> {
-  const provider = resolvePaymentProvider(env, { tester: opts.tester });
+  const provider = resolvePaymentProvider(env, { tester: opts.tester, payOnDelivery: opts.payOnDelivery });
   if (!provider) return { status: 503, body: { error: "payment_unavailable" } };
 
   const priced = await priceShopCheckout(raw, env);
@@ -1057,6 +1064,7 @@ export async function runShopCheckout(
       clientId: clientId ?? undefined,
       notes: buildShopStaffNotes(req, {
         test: isTest,
+        payOnDelivery: provider.name === "on_delivery",
         lines: await staffNoteLines(lines),
         promo: promo ? promoStaffNoteRu(promo) : null,
       }),

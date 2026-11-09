@@ -2,7 +2,7 @@ import { dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
 import { round2 } from "@/lib/money";
 import { maxLeadTime, type ShopLeadTime } from "@/lib/storefront/leadTime";
 import type { ShopDeliveryMethod } from "./constants";
-import { shopCustomerStatus, type ShopCustomerStatus } from "./customerStatus";
+import { shopCustomerStatus, shopOrderPaysOnDelivery, type ShopCustomerStatus } from "./customerStatus";
 
 /**
  * Public view of a storefront order (`GET /api/shop/order/[token]`): an
@@ -29,6 +29,8 @@ export interface ShopOrderView {
   customerName: string;
   /** Not paid yet and payable online: the page offers «Plătește acum». */
   canPay: boolean;
+  /** Not paid yet, paid at hand-over (cash / card): no online payment offered. */
+  payOnDelivery: boolean;
   /** Files may still be added to DTF lines (not shipped / delivered yet). */
   canAddFiles: boolean;
   /** Until it ships: the longest lead time of its lines (working days after payment). */
@@ -63,6 +65,10 @@ export interface ShopOrderViewInput {
   paymentStatus: string;
   isPaid: boolean;
   shippedAt: Date | null;
+  /** `on_delivery`: paid at hand-over. */
+  paymentProvider?: string | null;
+  /** «Оплата только при получении» is on: every unpaid order is shown as pay-on-delivery. */
+  payOnDelivery?: boolean;
   price: Decimalish;
   deliveryPriceMdl: Decimalish;
   /** Promo discount taken off `price` (absent / null = none). */
@@ -163,6 +169,7 @@ export function buildShopOrderView(o: ShopOrderViewInput, describe?: ShopLineDes
     discount > 0 && o.promoData != null && typeof o.promoData === "object" && (o.promoData as { type?: unknown }).type === "free_delivery";
   const method = (METHODS.has(o.deliveryMethod ?? "") ? o.deliveryMethod : "pickup") as ShopDeliveryMethod;
   const status = shopCustomerStatus(o);
+  const onDelivery: boolean = shopOrderPaysOnDelivery(o) && status !== "delivered";
   const lead: ShopLeadTime | null = orderLeadTime(o, describe);
   return {
     orderNumber: o.orderNumber,
@@ -185,8 +192,9 @@ export function buildShopOrderView(o: ShopOrderViewInput, describe?: ShopLineDes
     ...(o.trackingNumber ? { trackingNumber: o.trackingNumber } : {}),
     customerName: o.customerName ?? o.clientName ?? "",
     canPay: status === "pending_payment",
+    payOnDelivery: onDelivery,
     canAddFiles: status !== "shipped" && status !== "delivered",
-    ...(lead && (status === "pending_payment" || status === "paid" || status === "in_production") ? { leadTime: lead } : {}),
+    ...(lead && (status === "pending_payment" || status === "accepted" || status === "paid" || status === "in_production") ? { leadTime: lead } : {}),
     lines: o.orderLines
       .map((l) => lineView(l.shopLineData, describe, l.files))
       .filter((l): l is NonNullable<typeof l> => l != null),

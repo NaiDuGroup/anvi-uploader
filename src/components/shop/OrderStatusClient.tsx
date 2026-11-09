@@ -151,7 +151,8 @@ export function OrderStatusClient({
 
   const o = state.order;
   const paid: boolean = isPaid(o);
-  const steps = orderSteps(o.status, o.delivery.method);
+  const onDelivery: boolean = o.payOnDelivery === true && !paid;
+  const steps = orderSteps(o.status, o.delivery.method, { payOnDelivery: onDelivery });
   const deliveryLabel: string =
     o.delivery.method === "pickup" ? t("pickup") : o.delivery.method === "courier_chisinau" ? t("courierCity") : t("courierCountry");
   const firstName: string = o.customerName.trim().split(/\s+/)[0] ?? "";
@@ -159,13 +160,13 @@ export function OrderStatusClient({
   return (
     <div className="flex max-w-[860px] flex-col gap-7">
       <div className="flex flex-col gap-3">
-        {paid ? (
+        {paid || onDelivery ? (
           <span className="grid h-14 w-14 place-items-center rounded-full bg-(--ok-soft) text-(--ok)">
             <CheckIcon size={28} />
           </span>
         ) : null}
         <h1 className="m-0 text-[26px] leading-tight font-extrabold sm:text-4xl">
-          {t(paid ? "thanksPaid" : "thanksPending", { name: firstName })}
+          {t(paid ? "thanksPaid" : onDelivery ? "thanksAccepted" : "thanksPending", { name: firstName })}
         </h1>
         <p className="m-0 text-base leading-relaxed text-(--muted) sm:text-lg">
           {t("orderIntro", { number: String(o.orderNumber), total: formatPrice(o.total, lang) })}
@@ -225,12 +226,15 @@ export function OrderStatusClient({
             ) : null}
           </div>
         ) : null}
+        {onDelivery ? (
+          <p className="m-0 rounded-xl bg-(--soft) px-4 py-3 font-semibold text-(--ink)">{t("payOnDeliveryNote")}</p>
+        ) : null}
         {o.status === "issue" ? (
           <p role="alert" className="m-0 rounded-xl bg-(--err-soft) px-4 py-3 font-semibold text-(--err)">
             {t("stIssue")}
           </p>
         ) : null}
-        {o.leadTime ? <p className="m-0 text-sm text-(--muted)">{leadTimeText(o.leadTime, t, "order")}</p> : null}
+        {o.leadTime ? <p className="m-0 text-sm text-(--muted)">{leadTimeText(o.leadTime, t, "order", { payOnDelivery: onDelivery })}</p> : null}
         <ol className="m-0 grid list-none gap-3 p-0 sm:grid-cols-4">
           {steps.map((s, i) => (
             <li
@@ -306,7 +310,7 @@ export function OrderStatusClient({
           </div>
         ) : null}
         <div className="flex justify-between border-t border-(--line) pt-3">
-          <b>{paid ? t("paidTotal") : t("toPay")}</b>
+          <b>{paid ? t("paidTotal") : onDelivery ? t("toPayOnDelivery") : t("toPay")}</b>
           <b className="text-xl">{formatPrice(o.total, lang)}</b>
         </div>
       </section>

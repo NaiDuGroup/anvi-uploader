@@ -16,7 +16,8 @@ import { formatShopHours } from "./studioText";
  */
 
 export type InfoBlock =
-  | { kind: "p"; text: Localized }
+  /** `onDelivery`: the text while «Оплата только при получении» is on (payment paragraphs). */
+  | { kind: "p"; text: Localized; onDelivery?: Localized }
   | { kind: "list"; items: Localized[] }
   /** «Vezi pe hartă» link to the studio map, when stored. */
   | { kind: "map" };
@@ -49,6 +50,19 @@ export const INFO_LABEL: Record<InfoPageSlug | "map" | "soon", Localized> = {
 
 const p = (ro: string, ru: string, en: string): InfoBlock => ({ kind: "p", text: { ro, ru, en } });
 const L = (ro: string, ru: string, en: string): Localized => ({ ro, ru, en });
+/** A payment paragraph with its «pay on delivery» variant (see `InfoBlock.onDelivery`). */
+const pPay = (online: InfoBlock, onDelivery: Localized): InfoBlock =>
+  online.kind === "p" ? { ...online, onDelivery } : online;
+const ON_DELIVERY_PAY = L(
+  "Plata se face la primire — numerar sau cu cardul, la ridicarea din atelier sau la livrare. Online nu trebuie să plătești nimic.",
+  "Оплата при получении — наличными или картой, при самовывозе из мастерской или при доставке. Онлайн ничего платить не нужно.",
+  "You pay on delivery — cash or card, at pickup from the workshop or on delivery. Nothing to pay online.",
+);
+const ON_DELIVERY_START = L(
+  "Comanda intră în lucru imediat după plasare; te contactăm dacă e nevoie de ceva.",
+  "Заказ уходит в работу сразу после оформления; если что-то понадобится, мы свяжемся с вами.",
+  "Your order goes into production right after you place it; we'll contact you if anything is needed.",
+);
 
 const DESPRE: InfoPageDef = {
   slug: "despre",
@@ -220,15 +234,21 @@ const LIVRARE: InfoPageDef = {
     {
       heading: L("Plata", "Оплата", "Payment"),
       blocks: [
-        p(
-          "Online, cu cardul bancar, prin Paynet{soon}. Datele cardului le introduci pe pagina Paynet — noi nu le vedem.",
-          "Онлайн банковской картой через Paynet{soon}. Данные карты вы вводите на странице Paynet — мы их не видим.",
-          "Online by bank card via Paynet{soon}. You enter the card details on the Paynet page — we never see them.",
+        pPay(
+          p(
+            "Online, cu cardul bancar, prin Paynet{soon}. Datele cardului le introduci pe pagina Paynet — noi nu le vedem.",
+            "Онлайн банковской картой через Paynet{soon}. Данные карты вы вводите на странице Paynet — мы их не видим.",
+            "Online by bank card via Paynet{soon}. You enter the card details on the Paynet page — we never see them.",
+          ),
+          ON_DELIVERY_PAY,
         ),
-        p(
-          "Comanda intră în producție după confirmarea plății. Plata la livrare (ramburs) nu este disponibilă.",
-          "Заказ уходит в работу после подтверждения оплаты. Оплаты при получении (наложенный платёж) нет.",
-          "The order goes into production after the payment is confirmed. Cash on delivery is not available.",
+        pPay(
+          p(
+            "Comanda intră în producție după confirmarea plății. Plata la livrare (ramburs) nu este disponibilă.",
+            "Заказ уходит в работу после подтверждения оплаты. Оплаты при получении (наложенный платёж) нет.",
+            "The order goes into production after the payment is confirmed. Cash on delivery is not available.",
+          ),
+          ON_DELIVERY_START,
         ),
         p(
           "Pentru firme facem ofertă și factură — vezi [Pentru companii](/companii).",
@@ -359,10 +379,17 @@ const FAQ: InfoPageDef = {
     {
       heading: L("Cum plătesc?", "Как оплатить?", "How do I pay?"),
       blocks: [
-        p(
-          "Online, cu cardul, prin Paynet{soon}. Producția începe după confirmarea plății. Plata la livrare nu este disponibilă.",
-          "Онлайн картой через Paynet{soon}. Производство начинается после подтверждения оплаты. Оплаты при получении нет.",
-          "Online by card via Paynet{soon}. Production starts once the payment is confirmed. Cash on delivery is not available.",
+        pPay(
+          p(
+            "Online, cu cardul, prin Paynet{soon}. Producția începe după confirmarea plății. Plata la livrare nu este disponibilă.",
+            "Онлайн картой через Paynet{soon}. Производство начинается после подтверждения оплаты. Оплаты при получении нет.",
+            "Online by card via Paynet{soon}. Production starts once the payment is confirmed. Cash on delivery is not available.",
+          ),
+          L(
+            "La primire — numerar sau cu cardul, la ridicare sau la livrare. Comanda intră în lucru imediat după plasare.",
+            "При получении — наличными или картой, при самовывозе или доставке. Заказ уходит в работу сразу после оформления.",
+            "On delivery — cash or card, at pickup or on delivery. Your order goes into production right after you place it.",
+          ),
         ),
       ],
     },
@@ -441,7 +468,7 @@ export function infoFaqEntries(
   return page.sections.map((s) => ({
     question: text(s.heading),
     answer: s.blocks
-      .flatMap((b) => (b.kind === "p" ? [text(b.text)] : b.kind === "list" ? b.items.map((it) => `• ${text(it)}`) : []))
+      .flatMap((b) => (b.kind === "p" ? [text(infoParagraph(b, vars))] : b.kind === "list" ? b.items.map((it) => `• ${text(it)}`) : []))
       .filter(Boolean)
       .join("\n"),
   }));
@@ -481,6 +508,8 @@ export function infoPageVars(o: {
   hours: WeekHours;
   phone: string;
   paymentLive: boolean;
+  /** «Оплата только при получении» is on: payment paragraphs use their `onDelivery` text. */
+  payOnDelivery?: boolean;
 }): Record<string, string> {
   const t = shopT(o.lang);
   return {
@@ -492,5 +521,14 @@ export function infoPageVars(o: {
     courierMoldova: formatPrice(DELIVERY_DISPLAY_PRICE.courier_moldova, o.lang),
     lowDpi: String(SHOP_LOW_DPI),
     soon: o.paymentLive ? "" : ` (${INFO_LABEL.soon[o.lang]})`,
+    ...(o.payOnDelivery ? { [PAY_ON_DELIVERY_VAR]: "1" } : {}),
   };
+}
+
+/** Flag in the page vars (not a text placeholder): pay-on-delivery texts. */
+const PAY_ON_DELIVERY_VAR = "__payOnDelivery";
+
+/** A paragraph's text for these page vars: the pay-on-delivery variant while that is on. */
+export function infoParagraph(b: Extract<InfoBlock, { kind: "p" }>, vars: Readonly<Record<string, string>>): Localized {
+  return vars[PAY_ON_DELIVERY_VAR] === "1" && b.onDelivery ? b.onDelivery : b.text;
 }

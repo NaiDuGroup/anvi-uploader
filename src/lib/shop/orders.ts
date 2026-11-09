@@ -39,7 +39,11 @@ export function shopLineDescriber(labels: ShopLineLabels, lang: ShopLang): ShopL
  * Public storefront order by its token; null for unknown, studio or trashed
  * orders. With `describe` the line names are given in the viewer's language.
  */
-export async function loadShopOrderView(token: string, describe?: ShopLineDescriber): Promise<ShopOrderView | null> {
+export async function loadShopOrderView(
+  token: string,
+  describe?: ShopLineDescriber,
+  opts: { payOnDelivery?: boolean } = {},
+): Promise<ShopOrderView | null> {
   if (!token || token.length > 64) return null;
   const o = await prisma.order.findUnique({
     where: { publicToken: token },
@@ -50,6 +54,7 @@ export async function loadShopOrderView(token: string, describe?: ShopLineDescri
       createdAt: true,
       status: true,
       paymentStatus: true,
+      paymentProvider: true,
       isPaid: true,
       shippedAt: true,
       price: true,
@@ -68,7 +73,9 @@ export async function loadShopOrderView(token: string, describe?: ShopLineDescri
     },
   });
   if (!o || o.source !== "shop" || o.deletedAt) return null;
-  return buildShopOrderView(o, describe);
+  // Test orders stay with the test payment (they are never real work).
+  const payOnDelivery = opts.payOnDelivery === true && o.paymentProvider !== "test";
+  return buildShopOrderView({ ...o, payOnDelivery }, describe);
 }
 
 /**

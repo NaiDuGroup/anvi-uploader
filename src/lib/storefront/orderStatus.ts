@@ -5,7 +5,7 @@ import type { ShopLeadTime } from "./leadTime";
 export interface ShopOrderView {
   orderNumber: string | number;
   createdAt: string;
-  status: "pending_payment" | "paid" | "in_production" | "shipped" | "delivered" | "issue";
+  status: "pending_payment" | "accepted" | "paid" | "in_production" | "shipped" | "delivered" | "issue";
   paymentStatus: string;
   total: number;
   subtotal: number;
@@ -24,6 +24,8 @@ export interface ShopOrderView {
   customerName: string;
   /** Not paid yet: the page offers «Plătește acum» (absent on older answers). */
   canPay?: boolean;
+  /** Not paid yet, paid at hand-over (cash / card): no online payment (absent on older answers). */
+  payOnDelivery?: boolean;
   /** Files may still be added to DTF lines (absent on older answers). */
   canAddFiles?: boolean;
   /** Until it ships: the longest lead time of its lines, working days after payment. */
@@ -48,6 +50,7 @@ export interface OrderStep {
 /** Last step already reached per status; the next one is «in progress». */
 const REACHED: Record<ShopOrderView["status"], number> = {
   pending_payment: -1,
+  accepted: 0,
   paid: 0,
   in_production: 0,
   issue: 0,
@@ -55,11 +58,18 @@ const REACHED: Record<ShopOrderView["status"], number> = {
   delivered: 3,
 };
 
-/** Four progress steps (paid → printing → handed over → delivered) for a status. */
-export function orderSteps(status: ShopOrderView["status"], method: ShopOrderView["delivery"]["method"]): OrderStep[] {
+/**
+ * Four progress steps (paid → printing → handed over → delivered) for a
+ * status; a pay-on-delivery order starts with «received» instead of «paid».
+ */
+export function orderSteps(
+  status: ShopOrderView["status"],
+  method: ShopOrderView["delivery"]["method"],
+  opts: { payOnDelivery?: boolean } = {},
+): OrderStep[] {
   const pickup: boolean = method === "pickup";
   const labels: ShopStringKey[] = [
-    "stPaid",
+    opts.payOnDelivery ? "stAccepted" : "stPaid",
     "stPrinting",
     pickup ? "stPickupReady" : "stShipped",
     pickup ? "stPickedUp" : "stDelivered",
@@ -71,6 +81,8 @@ export function orderSteps(status: ShopOrderView["status"], method: ShopOrderVie
   }));
 }
 
-export function isPaid(order: Pick<ShopOrderView, "status" | "paymentStatus">): boolean {
-  return order.status !== "pending_payment" || order.paymentStatus === "paid";
+export function isPaid(order: Pick<ShopOrderView, "status" | "paymentStatus" | "payOnDelivery">): boolean {
+  if (order.paymentStatus === "paid") return true;
+  if (order.payOnDelivery) return false;
+  return order.status !== "pending_payment" && order.status !== "accepted";
 }

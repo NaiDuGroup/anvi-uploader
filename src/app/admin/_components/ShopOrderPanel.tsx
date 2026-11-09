@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Globe, Loader2, Mail, MessageSquareQuote, StickyNote, Store, Truck, UserRound } from "lucide-react";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import { isShopTestOrder, splitShopOrderNotes } from "@/lib/shop/orderFlags";
+import { isPayOnDeliveryShopOrder, isShopTestOrder, splitShopOrderNotes } from "@/lib/shop/orderFlags";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,6 +22,10 @@ const L: Record<
     test: string;
     testTitle: string;
     payment: Record<string, string>;
+    /** Pay-on-delivery order: unpaid / paid (staff marked it). */
+    onDelivery: string;
+    onDeliveryTitle: string;
+    paidOnDelivery: string;
     delivery: Record<string, string>;
     tracking: string;
     save: string;
@@ -41,6 +45,9 @@ const L: Record<
     test: "ТЕСТ",
     testTitle: "Тестовый заказ с сайта (тестовая оплата): склад не списан, можно удалить",
     payment: { unpaid: "не оплачен", pending: "ждёт оплаты", paid: "оплачен онлайн", failed: "оплата не прошла", refunded: "возврат" },
+    onDelivery: "оплата при получении",
+    onDeliveryTitle: "Клиент платит при получении (наличными или картой). Заказ в работу сразу; отметьте «Оплачен», когда деньги получены (статус «Выдан» отмечает сам).",
+    paidOnDelivery: "оплачен",
     delivery: { pickup: "Самовывоз", courier_chisinau: "Курьер по Кишинёву", courier_moldova: "Курьер по Молдове" },
     tracking: "Номер EVS",
     save: "Сохранить",
@@ -56,6 +63,9 @@ const L: Record<
     test: "TEST",
     testTitle: "Comandă de test de pe site (plată de test): stocul nu a fost scăzut, se poate șterge",
     payment: { unpaid: "neachitat", pending: "așteaptă plata", paid: "achitat online", failed: "plată eșuată", refunded: "rambursat" },
+    onDelivery: "plata la primire",
+    onDeliveryTitle: "Clientul plătește la primire (numerar sau card). Comanda intră în lucru imediat; marcați «Achitat» când banii sunt primiți («Eliberat» o marchează singur).",
+    paidOnDelivery: "achitat",
     delivery: { pickup: "Ridicare", courier_chisinau: "Curier Chișinău", courier_moldova: "Curier Moldova" },
     tracking: "Nr. EVS",
     save: "Salvează",
@@ -71,6 +81,9 @@ const L: Record<
     test: "TEST",
     testTitle: "Storefront test order (test payment): no stock deducted, safe to delete",
     payment: { unpaid: "unpaid", pending: "awaiting payment", paid: "paid online", failed: "payment failed", refunded: "refunded" },
+    onDelivery: "pay on delivery",
+    onDeliveryTitle: "The customer pays on delivery (cash or card). Work on it right away; mark it paid when the money is in («Delivered» does it too).",
+    paidOnDelivery: "paid",
     delivery: { pickup: "Pickup", courier_chisinau: "Courier Chișinău", courier_moldova: "Courier Moldova" },
     tracking: "EVS no.",
     save: "Save",
@@ -119,6 +132,9 @@ const PAYMENT_TONE: Record<string, { pill: string; dot: string }> = {
   pending: { pill: "bg-amber-50 text-amber-800 ring-amber-200", dot: "bg-amber-500" },
 };
 
+/** Unpaid pay-on-delivery order: a normal order to work on (not «ждёт оплаты»). */
+const ON_DELIVERY_TONE = { pill: "bg-sky-50 text-sky-800 ring-sky-200", dot: "bg-sky-500" };
+
 function useLabels() {
   const locale = useLanguageStore((s) => s.locale) as Locale;
   return L[locale] ?? L.ru;
@@ -140,6 +156,10 @@ export function ShopOrderBadge({ order }: { order: ShopOrderFields }) {
   const tone = PAYMENT_TONE[ps] ?? PAYMENT_TONE.pending!;
   const pn = paynetLabel(order);
   const pill = "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none";
+  // Pay on delivery: its own tone and words — the order is worked on, not waiting for a payment.
+  const onDelivery = isPayOnDeliveryShopOrder(order);
+  const psLabel = onDelivery ? (ps === "paid" ? l.paidOnDelivery : l.onDelivery) : (l.payment[ps] ?? ps);
+  const psTone = onDelivery && ps !== "paid" ? ON_DELIVERY_TONE : tone;
   return (
     <>
       <span className={cn(pill, "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200")} title={l.site}>
@@ -151,12 +171,12 @@ export function ShopOrderBadge({ order }: { order: ShopOrderFields }) {
           // Wraps inside the pill when the «Заказ» column is narrow (1024px + Цех panel) instead of spilling over
           // the phone column; rounded-lg ≈ fully round on one line, soft corners on two.
           "inline-flex max-w-full items-start gap-1 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold leading-3 ring-1 ring-inset",
-          tone.pill,
+          psTone.pill,
         )}
-        title={pn ? `${l.payment[ps] ?? ps} · ${pn.title}` : (l.payment[ps] ?? ps)}
+        title={onDelivery ? l.onDeliveryTitle : pn ? `${psLabel} · ${pn.title}` : psLabel}
       >
-        <span className={cn("mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full", tone.dot)} aria-hidden />
-        <span className="min-w-0">{l.payment[ps] ?? ps}</span>
+        <span className={cn("mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full", psTone.dot)} aria-hidden />
+        <span className="min-w-0">{psLabel}</span>
       </span>
       {pn && (
         <span className="max-w-full truncate text-[10px] tabular-nums text-gray-400" title={pn.title}>

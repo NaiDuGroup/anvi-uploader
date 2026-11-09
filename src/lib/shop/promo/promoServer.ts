@@ -71,6 +71,7 @@ export function promoHoldingOrdersWhere(promoId: string, now: Date, email?: stri
     OR: [
       { paymentStatus: "paid" },
       { paymentStatus: { not: "paid" }, createdAt: { gte: new Date(now.getTime() - PROMO_PENDING_HOLD_MS) } },
+      { paymentStatus: { not: "paid" }, paymentProvider: "on_delivery" },
     ],
   };
 }

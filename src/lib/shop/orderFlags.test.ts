@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   countsTowardClientDebt,
+  isPayOnDeliveryShopOrder,
   isShopTestOrder,
   isUnpaidShopOrder,
   splitShopOrderNotes,
@@ -35,7 +36,19 @@ describe("client debt", () => {
     expect(countsTowardClientDebt({ isPaid: true, source: "studio", paymentStatus: "unpaid" })).toBe(false);
   });
   it("Prisma condition matches the same orders", () => {
-    expect(UNPAID_SHOP_ORDER_WHERE).toEqual({ source: "shop", paymentStatus: { not: "paid" } });
+    expect(UNPAID_SHOP_ORDER_WHERE).toEqual({
+      source: "shop",
+      paymentStatus: { not: "paid" },
+      OR: [{ paymentProvider: null }, { paymentProvider: { not: "on_delivery" } }],
+    });
+  });
+  it("pay-on-delivery storefront orders are owed like studio orders", () => {
+    const o = { isPaid: false, source: "shop", paymentStatus: "pending", paymentProvider: "on_delivery" };
+    expect(isPayOnDeliveryShopOrder(o)).toBe(true);
+    expect(isUnpaidShopOrder(o)).toBe(false);
+    expect(countsTowardClientDebt(o)).toBe(true);
+    expect(countsTowardClientDebt({ ...o, isPaid: true, paymentStatus: "paid" })).toBe(false);
+    expect(isPayOnDeliveryShopOrder({ source: "studio", paymentProvider: "on_delivery" })).toBe(false);
   });
 });
 

@@ -13,6 +13,7 @@ import {
 import {
   formatCorporateRequest,
   formatShopOrderCreated,
+  formatShopOrderOnDelivery,
   formatShopOrderPaid,
   sendTelegram,
   telegramUnpaidOrdersEnabled,
@@ -34,7 +35,9 @@ export function adminPublicOrigin(env: Env = process.env): string {
   return raw && /^https?:\/\//.test(raw) ? raw.replace(/\/+$/, "") : PRINT_ORIGIN;
 }
 
-async function shopOrderAlert(where: { id: string } | { publicToken: string }): Promise<ShopOrderAlert | null> {
+async function shopOrderAlert(
+  where: { id: string } | { publicToken: string },
+): Promise<(ShopOrderAlert & { payOnDelivery: boolean }) | null> {
   const o = await prisma.order.findUnique({
     where,
     select: {
@@ -48,6 +51,7 @@ async function shopOrderAlert(where: { id: string } | { publicToken: string }): 
       deliveryCity: true,
       promoCode: true,
       promoDiscountMdl: true,
+      paymentProvider: true,
     },
   });
   if (!o || o.source !== "shop" || o.deletedAt) return null;
@@ -66,6 +70,7 @@ async function shopOrderAlert(where: { id: string } | { publicToken: string }): 
     promoDiscount: o.promoDiscountMdl == null ? null : Number(o.promoDiscountMdl),
     lines: view.lines.map((l) => ({ title: l.title, optionsText: l.optionsText, quantity: l.quantity, noQty: l.noQty })),
     adminUrl: `${adminPublicOrigin()}/admin/orders/${o.id}`,
+    payOnDelivery: o.paymentProvider === "on_delivery",
   };
 }
 
@@ -79,12 +84,17 @@ export async function alertShopOrderPaid(publicToken: string): Promise<void> {
   }
 }
 
-/** «Новый заказ с сайта (не оплачен)» — only with `TELEGRAM_ALERT_UNPAID_ORDERS` on. */
+/**
+ * «Новый заказ с сайта»: always for a pay-on-delivery order (it goes straight
+ * to work, there is no «paid» alert to wait for); an unpaid online order only
+ * with `TELEGRAM_ALERT_UNPAID_ORDERS` on.
+ */
 export async function alertShopOrderCreated(orderId: string, env: Env = process.env): Promise<void> {
-  if (!telegramUnpaidOrdersEnabled(env)) return;
   try {
     const a = await shopOrderAlert({ id: orderId });
-    if (a) await sendTelegram(formatShopOrderCreated(a));
+    if (!a) return;
+    if (a.payOnDelivery) await sendTelegram(formatShopOrderOnDelivery(a));
+    else if (telegramUnpaidOrdersEnabled(env)) await sendTelegram(formatShopOrderCreated(a));
   } catch (e) {
     console.error("[staff-alert] new order alert failed:", e);
   }

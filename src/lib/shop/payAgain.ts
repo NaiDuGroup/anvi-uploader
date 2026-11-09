@@ -41,6 +41,8 @@ export function parsePayAgainBody(raw: unknown): { locale: ShopLang; acceptTerms
  * - 400 `terms_required` — the checkbox was not ticked;
  * - 404 — unknown, studio or trashed order;
  * - 409 `already_paid`;
+ * - 409 `pay_on_delivery` — «Оплата только при получении» is on, or the order
+ *   is a pay-on-delivery one: nothing to pay online;
  * - 503 `payment_unavailable` — this caller cannot pay now (no provider, or a
  *   test order outside the test provider / a real order inside it);
  * - 503 `payment_not_configured` — the provider is not set up yet («în curând»).
@@ -49,9 +51,11 @@ export async function restartShopPayment(
   token: string,
   locale: ShopLang,
   env: Env = process.env,
-  opts: { tester?: boolean; acceptTerms?: boolean } = {},
+  opts: { tester?: boolean; acceptTerms?: boolean; payOnDelivery?: boolean } = {},
 ): Promise<PayAgainResponse> {
   if (!token || token.length > 64) return { status: 404, body: { error: "not_found" } };
+  // «Оплата только при получении»: no online payment is started for any order.
+  if (opts.payOnDelivery) return { status: 409, body: { error: "pay_on_delivery" } };
   if (opts.acceptTerms !== true) return { status: 400, body: { error: "terms_required" } };
   const o = await prisma.order.findUnique({
     where: { publicToken: token },
@@ -74,6 +78,7 @@ export async function restartShopPayment(
   });
   if (!o || o.source !== "shop" || o.deletedAt) return { status: 404, body: { error: "not_found" } };
   if (o.paymentStatus === "paid" || o.isPaid) return { status: 409, body: { error: "already_paid" } };
+  if (o.paymentProvider === "on_delivery") return { status: 409, body: { error: "pay_on_delivery" } };
 
   const provider = resolvePaymentProvider(env, { tester: opts.tester });
   if (!provider) return { status: 503, body: { error: "payment_unavailable" } };

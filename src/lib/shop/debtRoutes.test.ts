@@ -30,7 +30,11 @@ import { GET as cabinetOrder } from "@/app/api/cabinet/orders/[id]/route";
 import { GET as byClient } from "@/app/api/admin/orders/by-client/route";
 import { PATCH as patchAdminOrder } from "@/app/api/admin/orders/[id]/route";
 
-const NOT_UNPAID_SHOP = { source: "shop", paymentStatus: { not: "paid" } };
+const NOT_UNPAID_SHOP = {
+  source: "shop",
+  paymentStatus: { not: "paid" },
+  OR: [{ paymentProvider: null }, { paymentProvider: { not: "on_delivery" } }],
+};
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
 
 function order(over: Record<string, unknown>) {

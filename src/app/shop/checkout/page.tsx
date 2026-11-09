@@ -11,6 +11,7 @@ import { safeHttpUrl } from "@/lib/studioInfo/studioInfo";
 import { getShopHref } from "@/lib/storefront/shopBase";
 import { shopPaymentState } from "@/lib/shop/paymentMode";
 import { hasShopTesterAccess } from "@/lib/shop/testerAccess";
+import { isShopPayOnDelivery } from "@/lib/shop/payOnDelivery";
 import { getShopCustomer } from "@/lib/shop/account/session";
 import { accountCheckoutDraft } from "@/lib/storefront/checkoutDraft";
 import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
@@ -28,7 +29,8 @@ export default async function ShopCheckoutPage() {
   const [labels, contacts] = await Promise.all([loadShopLineLabels(lang), loadShopContacts()]);
   const pickup = { address: contacts.address, hours: formatShopHours(contacts.hours, lang), mapUrl: safeHttpUrl(contacts.mapUrl) };
   // Say it before the form is filled: without a way to pay, checkout refuses (503 payment_unavailable).
-  const paymentAvailable = shopPaymentState(process.env, { tester: await hasShopTesterAccess() }) !== "unavailable";
+  const payOnDelivery = await isShopPayOnDelivery();
+  const paymentAvailable = shopPaymentState(process.env, { tester: await hasShopTesterAccess(), payOnDelivery }) !== "unavailable";
   const me = await getShopCustomer();
   const account = me ? accountCheckoutDraft(me) : null;
   return (
@@ -39,7 +41,7 @@ export default async function ShopCheckoutPage() {
           <Link href={href("/shop/cos")}>{t("cartTitle")}</Link> → <b className="text-(--ink)">{t("checkoutTitle")}</b>
         </span>
       </div>
-      <CheckoutClient paymentAvailable={paymentAvailable} labels={labels} pickup={pickup} account={account} />
+      <CheckoutClient paymentAvailable={paymentAvailable} payOnDelivery={payOnDelivery} labels={labels} pickup={pickup} account={account} />
       <TurnstileScope action="checkout" lang={lang} />
     </main>
   );

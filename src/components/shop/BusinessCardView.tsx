@@ -147,7 +147,7 @@ function initialFaces(editLine: CartLine | null): Record<ShopBcZone, FaceState |
 }
 
 function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
-  const { t, lang, href, paymentLive } = useShopLang();
+  const { t, lang, href, paymentLive, payOnDelivery } = useShopLang();
   const router = useRouter();
   const editQuote = editLine?.quote.kind === "businessCard" ? editLine.quote : null;
   const [pack, setPack] = useState<number>(editQuote && isShopBcPack(editQuote.quantity) ? editQuote.quantity : SHOP_BC_DEFAULT_PACK);
@@ -479,7 +479,7 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
           <div className="flex flex-col gap-2 text-sm text-(--muted)">
             <span>{t("readyIn")}</span>
             <span>{t("deliveryLine")}</span>
-            <span>{paymentLive ? t("paymentLine") : t("paymentLineSoon")}</span>
+            <span>{t(paymentLive ? "paymentLine" : payOnDelivery ? "paymentLineOnDelivery" : "paymentLineSoon")}</span>
           </div>
         </div>
       </div>

@@ -22,19 +22,41 @@ export function isShopTestOrder(order: {
   return order.paymentProvider === "test" || (order.notes ?? "").startsWith(SHOP_TEST_ORDER_NOTE_PREFIX);
 }
 
-/** A storefront order whose online payment has not gone through (yet). */
-export function isUnpaidShopOrder(order: { source?: string | null; paymentStatus?: string | null }): boolean {
-  return order.source === "shop" && order.paymentStatus !== "paid";
+/** `Order.paymentProvider` of storefront orders paid at hand-over («Оплата при получении»). */
+export const SHOP_ON_DELIVERY_PROVIDER = "on_delivery";
+
+/**
+ * A storefront order paid on delivery (cash / card at hand-over): placed while
+ * «Оплата только при получении» was on. It goes to work at once, like a studio
+ * order; staff mark it paid (DELIVERED does it too).
+ */
+export function isPayOnDeliveryShopOrder(order: { source?: string | null; paymentProvider?: string | null }): boolean {
+  return order.source === "shop" && order.paymentProvider === SHOP_ON_DELIVERY_PROVIDER;
+}
+
+/**
+ * A storefront order whose online payment has not gone through (yet).
+ * Pay-on-delivery orders are not: they are owed like studio orders.
+ */
+export function isUnpaidShopOrder(order: {
+  source?: string | null;
+  paymentStatus?: string | null;
+  paymentProvider?: string | null;
+}): boolean {
+  return order.source === "shop" && order.paymentStatus !== "paid" && !isPayOnDeliveryShopOrder(order);
 }
 
 /**
  * Prisma condition matching unpaid storefront orders. They are prepaid online:
  * until the payment goes through they are not the client's debt and do not
  * show in the dealer cabinet. Use as `{ ..., NOT: UNPAID_SHOP_ORDER_WHERE }`.
+ * Pay-on-delivery orders are not matched (`paymentProvider` null is kept in:
+ * SQL `<>` alone would drop it).
  */
 export const UNPAID_SHOP_ORDER_WHERE = {
   source: "shop",
   paymentStatus: { not: "paid" },
+  OR: [{ paymentProvider: null }, { paymentProvider: { not: SHOP_ON_DELIVERY_PROVIDER } }],
 } as const satisfies Prisma.OrderWhereInput;
 
 /**
@@ -45,6 +67,7 @@ export function countsTowardClientDebt(order: {
   isPaid: boolean;
   source?: string | null;
   paymentStatus?: string | null;
+  paymentProvider?: string | null;
 }): boolean {
   return !order.isPaid && !isUnpaidShopOrder(order);
 }

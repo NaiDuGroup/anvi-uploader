@@ -1,4 +1,5 @@
 import { SHOP_ORDER_FILE_PREFIX } from "./constants";
+import { isPayOnDeliveryShopOrder } from "./orderFlags";
 
 /**
  * Status-change rules that differ for storefront orders. Pure (client-safe).
@@ -7,16 +8,20 @@ import { SHOP_ORDER_FILE_PREFIX } from "./constants";
 /**
  * Setting DELIVERED marks a studio order paid (cash at hand-over). Storefront
  * orders are prepaid online: their paid flag comes from the payment provider,
- * so delivery never flips it. Dealers pay once a month for what has
- * accumulated: their orders stay unpaid until staff mark them paid by hand.
+ * so delivery never flips it — except pay-on-delivery storefront orders
+ * (`paymentProvider='on_delivery'`), paid at hand-over like studio orders.
+ * Dealers pay once a month for what has accumulated: their orders stay
+ * unpaid until staff mark them paid by hand.
  */
 export function deliveredAutoMarksPaid(order: {
   source: string | null | undefined;
+  paymentProvider?: string | null;
   /** The order's client (`clients.is_dealer`); false / absent for guests and retail clients. */
   clientIsDealer?: boolean | null;
 }): boolean {
   if (order.clientIsDealer === true) return false;
-  return order.source !== "shop";
+  if (order.source === "shop") return isPayOnDeliveryShopOrder(order);
+  return true;
 }
 
 /** Days a finished storefront order keeps its files, counted from the order's creation. */
@@ -33,6 +38,8 @@ export interface ShopOrderRetentionInput {
   isPaid: boolean;
   createdAt: Date;
   deletedAt: Date | null;
+  /** `on_delivery`: paid at hand-over — the files stay like a paid order's. */
+  paymentProvider?: string | null;
   /** Linked storefront account: its files stay while they belong to the account. */
   shopCustomerId?: string | null;
 }
@@ -52,12 +59,12 @@ export interface ShopOrderRetentionInput {
 export function shopOrderFilesReleasable(order: ShopOrderRetentionInput, now: Date = new Date()): boolean {
   if (order.source !== "shop") return false;
   const ageMs = now.getTime() - order.createdAt.getTime();
-  const paidNow = order.isPaid || order.paymentStatus === "paid";
+  // A pay-on-delivery order is worked on unpaid: never «abandoned».
+  const paidNow = order.isPaid || order.paymentStatus === "paid" || isPayOnDeliveryShopOrder(order);
   if (order.shopCustomerId) return !paidNow && ageMs >= SHOP_ORDER_ABANDONED_DAYS * DAY_MS;
   const done = order.status === "DELIVERED" || order.deletedAt != null;
   if (done) return ageMs >= SHOP_ORDER_FILE_MIN_RETENTION_DAYS * DAY_MS;
-  const paid = order.isPaid || order.paymentStatus === "paid";
-  return !paid && ageMs >= SHOP_ORDER_ABANDONED_DAYS * DAY_MS;
+  return !paidNow && ageMs >= SHOP_ORDER_ABANDONED_DAYS * DAY_MS;
 }
 
 /** Storage key of a storefront copy of an order upload: `uploads/x` → `shop-orders/x`. */

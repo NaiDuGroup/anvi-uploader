@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { pruneShopLoginTokens } from "@/lib/shop/account/customers";
 import { SHOP_ORDER_FILE_PREFIX } from "@/lib/shop/constants";
+import { SHOP_ON_DELIVERY_PROVIDER } from "@/lib/shop/orderFlags";
 import {
   SHOP_ORDER_FILE_MIN_RETENTION_DAYS,
   shopKeysSafeToDelete,
@@ -38,13 +39,22 @@ export async function POST(request: NextRequest) {
         createdAt: { lt: cutoff },
         files: { some: { fileUrl: { startsWith: SHOP_ORDER_FILE_PREFIX }, ...NOT_PURGED } },
         // Paid account orders keep their files: never candidates (they would fill the batch).
-        OR: [{ shopCustomerId: null }, { isPaid: false, paymentStatus: { not: "paid" } }],
+        // Pay-on-delivery account orders are worked on unpaid: they keep their files too.
+        OR: [
+          { shopCustomerId: null },
+          {
+            isPaid: false,
+            paymentStatus: { not: "paid" },
+            OR: [{ paymentProvider: null }, { paymentProvider: { not: SHOP_ON_DELIVERY_PROVIDER } }],
+          },
+        ],
       },
       select: {
         id: true,
         source: true,
         status: true,
         paymentStatus: true,
+        paymentProvider: true,
         isPaid: true,
         createdAt: true,
         deletedAt: true,

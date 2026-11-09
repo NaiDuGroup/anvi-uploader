@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
 import { loadShopOrderView, shopLineDescriber } from "@/lib/shop/orders";
 import { syncPaynetOrderByToken } from "@/lib/shop/paynetSettle";
+import { isShopPayOnDelivery } from "@/lib/shop/payOnDelivery";
 import { parseShopLang } from "@/lib/storefront/i18n";
 import { loadShopLineLabels } from "@/lib/storefront/lineLabelsServer";
 
@@ -31,7 +32,8 @@ async function checkPaynet(token: string): Promise<void> {
  * for studio orders. `?lang=ro|ru` names the lines in that language from the
  * catalog (the text stored at checkout is the fallback). `?check=1` (the
  * order page on load and while it waits after Paynet) first asks Paynet
- * about a pending Paynet order and settles it when paid.
+ * about a pending Paynet order and settles it when paid. While «Оплата только
+ * при получении» is on, unpaid orders come as `payOnDelivery` (no «Plătește»).
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const staff = await getSessionUser();
@@ -48,7 +50,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (request.nextUrl.searchParams.get("check") === "1") await checkPaynet(token);
     const lang = langParam ? parseShopLang(langParam) : null;
     const labels = lang ? await loadShopLineLabels(lang) : null;
-    const view = await loadShopOrderView(token, labels && lang ? shopLineDescriber(labels, lang) : undefined);
+    // «Оплата только при получении» on: no unpaid order is offered online payment.
+    const payOnDelivery = await isShopPayOnDelivery();
+    const view = await loadShopOrderView(token, labels && lang ? shopLineDescriber(labels, lang) : undefined, { payOnDelivery });
     if (!view) return NextResponse.json({ error: "not_found" }, { status: 404, headers: NO_STORE });
     return NextResponse.json(view, { headers: NO_STORE });
   } catch (error) {

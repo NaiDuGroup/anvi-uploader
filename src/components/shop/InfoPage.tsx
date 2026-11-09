@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Fragment } from "react";
 import { JsonLd } from "@/components/shop/JsonLd";
 import { isRealPaymentConfigured } from "@/lib/shop/paymentMode";
+import { isShopPayOnDelivery } from "@/lib/shop/payOnDelivery";
 import { loadShopContacts } from "@/lib/storefront/contacts";
 import { pickLocalized, shopT, type ShopLang } from "@/lib/storefront/i18n";
 import {
@@ -11,6 +12,7 @@ import {
   fillInfoText,
   infoFaqEntries,
   infoHref,
+  infoParagraph,
   infoPageVars,
   parseInfoInline,
   type InfoBlock,
@@ -67,6 +69,7 @@ export async function InfoPage({ slug }: { slug: InfoPageSlug }) {
     hours: contacts.hours,
     phone: contacts.mainPhone,
     paymentLive: isRealPaymentConfigured(),
+    payOnDelivery: await isShopPayOnDelivery(),
   });
   const fill = (l: Parameters<typeof pickLocalized>[0]) => fillInfoText(pickLocalized(l, lang), vars);
   const mapUrl: string | null = safeHttpUrl(contacts.mapUrl);
@@ -77,7 +80,7 @@ export async function InfoPage({ slug }: { slug: InfoPageSlug }) {
       case "p":
         return (
           <p key={i} className="m-0 leading-relaxed">
-            <Text text={fill(b.text)} base={base} />
+            <Text text={fill(infoParagraph(b, vars))} base={base} />
           </p>
         );
       case "list":

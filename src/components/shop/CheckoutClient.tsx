@@ -35,7 +35,7 @@ import { useCartQuote } from "@/lib/storefront/useCartQuote";
 import { trackPaymentStart } from "@/lib/storefront/analytics";
 import { CheckoutPromoField, CheckoutPromoLine, useCheckoutPromo } from "./CheckoutPromo";
 import { PaymentLogos } from "./PaymentLogos";
-import { CardIcon } from "./ShopIcons";
+import { CardIcon, ReceiptIcon } from "./ShopIcons";
 import { ShopImg } from "./ShopImg";
 import { useShopLang } from "./ShopLangProvider";
 import { TermsConsent } from "./TermsConsent";
@@ -98,11 +98,14 @@ function initialForm(account: CheckoutDraft | null): CheckoutForm {
 
 export function CheckoutClient({
   paymentAvailable = true,
+  payOnDelivery = false,
   labels = null,
   pickup = null,
   account = null,
 }: {
   paymentAvailable?: boolean;
+  /** «Оплата только при получении» is on: no online payment, the order is paid at hand-over. */
+  payOnDelivery?: boolean;
   labels?: ShopLineLabels | null;
   pickup?: ShopPickupInfo | null;
   /** Signed-in storefront account: prefills the form. */
@@ -257,7 +260,8 @@ export function CheckoutClient({
         case "redirect":
           setLeaving(true);
           placeOrderFromCart({ token: out.created.publicToken, number: out.created.orderNumber, lineIds: sentIds });
-          trackPaymentStart(out.created.publicToken);
+          // Pay on delivery: the order page, not a payment page.
+          if (!out.onDelivery) trackPaymentStart(out.created.publicToken);
           window.location.assign(href(out.url));
           return;
         case "payment_soon":
@@ -481,10 +485,10 @@ export function CheckoutClient({
             {t("paymentTitle")}
           </h2>
           <div className="flex items-center gap-3.5 rounded-[14px] border-[1.5px] border-(--ink) bg-(--soft) p-4">
-            <CardIcon size={28} />
+            {payOnDelivery ? <ReceiptIcon size={28} /> : <CardIcon size={28} />}
             <span className="flex flex-col">
-              <b>{t("paymentCard")}</b>
-              <span className="text-sm text-(--muted)">{t("paymentCardSub")}</span>
+              <b>{t(payOnDelivery ? "paymentOnDelivery" : "paymentCard")}</b>
+              <span className="text-sm text-(--muted)">{t(payOnDelivery ? "paymentOnDeliverySub" : "paymentCardSub")}</span>
             </span>
           </div>
           <PaymentLogos />
@@ -563,10 +567,14 @@ export function CheckoutClient({
           disabled={submitting || anyMissing || overLimit}
           className="shop-btn-dark min-h-14 rounded-xl bg-(--ink) py-4 text-[17px] font-extrabold disabled:opacity-60"
         >
-          {submitting ? t("placing") : total != null ? t("pay", { price: formatPrice(total, lang) }) : t("checkout")}
+          {submitting
+            ? t("placing")
+            : total != null
+              ? t(payOnDelivery ? "placeOrder" : "pay", { price: formatPrice(total, lang) })
+              : t("checkout")}
         </button>
         <span className="text-xs leading-snug text-(--muted2)">
-          {leadTimeText(cartLeadTime(lines.map((l) => l.quote), labels), t, "checkout")}
+          {leadTimeText(cartLeadTime(lines.map((l) => l.quote), labels), t, "checkout", { payOnDelivery })}
         </span>
       </aside>
     </form>

@@ -79,7 +79,7 @@ export function UvStickersView({ editId = null }: { editId?: string | null }) {
 }
 
 function UvStickersEditor({ editLine }: { editLine: CartLine | null }) {
-  const { lang, href, paymentLive, t: shopTr } = useShopLang();
+  const { lang, href, paymentLive, payOnDelivery, t: shopTr } = useShopLang();
   const t: PsT = useMemo(() => psT(lang), [lang]);
   const router = useRouter();
   const editQuote: ShopUvStickersLine | null = editLine && isShopUvStickersLine(editLine.quote) ? editLine.quote : null;
@@ -261,7 +261,7 @@ function UvStickersEditor({ editLine }: { editLine: CartLine | null }) {
           <div className="flex flex-col gap-2 text-sm text-(--muted)">
             <span>{shopTr("readyIn")}</span>
             <span>{shopTr("deliveryLine")}</span>
-            <span>{paymentLive ? shopTr("paymentLine") : shopTr("paymentLineSoon")}</span>
+            <span>{shopTr(paymentLive ? "paymentLine" : payOnDelivery ? "paymentLineOnDelivery" : "paymentLineSoon")}</span>
           </div>
         </div>
       </div>

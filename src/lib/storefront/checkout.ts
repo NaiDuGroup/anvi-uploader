@@ -114,7 +114,7 @@ export interface CheckoutCreated {
 }
 
 export type CheckoutOutcome =
-  | { kind: "redirect"; created: CheckoutCreated; url: string }
+  | { kind: "redirect"; created: CheckoutCreated; url: string; onDelivery?: true }
   | { kind: "payment_soon"; orderNumber: string; token: string }
   | {
       kind: "line_unavailable";
@@ -255,7 +255,11 @@ export function checkoutOutcome(status: number, body: unknown): CheckoutOutcome 
   if ((status === 201 || status === 200) && typeof b.publicToken === "string") {
     const created = b as unknown as CheckoutCreated;
     const url: unknown = isObj(b.payment) ? b.payment.redirectUrl : null;
-    if (typeof url === "string" && url) return { kind: "redirect", created, url };
+    if (typeof url === "string" && url) {
+      // Pay on delivery: `url` is the order page (no payment to start).
+      const onDelivery: boolean = isObj(b.payment) && b.payment.provider === "on_delivery";
+      return { kind: "redirect", created, url, ...(onDelivery ? { onDelivery: true as const } : {}) };
+    }
     return { kind: "payment_soon", orderNumber: String(created.orderNumber ?? ""), token: created.publicToken };
   }
   if (status === 503 && b.error === "payment_unavailable") return { kind: "payment_unavailable" };

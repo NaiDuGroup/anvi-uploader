@@ -1,5 +1,5 @@
 import type { ShopPaymentProvider } from "./constants";
-import { isRealPaymentConfigured, isTestPaymentAllowed } from "./paymentMode";
+import { isRealPaymentConfigured, isTestPaymentAllowed, type ShopPaymentOpts } from "./paymentMode";
 import {
   PAYNET_ATTEMPTS,
   createPaynetOrder,
@@ -26,6 +26,9 @@ import { shopOrigin } from "@/lib/storefront/shopHost";
  * - `test`  — fake provider for the pilot (see {@link isTestPaymentEnabled}):
  *             the customer lands on `/shop/pay/test?token=…` and a button
  *             calls `POST /api/shop/pay/test`.
+ * - `on_delivery` — no online payment («Оплата только при получении», see
+ *             `payOnDelivery.ts`): the order goes to work at once and the
+ *             customer lands on its page; paid at hand-over (staff mark it paid).
  * - `paynet` — Paynet (paynet.md) hosted card payment page, see {@link paynetProvider}
  *             and `paynet.ts`; settled by the notification route, the order page
  *             check and the reconcile cron (`paynetSettle.ts`).
@@ -177,16 +180,29 @@ export const paynetProvider: PaymentProvider = {
   },
 };
 
+/** Pay on delivery: nothing to start, the customer goes to the order page. */
+export const onDeliveryPaymentProvider: PaymentProvider = {
+  name: "on_delivery",
+  async startPayment(input) {
+    return {
+      provider: "on_delivery",
+      redirectUrl: `/shop/comanda/${encodeURIComponent(input.publicToken)}`,
+    };
+  },
+};
+
 /**
  * The provider to use for a new checkout, or null when the caller cannot pay
  * (checkout then answers 503 `payment_unavailable` BEFORE creating an order).
- * A configured real provider (Paynet) wins; otherwise the test provider when
+ * «Оплата только при получении» (`opts.payOnDelivery`) wins over everything;
+ * then a configured real provider (Paynet); otherwise the test provider when
  * allowed for this caller (environment-wide, or `tester` = tester pass / staff).
  */
 export function resolvePaymentProvider(
   env: Env = process.env,
-  opts: { tester?: boolean } = {},
+  opts: ShopPaymentOpts = {},
 ): PaymentProvider | null {
+  if (opts.payOnDelivery) return onDeliveryPaymentProvider;
   if (isRealPaymentConfigured(env)) return paynetProvider;
   if (isTestPaymentAllowed(env, opts)) return testPaymentProvider;
   return null;

@@ -148,7 +148,7 @@ function initialFile(editLine: CartLine | null): FileState | null {
 }
 
 function LfEditor({ data, editLine }: { data: ShopLfPageData; editLine: CartLine | null }) {
-  const { t, lang, href, paymentLive } = useShopLang();
+  const { t, lang, href, paymentLive, payOnDelivery } = useShopLang();
   const lt: LfT = useMemo(() => lfText(lang), [lang]);
   const cm: string = t("lfCm");
   const router = useRouter();
@@ -717,7 +717,7 @@ function LfEditor({ data, editLine }: { data: ShopLfPageData; editLine: CartLine
             ) : null}
             <span>{t("readyIn")}</span>
             <span>{t("deliveryLine")}</span>
-            <span>{paymentLive ? t("paymentLine") : t("paymentLineSoon")}</span>
+            <span>{t(paymentLive ? "paymentLine" : payOnDelivery ? "paymentLineOnDelivery" : "paymentLineSoon")}</span>
           </div>
         </div>
       </div>

@@ -11,11 +11,13 @@ type ShopCtx = {
   href: (path: string) => string;
   /** A real card payment is configured (until then the shop says «plată online — în curând»). */
   paymentLive: boolean;
+  /** «Оплата только при получении» is on: the shop says «plata la primire» instead. */
+  payOnDelivery: boolean;
   /** A storefront account is signed in (`shop_session`): header icon, bottom nav → `/cont/comenzi`. */
   signedIn: boolean;
 };
 
-const Ctx = createContext<ShopCtx>({ lang: "ro", t: shopT("ro"), base: "/shop", href: (p) => p, paymentLive: false, signedIn: false });
+const Ctx = createContext<ShopCtx>({ lang: "ro", t: shopT("ro"), base: "/shop", href: (p) => p, paymentLive: false, payOnDelivery: false, signedIn: false });
 
 /**
  * Language + link base of the storefront. `base` is "" on a shop host
@@ -26,18 +28,20 @@ export function ShopLangProvider({
   lang,
   base = "/shop",
   paymentLive = false,
+  payOnDelivery = false,
   signedIn = false,
   children,
 }: {
   lang: ShopLang;
   base?: "" | "/shop";
   paymentLive?: boolean;
+  payOnDelivery?: boolean;
   signedIn?: boolean;
   children: React.ReactNode;
 }) {
   const value = useMemo(
-    () => ({ lang, t: shopT(lang), base, href: (p: string) => shopHref(base, p), paymentLive, signedIn }),
-    [lang, base, paymentLive, signedIn],
+    () => ({ lang, t: shopT(lang), base, href: (p: string) => shopHref(base, p), paymentLive, payOnDelivery, signedIn }),
+    [lang, base, paymentLive, payOnDelivery, signedIn],
   );
   // `<html lang>` follows the shop language after a client-side switch (the root layout sets it on load).
   useEffect(() => {

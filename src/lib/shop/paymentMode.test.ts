@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { isRealPaymentConfigured, isTestPaymentAllowed, isTestPaymentEnabled, shopPaymentState } from "./paymentMode";
-import { paynetProvider, PaymentNotConfiguredError, resolvePaymentProvider, testPaymentProvider } from "./payment";
+import { onDeliveryPaymentProvider, paynetProvider, PaymentNotConfiguredError, resolvePaymentProvider, testPaymentProvider } from "./payment";
 
 const PAYNET = {
   SHOP_PAYMENT_MODE: "paynet",
@@ -92,5 +92,33 @@ describe("resolvePaymentProvider", () => {
       redirectUrl: "/shop/pay/test?token=tok_1",
     });
     await expect(paynetProvider.startPayment(input)).rejects.toBeInstanceOf(PaymentNotConfiguredError);
+  });
+});
+
+describe("pay on delivery («Оплата только при получении»)", () => {
+  it("wins over Paynet, the test provider and a tester pass", () => {
+    expect(shopPaymentState(PAYNET, { payOnDelivery: true })).toBe("on_delivery");
+    expect(shopPaymentState({ NODE_ENV: "development" }, { payOnDelivery: true, tester: true })).toBe("on_delivery");
+    expect(shopPaymentState({ NODE_ENV: "production", VERCEL_ENV: "production" }, { payOnDelivery: true })).toBe("on_delivery");
+    expect(resolvePaymentProvider(PAYNET, { payOnDelivery: true })).toBe(onDeliveryPaymentProvider);
+    expect(resolvePaymentProvider({ NODE_ENV: "development" }, { payOnDelivery: true })).toBe(onDeliveryPaymentProvider);
+    expect(isTestPaymentAllowed({ NODE_ENV: "development" }, { payOnDelivery: true })).toBe(false);
+  });
+  it("off: everything as before", () => {
+    expect(shopPaymentState(PAYNET, { payOnDelivery: false })).toBe("real");
+    expect(resolvePaymentProvider(PAYNET, { payOnDelivery: false })).toBe(paynetProvider);
+    expect(resolvePaymentProvider({ NODE_ENV: "development" }, { payOnDelivery: false })).toBe(testPaymentProvider);
+  });
+  it("starts nothing: the customer goes to the order page", async () => {
+    const r = await onDeliveryPaymentProvider.startPayment({
+      orderId: "o",
+      orderNumber: 5,
+      publicToken: "tok/1",
+      amountMdl: 100,
+      customer: { name: "A", phone: "1" },
+      locale: "ro",
+      description: "x",
+    });
+    expect(r).toEqual({ provider: "on_delivery", redirectUrl: "/shop/comanda/tok%2F1" });
   });
 });

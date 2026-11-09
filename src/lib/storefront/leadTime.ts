@@ -48,7 +48,25 @@ export function cartLeadTime(quotes: readonly ShopQuoteLine[], labels: ShopLineL
 }
 
 /** «✓ Gata în 6–7 zile lucrătoare» (product page), «… după plată.» (checkout), «Termen de execuție: …» (order page). */
-export function leadTimeText(lead: ShopLeadTime, t: ShopT, where: "product" | "checkout" | "order"): string {
+/** «… after payment» → «… after the order is placed» (pay on delivery: work starts at once). */
+const AFTER_PAYMENT: readonly [RegExp, string][] = [
+  [/ după plată\.$/, " de la plasarea comenzii."],
+  [/ после оплаты\.$/, " после оформления заказа."],
+  [/ after payment\.$/, " after you place the order."],
+];
+
+export function leadTimeText(
+  lead: ShopLeadTime,
+  t: ShopT,
+  where: "product" | "checkout" | "order",
+  opts: { payOnDelivery?: boolean } = {},
+): string {
+  const text = leadTimeTextRaw(lead, t, where);
+  if (!opts.payOnDelivery) return text;
+  return AFTER_PAYMENT.reduce((s, [re, to]) => s.replace(re, to), text);
+}
+
+function leadTimeTextRaw(lead: ShopLeadTime, t: ShopT, where: "product" | "checkout" | "order"): string {
   if (lead.to == null) {
     const key = where === "product" ? "readyFromDays" : where === "checkout" ? "checkoutReadyFrom" : "orderReadyFrom";
     return t(key, { n: lead.from });

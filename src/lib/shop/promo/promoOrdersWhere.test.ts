@@ -19,7 +19,7 @@ describe("promo orders where-clauses", () => {
       deletedAt: null,
       NOT: { paymentProvider: "test" },
       paymentStatus: { not: "paid" },
-      createdAt: { gte: new Date(NOW.getTime() - PROMO_PENDING_HOLD_MS) },
+      OR: [{ createdAt: { gte: new Date(NOW.getTime() - PROMO_PENDING_HOLD_MS) } }, { paymentProvider: "on_delivery" }],
     });
   });
 });

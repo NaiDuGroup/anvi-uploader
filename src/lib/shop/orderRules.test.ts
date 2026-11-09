@@ -21,6 +21,12 @@ describe("deliveredAutoMarksPaid", () => {
     expect(deliveredAutoMarksPaid({ source: "shop", clientIsDealer: true })).toBe(false);
   });
 
+  it("pay-on-delivery storefront orders are marked paid on DELIVERED (paid at hand-over)", () => {
+    expect(deliveredAutoMarksPaid({ source: "shop", paymentProvider: "on_delivery" })).toBe(true);
+    expect(deliveredAutoMarksPaid({ source: "shop", paymentProvider: "paynet" })).toBe(false);
+    expect(deliveredAutoMarksPaid({ source: "shop", paymentProvider: "on_delivery", clientIsDealer: true })).toBe(false);
+  });
+
   it("non-dealer clients are still marked paid on DELIVERED", () => {
     expect(deliveredAutoMarksPaid({ source: "studio", clientIsDealer: false })).toBe(true);
     expect(deliveredAutoMarksPaid({ source: "cabinet", clientIsDealer: null })).toBe(true);
@@ -56,6 +62,11 @@ describe("storefront order files", () => {
   it("releases files once DELIVERED or cancelled (trash), but not before 14 days from creation", () => {
     expect(shopOrderFilesReleasable(order({ status: "DELIVERED" }), now)).toBe(true);
     expect(shopOrderFilesReleasable(order({ deletedAt: now }), now)).toBe(true);
+    // A pay-on-delivery order is worked on unpaid: its files are never «abandoned».
+    const pod = { paymentStatus: "pending", isPaid: false, paymentProvider: "on_delivery" };
+    expect(shopOrderFilesReleasable(order(pod), now)).toBe(false);
+    expect(shopOrderFilesReleasable(order({ ...pod, shopCustomerId: "c1" }), now)).toBe(false);
+    expect(shopOrderFilesReleasable(order({ ...pod, paymentProvider: "paynet" }), now)).toBe(true);
     expect(shopOrderFilesReleasable(order({ status: "DELIVERED", createdAt: new Date(now.getTime() - 3 * DAY) }), now)).toBe(false);
   });
 

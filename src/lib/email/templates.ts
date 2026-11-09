@@ -33,6 +33,8 @@ export interface ShopEmailData {
   pickupAddress?: string | null;
   /** Minutes the login link / code stays valid. */
   ttlMinutes?: number;
+  /** `order_received`: paid at hand-over (no online payment) — no «Plătește» button. */
+  payOnDelivery?: boolean;
 }
 
 export interface RenderedEmail {
@@ -73,6 +75,11 @@ const S = {
     ro: "Am primit comanda nr. {number} în valoare de {total}. O începem imediat ce este achitată.",
     ru: "Мы получили заказ № {number} на сумму {total}. Начнём работу сразу после оплаты.",
     en: "We've received order no. {number} for {total}. We'll start as soon as it's paid.",
+  },
+  receivedTextOnDelivery: {
+    ro: "Am primit comanda nr. {number} în valoare de {total} și o luăm în lucru. Plata se face la primire — numerar sau cu cardul.",
+    ru: "Мы получили заказ № {number} на сумму {total} и берём его в работу. Оплата при получении — наличными или картой.",
+    en: "We've received order no. {number} for {total} and are starting on it. You pay on delivery — cash or card.",
   },
   payButton: { ro: "Plătește", ru: "Оплатить", en: "Pay" },
   accountText: {
@@ -236,8 +243,14 @@ export function renderShopEmail(template: ShopEmailTemplate, lang: ShopLang, d: 
     case "order_received":
       subject = t("receivedSubject");
       title = subject;
-      blocks.push(hello, { kind: "p", text: t("receivedText") }, ...discount);
-      if (d.orderUrl) blocks.push({ kind: "button", label: S.payButton[lang], url: d.orderUrl, gold: true });
+      blocks.push(hello, { kind: "p", text: t(d.payOnDelivery ? "receivedTextOnDelivery" : "receivedText") }, ...discount);
+      if (d.orderUrl) {
+        blocks.push(
+          d.payOnDelivery
+            ? { kind: "button", label: S.orderButton[lang], url: d.orderUrl }
+            : { kind: "button", label: S.payButton[lang], url: d.orderUrl, gold: true },
+        );
+      }
       if (d.loginUrl) {
         blocks.push({ kind: "p", text: t("accountText") }, { kind: "button", label: S.accountButton[lang], url: d.loginUrl });
       }

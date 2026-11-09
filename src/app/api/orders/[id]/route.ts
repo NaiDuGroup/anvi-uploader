@@ -247,9 +247,14 @@ export async function PATCH(
               )
             )?.isDealer === true
           : false;
-      if (!oldOrder.isPaid && deliveredAutoMarksPaid({ source: oldOrder.source, clientIsDealer })) {
+      if (
+        !oldOrder.isPaid &&
+        deliveredAutoMarksPaid({ source: oldOrder.source, paymentProvider: oldOrder.paymentProvider, clientIsDealer })
+      ) {
         data.isPaid = true;
         data.paidAt = new Date();
+        // Pay-on-delivery storefront order: paid at hand-over.
+        if (oldOrder.source === "shop" && oldOrder.paymentStatus !== "paid") data.paymentStatus = "paid";
         logEntries.push({
           orderId: id,
           userId: user.id,

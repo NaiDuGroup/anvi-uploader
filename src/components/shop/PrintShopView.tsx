@@ -152,7 +152,7 @@ function choiceClass(active: boolean): string {
 }
 
 function PrintShopEditor({ product, editLine }: { product: PsProduct; editLine: CartLine | null }) {
-  const { lang, href, paymentLive, t: shopTr } = useShopLang();
+  const { lang, href, paymentLive, payOnDelivery, t: shopTr } = useShopLang();
   const t: PsT = useMemo(() => psT(lang), [lang]);
   const router = useRouter();
   const editQuote: PsQuoteLine | null =
@@ -539,7 +539,7 @@ function PrintShopEditor({ product, editLine }: { product: PsProduct; editLine: 
           <div className="flex flex-col gap-2 text-sm text-(--muted)">
             <span>{product.leadTime ? product.leadTime[lang] : shopTr("readyIn")}</span>
             <span>{shopTr("deliveryLine")}</span>
-            <span>{paymentLive ? shopTr("paymentLine") : shopTr("paymentLineSoon")}</span>
+            <span>{shopTr(paymentLive ? "paymentLine" : payOnDelivery ? "paymentLineOnDelivery" : "paymentLineSoon")}</span>
           </div>
         </div>
       </div>

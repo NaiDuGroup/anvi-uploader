@@ -114,7 +114,7 @@ export function visibleRecentOrders(list: readonly RecentOrder[]): RecentOrder[]
 /** Status + amount of a remembered order, from its status answer (shown in «Comenzile mele»). */
 export type RecentOrderInfo = { status: ShopOrderView["status"]; total: number };
 
-const ORDER_STATUSES: ReadonlySet<string> = new Set(["pending_payment", "paid", "in_production", "shipped", "delivered", "issue"]);
+const ORDER_STATUSES: ReadonlySet<string> = new Set(["pending_payment", "accepted", "paid", "in_production", "shipped", "delivered", "issue"]);
 
 /** Status + amount from `GET /api/shop/order/[token]`; null when either is missing. */
 export function orderInfo(body: { status?: unknown; total?: unknown } | null): RecentOrderInfo | null {

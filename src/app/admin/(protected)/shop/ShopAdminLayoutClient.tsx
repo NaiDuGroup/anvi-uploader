@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { BarChart3, Building2, TicketPercent } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
+import ShopPayOnDeliveryToggle from "./ShopPayOnDeliveryToggle";
 
 const TABS = [
   { href: "/admin/shop/report", key: "subTabReport" as const, Icon: BarChart3 },
@@ -13,7 +14,7 @@ const TABS = [
   { href: "/admin/shop/corporate-requests", key: "subTabCorporate" as const, Icon: Building2 },
 ];
 
-export default function ShopAdminLayoutClient({ children }: { children: ReactNode }) {
+export default function ShopAdminLayoutClient({ children, payOnDelivery }: { children: ReactNode; payOnDelivery: boolean }) {
   const pathname = usePathname();
   const { t } = useLanguageStore();
   const navRef = useRef<HTMLElement>(null);
@@ -62,6 +63,7 @@ export default function ShopAdminLayoutClient({ children }: { children: ReactNod
           </nav>
         </div>
       </div>
+      <ShopPayOnDeliveryToggle initial={payOnDelivery} />
       {children}
     </div>
   );

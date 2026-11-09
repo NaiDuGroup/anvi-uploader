@@ -39,6 +39,15 @@ beforeEach(() => {
 });
 
 describe("restartShopPayment («Plătește acum»)", () => {
+  it("pay on delivery: 409 pay_on_delivery while the switch is on, or for an on-delivery order", async () => {
+    expect(await restartShopPayment("tok", "ro", DEV, { ...OK, payOnDelivery: true })).toEqual({
+      status: 409,
+      body: { error: "pay_on_delivery" },
+    });
+    db.order.findUnique.mockResolvedValue({ ...order, paymentProvider: "on_delivery" });
+    expect((await restartShopPayment("tok", "ro", DEV, OK)).body).toEqual({ error: "pay_on_delivery" });
+  });
+
   it("sends an unpaid test order back to the test pay page", async () => {
     const r = await restartShopPayment("tok", "ro", DEV, OK);
     expect(r).toEqual({ status: 200, body: { payment: { provider: "test", redirectUrl: "/shop/pay/test?token=tok" } } });

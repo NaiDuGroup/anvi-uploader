@@ -87,6 +87,7 @@ export async function notifyShopOrder(orderId: string, event: ShopOrderEvent, op
         shopCustomerId: true,
         trackingNumber: true,
         deliveryMethod: true,
+        paymentProvider: true,
       },
     });
     if (!o || o.source !== "shop" || o.deletedAt || !o.customerEmail) return;
@@ -119,6 +120,7 @@ export async function notifyShopOrder(orderId: string, event: ShopOrderEvent, op
       loginUrl,
       trackingNumber: o.trackingNumber,
       pickupAddress,
+      payOnDelivery: o.paymentProvider === "on_delivery",
     });
     await sendEmail({
       to: o.customerEmail,

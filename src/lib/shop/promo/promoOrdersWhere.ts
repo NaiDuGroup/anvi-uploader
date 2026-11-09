@@ -21,6 +21,7 @@ export function promoHeldOrdersWhere(promoCodeId: string | { in: string[] }, now
   return {
     ...promoRealOrdersWhere(promoCodeId),
     paymentStatus: { not: "paid" },
-    createdAt: { gte: new Date(now.getTime() - PROMO_PENDING_HOLD_MS) },
+    // A pay-on-delivery order is worked on unpaid: it holds its code until paid (then `usesCount`).
+    OR: [{ createdAt: { gte: new Date(now.getTime() - PROMO_PENDING_HOLD_MS) } }, { paymentProvider: "on_delivery" }],
   };
 }

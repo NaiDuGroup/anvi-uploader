@@ -18,6 +18,8 @@ vi.mock("@/lib/shop/checkout", () => checkout);
 vi.mock("@/lib/shop/account/session", () => ({ getShopCustomer: vi.fn(async () => null) }));
 vi.mock("@/lib/email/shopNotify", () => ({ notifyShopOrder: vi.fn(async () => {}) }));
 vi.mock("@/lib/notify/staffAlerts", () => ({ alertShopOrderCreated: vi.fn(async () => {}) }));
+const pod = vi.hoisted(() => ({ isShopPayOnDelivery: vi.fn(async () => false) }));
+vi.mock("@/lib/shop/payOnDelivery", () => pod);
 
 import { POST as linkRoute } from "@/app/api/admin/shop-tester-link/route";
 import { POST as checkoutRoute } from "@/app/api/shop/checkout/route";
@@ -96,7 +98,7 @@ describe("POST /api/shop/checkout passes the tester flag", () => {
 
   it("anonymous → tester false; pass cookie → true; staff → true", async () => {
     await post();
-    expect(checkout.runShopCheckout.mock.calls[0]![2]).toEqual({ tester: false, customerId: null });
+    expect(checkout.runShopCheckout.mock.calls[0]![2]).toEqual({ tester: false, payOnDelivery: false, customerId: null });
 
     const opened = await testerRoute(
       get(`https://anvi.md/shop/tester?token=${encodeURIComponent((await (async () => {
@@ -107,11 +109,17 @@ describe("POST /api/shop/checkout passes the tester flag", () => {
     );
     jar.values.set(SHOP_TESTER_COOKIE, opened.cookies.get(SHOP_TESTER_COOKIE)!.value);
     await post();
-    expect(checkout.runShopCheckout.mock.calls[1]![2]).toEqual({ tester: true, customerId: null });
+    expect(checkout.runShopCheckout.mock.calls[1]![2]).toEqual({ tester: true, payOnDelivery: false, customerId: null });
 
     jar.values.clear();
     auth.getSessionUser.mockResolvedValue({ id: "u", role: "admin" });
     await post();
-    expect(checkout.runShopCheckout.mock.calls[2]![2]).toEqual({ tester: true, customerId: null });
+    expect(checkout.runShopCheckout.mock.calls[2]![2]).toEqual({ tester: true, payOnDelivery: false, customerId: null });
+  });
+
+  it("passes the «Оплата только при получении» switch to the checkout", async () => {
+    pod.isShopPayOnDelivery.mockResolvedValueOnce(true);
+    await post();
+    expect(checkout.runShopCheckout.mock.calls[0]![2]).toEqual({ tester: false, payOnDelivery: true, customerId: null });
   });
 });

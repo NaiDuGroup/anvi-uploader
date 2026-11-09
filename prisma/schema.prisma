@@ -1312,6 +1312,9 @@ model CompanyProfile {
   studioInfo                Json?     @map("studio_info")
   /// «Доплата за срочность (дилеры)» in MDL: global dealer urgency fee (0 = free). Per-dealer override on the client card.
   dealerUrgencyFeeMdl       Decimal   @default(0) @map("dealer_urgency_fee_mdl") @db.Decimal(12, 2)
+  /// «Оплата только при получении (временно)» (Сайт, super admin): the storefront takes no online
+  /// payment, orders go straight to work and are paid on delivery. Wins over Paynet / test payment.
+  shopPayOnDelivery         Boolean   @default(true) @map("shop_pay_on_delivery")
   createdAt                 DateTime  @default(now()) @map("created_at")
   updatedAt                 DateTime  @updatedAt @map("updated_at")
   invoices                  Invoice[]

@@ -166,7 +166,8 @@ describe("applyShopPromo — server checks", () => {
     });
     const where = db.order.count.mock.calls[0]![0].where;
     expect(where).toMatchObject({ promoCodeId: "promo-1", deletedAt: null, paymentStatus: { not: "paid" } });
-    expect(where.createdAt.gte.getTime()).toBe(NOW.getTime() - PROMO_PENDING_HOLD_MS);
+    expect(where.OR[0].createdAt.gte.getTime()).toBe(NOW.getTime() - PROMO_PENDING_HOLD_MS);
+    expect(where.OR[1]).toEqual({ paymentProvider: "on_delivery" });
     db.order.count.mockResolvedValue(0);
     await expect(applyShopPromo({ code: "LANSARE10", lines, deliveryPrice: 45, now: NOW })).resolves.toMatchObject({ ok: true });
   });
@@ -192,6 +193,7 @@ describe("applyShopPromo — server checks", () => {
       OR: [
         { paymentStatus: "paid" },
         { paymentStatus: { not: "paid" }, createdAt: { gte: new Date(NOW.getTime() - PROMO_PENDING_HOLD_MS) } },
+        { paymentStatus: { not: "paid" }, paymentProvider: "on_delivery" },
       ],
     });
   });

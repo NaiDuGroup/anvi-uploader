@@ -162,6 +162,11 @@ export function formatShopOrderCreated(o: ShopOrderAlert): string {
   return [`🛒 <b>Новый заказ с сайта № ${o.orderNumber}</b> (ещё не оплачен)`, ...shopOrderBody(o)].join("\n");
 }
 
+/** «🛒 Новый заказ с сайта № 123 — оплата при получении» (goes straight to work). */
+export function formatShopOrderOnDelivery(o: ShopOrderAlert): string {
+  return [`🛒 <b>Новый заказ с сайта № ${o.orderNumber}</b> — оплата при получении`, ...shopOrderBody(o)].join("\n");
+}
+
 export interface CorporateRequestAlert {
   number: number;
   companyName: string;

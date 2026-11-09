@@ -211,7 +211,7 @@ export function ProductView({
 }
 
 function ProductEditor({ product, editLine, extras }: { product: ShopProduct; editLine: CartLine | null; extras: ProductViewExtras }) {
-  const { t, lang, href, paymentLive } = useShopLang();
+  const { t, lang, href, paymentLive, payOnDelivery } = useShopLang();
   const router = useRouter();
   const init = useMemo(() => initialState(product, editLine), [product, editLine]);
 
@@ -660,7 +660,7 @@ function ProductEditor({ product, editLine, extras }: { product: ShopProduct; ed
               </span>
             ) : null}
             <span>{t("deliveryLine")}</span>
-            <span>{paymentLive ? t("paymentLine") : t("paymentLineSoon")}</span>
+            <span>{t(paymentLive ? "paymentLine" : payOnDelivery ? "paymentLineOnDelivery" : "paymentLineSoon")}</span>
           </div>
         </div>
       </div>

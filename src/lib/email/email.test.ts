@@ -98,6 +98,15 @@ describe("templates", () => {
     expect(renderShopEmail("order_shipped", "ro", { ...data, trackingNumber: null }).text).not.toContain("EVS123");
     expect(renderShopEmail("ready_pickup", "ru", data).text).toContain("str. Test 1");
   });
+
+  it("order received, pay on delivery: no «Pay» button, says how to pay", () => {
+    const ro = renderShopEmail("order_received", "ro", { ...data, payOnDelivery: true });
+    expect(ro.text).toContain("Plata se face la primire");
+    expect(ro.text).toContain("Vezi comanda");
+    expect(ro.text).not.toContain("Plătește");
+    expect(renderShopEmail("order_received", "ru", { ...data, payOnDelivery: true }).text).toContain("Оплата при получении");
+    expect(renderShopEmail("order_received", "ro", data).text).toContain("Plătește");
+  });
 });
 
 describe("adminUpdateShopEvents", () => {

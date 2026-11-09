@@ -50,7 +50,7 @@ export function shopLayoutMetadata(cleanPath: string | null, env: Env = process.
  */
 export function shopTestBannerKeys(
   launched: boolean,
-  paymentState: "real" | "test" | "tester" | "unavailable",
+  paymentState: "on_delivery" | "real" | "test" | "tester" | "unavailable",
 ): ("closedTestBanner" | "testerMode")[] {
   const tester: boolean = paymentState === "tester";
   if (!launched) return tester ? ["closedTestBanner", "testerMode"] : ["closedTestBanner"];

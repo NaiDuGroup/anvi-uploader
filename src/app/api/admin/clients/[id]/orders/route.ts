@@ -49,6 +49,7 @@ export async function GET(
       notes: true,
       source: true,
       paymentStatus: true,
+      paymentProvider: true,
       urgencyFee: true,
       urgencyByDealerAt: true,
     },

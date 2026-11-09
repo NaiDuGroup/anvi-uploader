@@ -483,6 +483,25 @@ describe("runShopCheckout — order", () => {
     expect(clients.findClientIdByOrderPhone).not.toHaveBeenCalled();
   });
 
+  it("pay on delivery (switch on) in production: a real order that goes to work, no payment started", async () => {
+    const res = await runShopCheckout(body(), { ...PROD, SHOP_PAYMENT_MODE: "paynet" }, { payOnDelivery: true });
+    expect(res.status).toBe(201);
+    expect(res.body.payment).toEqual({ provider: "on_delivery", redirectUrl: "/shop/comanda/tok_abc" });
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.order).toMatchObject({ status: "NEW", paymentStatus: "pending", paymentProvider: "on_delivery", clientId: "client-7" });
+    expect(args.skipStock).toBe(false);
+    expect(args.order.notes.startsWith("Сайт · Оплата при получении · Курьер по Кишинёву")).toBe(true);
+    expect(db.order.update).not.toHaveBeenCalled();
+  });
+
+  it("pay on delivery wins over the test provider and a tester pass", async () => {
+    const res = await runShopCheckout(body(), DEV, { tester: true, payOnDelivery: true });
+    expect(res.body.payment).toEqual({ provider: "on_delivery", redirectUrl: "/shop/comanda/tok_abc" });
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.order.paymentProvider).toBe("on_delivery");
+    expect(args.order.notes.startsWith("[ТЕСТ")).toBe(false);
+  });
+
   it("503 payment_not_configured when a selected provider fails to start (order kept)", async () => {
     pay.override = () => paynetProvider;
     const res = await runShopCheckout(body(), PROD);

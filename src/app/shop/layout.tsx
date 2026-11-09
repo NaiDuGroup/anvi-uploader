@@ -19,6 +19,7 @@ import { SHOP_PATH_HEADER, isShopLaunched } from "@/lib/storefront/shopHost";
 import { shopLayoutMetadata, shopTestBannerKeys } from "@/lib/storefront/shopMetadata";
 import { shopPaymentState } from "@/lib/shop/paymentMode";
 import { hasShopTesterAccess } from "@/lib/shop/testerAccess";
+import { isShopPayOnDelivery } from "@/lib/shop/payOnDelivery";
 import { getShopCustomer } from "@/lib/shop/account/session";
 import "./shop.css";
 
@@ -43,7 +44,10 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const t = shopT(lang);
   const base = await getShopBase();
   const launched = isShopLaunched();
-  const paymentState = shopPaymentState(process.env, { tester: await hasShopTesterAccess() });
+  const paymentState = shopPaymentState(process.env, {
+    tester: await hasShopTesterAccess(),
+    payOnDelivery: await isShopPayOnDelivery(),
+  });
   const bannerKeys = shopTestBannerKeys(launched, paymentState);
   const signedIn = (await getShopCustomer()) != null;
   const nav = await loadShopNav(lang);
@@ -55,7 +59,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       >
         {t("skipToContent")}
       </a>
-      <ShopLangProvider lang={lang} base={base} paymentLive={paymentState === "real"} signedIn={signedIn}>
+      <ShopLangProvider lang={lang} base={base} paymentLive={paymentState === "real"} payOnDelivery={paymentState === "on_delivery"} signedIn={signedIn}>
         {bannerKeys.length ? (
           <p
             role="note"

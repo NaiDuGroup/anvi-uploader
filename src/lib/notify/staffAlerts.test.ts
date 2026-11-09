@@ -79,10 +79,17 @@ describe("shop order alerts", () => {
 
   it("unpaid alerts only behind the flag", async () => {
     await alertShopOrderCreated("o1", {});
-    expect(db.order.findUnique).not.toHaveBeenCalled();
     expect(tg.sendTelegram).not.toHaveBeenCalled();
     await alertShopOrderCreated("o1", { TELEGRAM_ALERT_UNPAID_ORDERS: "1" });
     expect((tg.sendTelegram.mock.calls[0] as unknown as [string])[0]).toContain("ещё не оплачен");
+  });
+
+  it("pay-on-delivery orders always alert (they go straight to work)", async () => {
+    db.order.findUnique.mockResolvedValue({ ...ORDER, paymentProvider: "on_delivery" });
+    await alertShopOrderCreated("o1", {});
+    const text = (tg.sendTelegram.mock.calls[0] as unknown as [string])[0];
+    expect(text).toContain("оплата при получении");
+    expect(text).not.toContain("ещё не оплачен");
   });
 
   it("admin origin can be overridden", () => {
