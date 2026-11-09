@@ -147,14 +147,19 @@ export function ShopOrderBadge({ order }: { order: ShopOrderFields }) {
         {l.site}
       </span>
       <span
-        className={cn(pill, "ring-1 ring-inset", tone.pill)}
+        className={cn(
+          // Wraps inside the pill when the «Заказ» column is narrow (1024px + Цех panel) instead of spilling over
+          // the phone column; rounded-lg ≈ fully round on one line, soft corners on two.
+          "inline-flex max-w-full items-start gap-1 rounded-lg px-1.5 py-0.5 text-[10px] font-semibold leading-3 ring-1 ring-inset",
+          tone.pill,
+        )}
         title={pn ? `${l.payment[ps] ?? ps} · ${pn.title}` : (l.payment[ps] ?? ps)}
       >
-        <span className={cn("h-1.5 w-1.5 rounded-full", tone.dot)} aria-hidden />
-        {l.payment[ps] ?? ps}
+        <span className={cn("mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full", tone.dot)} aria-hidden />
+        <span className="min-w-0">{l.payment[ps] ?? ps}</span>
       </span>
       {pn && (
-        <span className="whitespace-nowrap text-[10px] tabular-nums text-gray-400" title={pn.title}>
+        <span className="max-w-full truncate text-[10px] tabular-nums text-gray-400" title={pn.title}>
           {pn.short}
         </span>
       )}

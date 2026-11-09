@@ -2415,18 +2415,18 @@ const OrderTable = memo(function OrderTable({
           <colgroup>
             {isWorkshop ? (
               <>
-                <col style={{ width: "11%" }} />
+                <col style={{ width: "13%" }} />
                 <col style={{ width: "17%" }} />
-                <col style={{ width: "29%" }} />
+                <col style={{ width: "27%" }} />
                 <col style={{ width: "16%" }} />
                 <col style={{ width: "19%" }} />
                 <col style={{ width: "8%" }} />
               </>
             ) : (
               <>
-                <col style={{ width: "11%" }} />
+                <col style={{ width: "13%" }} />
                 <col style={{ width: "15%" }} />
-                <col style={{ width: "29%" }} />
+                <col style={{ width: "27%" }} />
                 <col style={{ width: "13%" }} />
                 <col style={{ width: "17%" }} />
                 <col style={{ width: "15%" }} />
@@ -2534,11 +2534,11 @@ const OrderTable = memo(function OrderTable({
                 </td>
                 <td className="px-3 py-3 align-middle text-sm overflow-hidden">
                   {isWorkshop ? (
-                    <a href={`tel:${order.phone}`} className="font-medium text-blue-600 hover:underline">
+                    <a href={`tel:${order.phone}`} className="font-medium text-blue-600 hover:underline break-all">
                       {order.phone}
                     </a>
                   ) : (
-                    <span>{order.phone}</span>
+                    <span className="break-all">{order.phone}</span>
                   )}
                   {order.clientName && (
                     <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
