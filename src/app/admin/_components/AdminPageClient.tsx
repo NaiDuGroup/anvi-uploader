@@ -2486,7 +2486,7 @@ const OrderTable = memo(function OrderTable({
                 <span className="@max-[56rem]/orders:hidden">{t.common.createdBySentBy}</span>
               </th>
               <SortableTh col="status" current={sortCol} dir={sortDir} onSort={toggleSort}>{t.common.status}</SortableTh>
-              <th className="px-3 py-3">{t.common.actions}</th>
+              <th className="px-3 py-3 @max-[56rem]/orders:px-1.5">{t.common.actions}</th>
             </tr>
           </thead>
           <tbody>
@@ -2702,7 +2702,7 @@ const OrderTable = memo(function OrderTable({
                     )}
                   </div>
                 </td>
-                <td className="px-3 py-3 align-middle">
+                <td className="px-3 py-3 align-middle @max-[56rem]/orders:px-1.5">
                   <div className="flex flex-wrap items-center gap-0.5">
                     {/*
                       Both admin and workshop can toggle the rush flag — cell
