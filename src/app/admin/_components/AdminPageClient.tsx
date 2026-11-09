@@ -1414,6 +1414,22 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
 
   const renderFileRow = (f: AdminOrderFileRow, lfQuantity?: number) => {
     const isLink = isExternalUrl(f.fileUrl);
+    // Wide-format copies badge: beside the name on a roomy cell, under the
+    // name when the files cell is narrow so the right icons never clip.
+    const lfCopiesBadge = (className: string) =>
+      f.paperType === "large_format" ? (
+        <span
+          className={cn(
+            "shrink-0 items-center gap-1 rounded-md border border-sky-300 bg-sky-100 px-2 py-1 text-xs font-bold tabular-nums text-sky-900 leading-none shadow-sm",
+            className,
+          )}
+          title={t.admin.lfFilePrintCopiesBadge(lfQuantity ?? f.copies)}
+          aria-label={t.admin.lfFilePrintCopiesBadge(lfQuantity ?? f.copies)}
+        >
+          <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {t.admin.lfFilePrintCopiesBadge(lfQuantity ?? f.copies)}
+        </span>
+      ) : null;
     return (
       <div key={f.id} className="flex items-center gap-1.5">
         {isLink ? (
@@ -1456,19 +1472,11 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 <InLibraryBadge fileId={f.id} fileUrl={f.fileUrl} />
               </div>
               <FileMetaLine fileId={f.id} hideMissing className="block truncate whitespace-nowrap text-[10px] leading-tight max-sm:whitespace-normal" />
+              {lfCopiesBadge("mt-0.5 hidden max-w-full @max-[20rem]/files:inline-flex")}
             </>
           )}
         </div>
-        {f.paperType === "large_format" && (
-          <span
-            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-300 bg-sky-100 px-2 py-1 text-xs font-bold tabular-nums text-sky-900 leading-none shadow-sm"
-            title={t.admin.lfFilePrintCopiesBadge(lfQuantity ?? f.copies)}
-            aria-label={t.admin.lfFilePrintCopiesBadge(lfQuantity ?? f.copies)}
-          >
-            <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            {t.admin.lfFilePrintCopiesBadge(lfQuantity ?? f.copies)}
-          </span>
-        )}
+        {lfCopiesBadge("inline-flex @max-[20rem]/files:hidden")}
         {isLink ? (
           <a
             href={f.fileUrl}
@@ -1504,7 +1512,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   };
 
   return (
-    <div>
+    <div className="@container/files">
       {totalFiles > 1 && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
           <span className="text-sm">{t.admin.filesCount(totalFiles)}</span>
@@ -1748,6 +1756,34 @@ function OrderKindBadges({
 }
 
 /** Amount / paid chip that toggles «оплачен» (table + phone card). */
+/** «Создал / Передал» lines: own column on wide tables, under the status when narrow. */
+function OrderCreatedSentLines({
+  order,
+  t,
+  className,
+}: {
+  order: Pick<AdminOrderRow, "createdByName" | "sentToWorkshopByName" | "isWorkshop">;
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+  className?: string;
+}) {
+  return (
+    <div className={cn("min-w-0", className)}>
+      <p className="flex items-center gap-1 truncate" title={order.createdByName ?? t.common.createdByClient}>
+        <UserCheck className="w-3 h-3 flex-shrink-0 text-gray-400" />
+        {order.createdByName ?? (
+          <span className="text-gray-400">{t.common.createdByClient}</span>
+        )}
+      </p>
+      {(order.sentToWorkshopByName || order.isWorkshop) && (
+        <p className="flex items-center gap-1 truncate mt-0.5" title={order.sentToWorkshopByName ?? order.createdByName ?? ""}>
+          <Send className="w-3 h-3 flex-shrink-0 text-gray-400" />
+          {order.sentToWorkshopByName ?? order.createdByName ?? "—"}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function OrderPaidToggle({
   order,
   t,
@@ -1767,7 +1803,7 @@ function OrderPaidToggle({
       onClick={() => onToggle(order.id, order.isPaid)}
       disabled={saving}
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait",
+        "inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait",
         order.price == null && "uppercase tracking-wide",
         order.isPaid
           ? "bg-green-100 text-green-700 hover:bg-green-200"
@@ -2410,26 +2446,32 @@ const OrderTable = memo(function OrderTable({
       ))}
     </ul>
     <div className="hidden bg-white rounded-lg shadow overflow-hidden sm:block">
-      <div className="overflow-x-auto">
+      <div className="@container/orders overflow-x-auto">
         <table className="w-full table-fixed">
+          {/*
+            Column widths follow the orders container, not the window:
+            below 56rem (e.g. 1024px window with the ЦЕХ panel open) the
+            «Создал / Передал» column collapses to zero and its lines move
+            under the status select; the other columns take its share.
+          */}
           <colgroup>
             {isWorkshop ? (
               <>
-                <col style={{ width: "13%" }} />
-                <col style={{ width: "17%" }} />
-                <col style={{ width: "27%" }} />
-                <col style={{ width: "16%" }} />
-                <col style={{ width: "19%" }} />
-                <col style={{ width: "8%" }} />
+                <col className="w-[13%] @max-[56rem]/orders:w-[15%]" />
+                <col className="w-[17%] @max-[56rem]/orders:w-[19%]" />
+                <col className="w-[27%] @max-[56rem]/orders:w-[33%]" />
+                <col className="w-[16%] @max-[56rem]/orders:w-0" />
+                <col className="w-[19%] @max-[56rem]/orders:w-[24%]" />
+                <col className="w-[8%] @max-[56rem]/orders:w-[9%]" />
               </>
             ) : (
               <>
-                <col style={{ width: "13%" }} />
-                <col style={{ width: "15%" }} />
-                <col style={{ width: "27%" }} />
-                <col style={{ width: "13%" }} />
-                <col style={{ width: "17%" }} />
-                <col style={{ width: "15%" }} />
+                <col className="w-[13%] @max-[56rem]/orders:w-[15%]" />
+                <col className="w-[15%] @max-[56rem]/orders:w-[18%]" />
+                <col className="w-[27%] @max-[56rem]/orders:w-[33%]" />
+                <col className="w-[13%] @max-[56rem]/orders:w-0" />
+                <col className="w-[17%] @max-[56rem]/orders:w-[20%]" />
+                <col className="w-[15%] @max-[56rem]/orders:w-[14%]" />
               </>
             )}
           </colgroup>
@@ -2438,7 +2480,9 @@ const OrderTable = memo(function OrderTable({
               <th className="px-3 py-3">{t.admin.order}</th>
               <th className="px-3 py-3">{t.common.phone}</th>
               <th className="px-3 py-3">{t.common.files}</th>
-              <th className="px-3 py-3">{t.common.createdBySentBy}</th>
+              <th className="px-3 py-3 @max-[56rem]/orders:overflow-hidden @max-[56rem]/orders:p-0">
+                <span className="@max-[56rem]/orders:hidden">{t.common.createdBySentBy}</span>
+              </th>
               <SortableTh col="status" current={sortCol} dir={sortDir} onSort={toggleSort}>{t.common.status}</SortableTh>
               <th className="px-3 py-3">{t.common.actions}</th>
             </tr>
@@ -2617,19 +2661,8 @@ const OrderTable = memo(function OrderTable({
                     setLightboxFile={setLightboxFile}
                   />
                 </td>
-                <td className="px-3 py-3 align-middle text-xs text-gray-500 overflow-hidden">
-                  <p className="flex items-center gap-1 truncate" title={order.createdByName ?? t.common.createdByClient}>
-                    <UserCheck className="w-3 h-3 flex-shrink-0 text-gray-400" />
-                    {order.createdByName ?? (
-                      <span className="text-gray-400">{t.common.createdByClient}</span>
-                    )}
-                  </p>
-                  {(order.sentToWorkshopByName || order.isWorkshop) && (
-                    <p className="flex items-center gap-1 truncate mt-0.5" title={order.sentToWorkshopByName ?? order.createdByName ?? ""}>
-                      <Send className="w-3 h-3 flex-shrink-0 text-gray-400" />
-                      {order.sentToWorkshopByName ?? order.createdByName ?? "—"}
-                    </p>
-                  )}
+                <td className="px-3 py-3 align-middle text-xs text-gray-500 overflow-hidden @max-[56rem]/orders:p-0">
+                  <OrderCreatedSentLines order={order} t={t} className="@max-[56rem]/orders:hidden" />
                 </td>
                 <td className="px-3 py-3 align-middle overflow-hidden">
                   <div className="flex min-w-0 flex-col gap-1">
@@ -2645,6 +2678,11 @@ const OrderTable = memo(function OrderTable({
                     />
                     <OrderLineSummary order={order} t={t} />
                     <OrderLayoutIssueLabel order={order} />
+                    <OrderCreatedSentLines
+                      order={order}
+                      t={t}
+                      className="hidden text-xs text-gray-500 @max-[56rem]/orders:block"
+                    />
                     {order.assignedToName && (
                       <p className="flex items-start gap-1 text-xs leading-snug text-gray-500">
                         <UserCheck className="mt-0.5 h-3 w-3 flex-shrink-0" />
@@ -2663,7 +2701,7 @@ const OrderTable = memo(function OrderTable({
                   </div>
                 </td>
                 <td className="px-3 py-3 align-middle">
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex flex-wrap items-center gap-0.5">
                     {/*
                       Both admin and workshop can toggle the rush flag — cell
                       admins often spot a "must-be-today" job that the
