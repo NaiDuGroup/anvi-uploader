@@ -1431,82 +1431,84 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
         </span>
       ) : null;
     return (
-      <div key={f.id} className="flex items-center gap-1.5">
-        {isLink ? (
-          <div className="w-8 h-8 rounded bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
-            <Link2 className="w-3.5 h-3.5 text-blue-500" />
+      <div key={f.id}>
+        <div className="flex items-center gap-1.5">
+          {isLink ? (
+            <div className="w-8 h-8 rounded bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
+              <Link2 className="w-3.5 h-3.5 text-blue-500" />
+            </div>
+          ) : (
+            <FileThumb
+              fileId={f.id}
+              fileName={f.fileName}
+              onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+            />
+          )}
+          <div className="min-w-0 flex-1 max-w-[280px]">
+            {isLink ? (
+              <a
+                href={f.fileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline truncate block max-w-full text-left"
+                title={f.fileUrl}
+              >
+                {f.fileName}
+              </a>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                  className="text-blue-600 hover:underline truncate block max-w-full text-left"
+                  title={f.fileName}
+                >
+                  {f.fileName}
+                </button>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  {f.pageCount ? (
+                    <span className="text-gray-400">{t.admin.pagesCount(f.pageCount)}</span>
+                  ) : null}
+                  <OrderFileLifecycleBadge fileUrl={f.fileUrl} />
+                  <InLibraryBadge fileId={f.id} fileUrl={f.fileUrl} />
+                </div>
+                <FileMetaLine fileId={f.id} hideMissing className="block truncate whitespace-nowrap text-[10px] leading-tight max-sm:whitespace-normal" />
+              </>
+            )}
           </div>
-        ) : (
-          <FileThumb
-            fileId={f.id}
-            fileName={f.fileName}
-            onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
-          />
-        )}
-        <div className="min-w-0 flex-1 max-w-[280px]">
+          {lfCopiesBadge("inline-flex @max-[20rem]/files:hidden")}
           {isLink ? (
             <a
               href={f.fileUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 hover:underline truncate block max-w-full text-left"
-              title={f.fileUrl}
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+              title={t.upload.externalLink}
+              aria-label={t.upload.externalLink}
             >
-              {f.fileName}
+              <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
             </a>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
-                className="text-blue-600 hover:underline truncate block max-w-full text-left"
-                title={f.fileName}
+              <SaveFileToLibraryButton
+                fileId={f.id}
+                fileUrl={f.fileUrl}
+                fileName={f.fileName}
+                orderNumber={order.orderNumber}
+                orderClient={orderClient}
+              />
+              <a
+                href={`/api/download/${f.id}`}
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+                title={t.admin.downloadFile}
+                aria-label={t.admin.downloadFile}
               >
-                {f.fileName}
-              </button>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                {f.pageCount ? (
-                  <span className="text-gray-400">{t.admin.pagesCount(f.pageCount)}</span>
-                ) : null}
-                <OrderFileLifecycleBadge fileUrl={f.fileUrl} />
-                <InLibraryBadge fileId={f.id} fileUrl={f.fileUrl} />
-              </div>
-              <FileMetaLine fileId={f.id} hideMissing className="block truncate whitespace-nowrap text-[10px] leading-tight max-sm:whitespace-normal" />
-              {lfCopiesBadge("mt-0.5 hidden max-w-full @max-[20rem]/files:inline-flex")}
+                <Download className="h-4 w-4 shrink-0" aria-hidden />
+              </a>
             </>
           )}
         </div>
-        {lfCopiesBadge("inline-flex @max-[20rem]/files:hidden")}
-        {isLink ? (
-          <a
-            href={f.fileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
-            title={t.upload.externalLink}
-            aria-label={t.upload.externalLink}
-          >
-            <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
-          </a>
-        ) : (
-          <>
-            <SaveFileToLibraryButton
-              fileId={f.id}
-              fileUrl={f.fileUrl}
-              fileName={f.fileName}
-              orderNumber={order.orderNumber}
-              orderClient={orderClient}
-            />
-            <a
-              href={`/api/download/${f.id}`}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
-              title={t.admin.downloadFile}
-              aria-label={t.admin.downloadFile}
-            >
-              <Download className="h-4 w-4 shrink-0" aria-hidden />
-            </a>
-          </>
-        )}
+        {lfCopiesBadge("mt-1 ml-[38px] hidden whitespace-nowrap @max-[20rem]/files:inline-flex")}
       </div>
     );
   };
@@ -2466,12 +2468,12 @@ const OrderTable = memo(function OrderTable({
               </>
             ) : (
               <>
-                <col className="w-[13%] @max-[56rem]/orders:w-[15%]" />
-                <col className="w-[15%] @max-[56rem]/orders:w-[18%]" />
-                <col className="w-[27%] @max-[56rem]/orders:w-[33%]" />
+                <col className="w-[13%] @max-[56rem]/orders:w-[14%]" />
+                <col className="w-[15%] @max-[56rem]/orders:w-[20%]" />
+                <col className="w-[27%] @max-[56rem]/orders:w-[32%]" />
                 <col className="w-[13%] @max-[56rem]/orders:w-0" />
-                <col className="w-[17%] @max-[56rem]/orders:w-[20%]" />
-                <col className="w-[15%] @max-[56rem]/orders:w-[14%]" />
+                <col className="w-[17%] @max-[56rem]/orders:w-[21%]" />
+                <col className="w-[15%] @max-[56rem]/orders:w-[13%]" />
               </>
             )}
           </colgroup>
