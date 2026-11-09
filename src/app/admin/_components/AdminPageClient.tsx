@@ -124,6 +124,7 @@ import type { LayoutIssueReason } from "@/lib/layoutIssue";
 import { DealerEditedBadge } from "./DealerEditedBadge";
 import { DealerUrgencyBadge, DealerUrgencyWaiveContext } from "./DealerUrgencyBadge";
 import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
+import type { IssueReasonKey } from "../_lib/constants";
 
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
@@ -616,11 +617,11 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
     [updateOrder, showStatusNotice, t],
   );
 
-  const handleConfirmIssue = async (reason: string) => {
+  const handleConfirmIssue = async (reason: string, code: IssueReasonKey) => {
     if (!issueOrderId) return;
     setOrderSaving({ orderId: issueOrderId, kind: "status" });
     try {
-      await updateOrder(issueOrderId, { status: "ISSUE", issueReason: reason });
+      await updateOrder(issueOrderId, { status: "ISSUE", issueReason: reason, issueReasonCode: code });
       setIssueOrderId(null);
     } finally {
       setOrderSaving(null);

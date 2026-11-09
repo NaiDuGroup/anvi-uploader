@@ -11,6 +11,7 @@ import { importsRo } from "./imports/ro";
 import { stockBulkRo } from "./stockBulk/ro";
 import { corporateRo } from "./corporate/ro";
 import { shopReportRo } from "./shopReport/ro";
+import { workshopAnalyticsRo } from "./workshopAnalytics/ro";
 import { shopFunnelRo } from "./shopFunnel/ro";
 import { shopPromoRo } from "./shopPromo/ro";
 import { libraryRo } from "./library/ro";
@@ -2486,6 +2487,7 @@ export const ro: TranslationDictionary = {
   stockBulk: stockBulkRo,
   corporate: corporateRo,
   shopReport: shopReportRo,
+  workshopAnalytics: workshopAnalyticsRo,
   shopFunnel: shopFunnelRo,
   shopPromo: shopPromoRo,
   purchases: {

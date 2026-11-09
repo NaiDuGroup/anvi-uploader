@@ -19,6 +19,7 @@ import {
   UserCog,
   type LucideIcon,
   BookMarked,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +54,7 @@ type NavLabelKey =
   | "navUsers"
   | "navAccounting"
   | "navShop"
+  | "navWorkshopAnalytics"
   | "navSettings";
 
 type NavItem = {
@@ -77,6 +79,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/users", labelKey: "navUsers", Icon: UserCog, roles: ["superadmin"] },
   { href: "/admin/accounting", labelKey: "navAccounting", Icon: Calculator, roles: ["superadmin"] },
+  { href: "/admin/workshop-analytics", labelKey: "navWorkshopAnalytics", Icon: BarChart3, roles: ["superadmin"] },
   // «Сайт» also holds «Заявки компаний» (/admin/shop/corporate-requests).
   { href: "/admin/shop", labelKey: "navShop", Icon: Store, roles: ["superadmin"] },
   { href: "/admin/settings", labelKey: "navSettings", Icon: SettingsIcon, roles: ["superadmin"] },
@@ -138,6 +141,7 @@ export default function AdminAppShell({
     navUsers: t.admin.navUsers,
     navAccounting: t.admin.navAccounting,
     navShop: t.shopReport.navShop,
+    navWorkshopAnalytics: t.workshopAnalytics.nav,
     navSettings: t.admin.navSettings,
   };
 

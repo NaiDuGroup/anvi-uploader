@@ -12,6 +12,7 @@ import type { ImportsDictionary } from "./imports/types";
 import type { StockBulkDictionary } from "./stockBulk/types";
 import type { CorporateDictionary } from "./corporate/types";
 import type { ShopReportDictionary } from "./shopReport/types";
+import type { WorkshopAnalyticsDictionary } from "./workshopAnalytics/types";
 import type { ShopFunnelDictionary } from "./shopFunnel/types";
 import type { ShopPromoDictionary } from "./shopPromo/types";
 import type { ProductPickerGroup } from "../productPickerGroup";
@@ -2754,6 +2755,7 @@ export interface TranslationDictionary {
   corporate: CorporateDictionary;
   /** Admin «Сайт: заказы и воронка» report (orders part, nav, sub-tabs). */
   shopReport: ShopReportDictionary;
+  workshopAnalytics: WorkshopAnalyticsDictionary;
   /** Admin report: storefront funnel analytics section. */
   shopFunnel: ShopFunnelDictionary;
   /** Admin «Промокоды» (storefront promo codes). */

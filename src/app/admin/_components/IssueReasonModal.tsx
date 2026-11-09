@@ -15,7 +15,8 @@ export default function IssueReasonModal({
 }: {
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   isSubmitting?: boolean;
-  onConfirm: (reason: string) => void;
+  /** `code`: the picked key, saved silently next to the text (`Order.issueReasonCode`). */
+  onConfirm: (reason: string, code: IssueReasonKey) => void;
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState<IssueReasonKey | null>(null);
@@ -27,7 +28,7 @@ export default function IssueReasonModal({
       selected === "other"
         ? customText.trim() || t.admin.issueReasons.other
         : t.admin.issueReasons[selected];
-    onConfirm(reason);
+    onConfirm(reason, selected);
   };
 
   return (

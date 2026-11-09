@@ -85,6 +85,7 @@ import {
   shownLineStatus,
   useLineStatus,
 } from "./workshopBoard/LineStatusControls";
+import type { IssueReasonKey } from "../_lib/constants";
 
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
@@ -1323,14 +1324,14 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   );
 
   const handleConfirmIssue = useCallback(
-    async (reason: string) => {
+    async (reason: string, code: IssueReasonKey) => {
       if (!issueOrderId) return;
       setSaving({ orderId: issueOrderId, kind: "status" });
       try {
         const res = await fetch(`/api/orders/${issueOrderId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "ISSUE", issueReason: reason }),
+          body: JSON.stringify({ status: "ISSUE", issueReason: reason, issueReasonCode: code }),
         });
         if (!res.ok) throw new Error("Failed to set issue");
         setIssueOrderId(null);

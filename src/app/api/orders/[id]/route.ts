@@ -89,6 +89,8 @@ export async function PATCH(
       data.price = toOrderPriceDecimal(validated.price);
     }
     if (validated.issueReason !== undefined) data.issueReason = validated.issueReason;
+    // Silent reason key (analytics): set together with the text; a text without a key clears an old key.
+    if (validated.issueReason !== undefined) data.issueReasonCode = validated.issueReasonCode ?? null;
     if (validated.phone !== undefined) data.phone = validated.phone;
     if (validated.clientName !== undefined) data.clientName = validated.clientName;
     if (validated.notes !== undefined) data.notes = validated.notes;
@@ -194,6 +196,19 @@ export async function PATCH(
 
     if (validated.status && validated.status !== "ISSUE") {
       data.issueReason = null;
+      data.issueReasonCode = null;
+    }
+
+    // «Аналитика цеха»: the picked reason key rides along in the log metadata.
+    if (validated.issueReasonCode !== undefined) {
+      for (const e of logEntries) {
+        if (
+          (e.action === "status_changed" && e.newValue === "ISSUE") ||
+          (e.action === "field_updated" && e.field === "issueReason")
+        ) {
+          e.metadata = { issueReasonCode: validated.issueReasonCode };
+        }
+      }
     }
 
     if (
@@ -275,7 +290,9 @@ export async function PATCH(
               newValue: prepared.status,
               ...(prepared.status !== validated.status
                 ? { metadata: { requested: validated.status, keptNeedsLayoutLines: prepared.keptLineCodes } }
-                : {}),
+                : prepared.status === "ISSUE" && validated.issueReasonCode !== undefined
+                  ? { metadata: { issueReasonCode: validated.issueReasonCode } }
+                  : {}),
             });
           }
         }

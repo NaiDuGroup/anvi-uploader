@@ -11,6 +11,7 @@ import { importsEn } from "./imports/en";
 import { stockBulkEn } from "./stockBulk/en";
 import { corporateEn } from "./corporate/en";
 import { shopReportEn } from "./shopReport/en";
+import { workshopAnalyticsEn } from "./workshopAnalytics/en";
 import { shopFunnelEn } from "./shopFunnel/en";
 import { shopPromoEn } from "./shopPromo/en";
 import { libraryEn } from "./library/en";
@@ -2477,6 +2478,7 @@ export const en: TranslationDictionary = {
   stockBulk: stockBulkEn,
   corporate: corporateEn,
   shopReport: shopReportEn,
+  workshopAnalytics: workshopAnalyticsEn,
   shopFunnel: shopFunnelEn,
   shopPromo: shopPromoEn,
   purchases: {

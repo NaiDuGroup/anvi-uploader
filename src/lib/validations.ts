@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ISSUE_REASON_CODES } from "@/lib/issueReasonCode";
 import { GIFT_SET_MAX_QUANTITY } from "@/lib/giftSet/giftSet";
 import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
 import { DEALER_CANCEL_REASON_MAX, DEALER_CANCEL_REASON_MIN } from "@/lib/dealerOrderModify";
@@ -1124,6 +1125,8 @@ export const updateOrderSchema = z.object({
   isPaid: z.boolean().optional(),
   price: mdlPriceSchema.nullable().optional(),
   issueReason: z.string().max(500).optional(),
+  /** Silent key of the picked ISSUE reason (`IssueReasonModal`); stored next to the text for analytics. */
+  issueReasonCode: z.enum(ISSUE_REASON_CODES).optional(),
   phone: z.string().min(8).optional(),
   clientName: z.string().max(100).nullable().optional(),
   clientId: z.string().uuid().nullable().optional(),

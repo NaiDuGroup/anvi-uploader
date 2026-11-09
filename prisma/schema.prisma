@@ -23,6 +23,9 @@ model Order {
   paidAt                   DateTime?                 @map("paid_at")
   notes                    String?
   issueReason              String?                   @map("issue_reason")
+  /// Key of the ISSUE reason picked in `IssueReasonModal` (fileCorrupt / wrongFormat / lowQuality / missingPages / other),
+  /// stored silently next to the localized `issueReason` text for «Аналитика цеха». Null for old rows and non-ISSUE orders.
+  issueReasonCode          String?                   @map("issue_reason_code")
   createdBy                String?                   @map("created_by")
   sentToWorkshopBy         String?                   @map("sent_to_workshop_by")
   clientName               String?                   @map("client_name")
@@ -1276,6 +1279,8 @@ model OrderLog {
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId, createdAt])
+  /// «Аналитика цеха»: period scans by action (status changes, flags, deletions).
+  @@index([action, createdAt])
   @@map("order_logs")
 }
 

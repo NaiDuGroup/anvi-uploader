@@ -123,7 +123,7 @@ export async function applyDerivedStatus(
   if (!derived || derived === order.status) return order.status;
   await tx.order.update({
     where: { id: order.id },
-    data: { status: derived, assignedTo: userId, isWorkshop: true, issueReason: null },
+    data: { status: derived, assignedTo: userId, isWorkshop: true, issueReason: null, issueReasonCode: null },
   });
   logs.push({
     orderId: order.id,

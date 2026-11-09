@@ -11,6 +11,7 @@ import { importsRu } from "./imports/ru";
 import { stockBulkRu } from "./stockBulk/ru";
 import { corporateRu } from "./corporate/ru";
 import { shopReportRu } from "./shopReport/ru";
+import { workshopAnalyticsRu } from "./workshopAnalytics/ru";
 import { shopFunnelRu } from "./shopFunnel/ru";
 import { shopPromoRu } from "./shopPromo/ru";
 import { libraryRu } from "./library/ru";
@@ -2647,6 +2648,7 @@ export const ru: TranslationDictionary = {
   stockBulk: stockBulkRu,
   corporate: corporateRu,
   shopReport: shopReportRu,
+  workshopAnalytics: workshopAnalyticsRu,
   shopFunnel: shopFunnelRu,
   shopPromo: shopPromoRu,
   purchases: {
