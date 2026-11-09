@@ -10,6 +10,7 @@
  * own hard delete (only when no order file uses the key).
  */
 import { sanitizeUploadFileName } from "@/lib/uploads/uploadScopePolicy";
+import { isSafeKeyPath } from "@/lib/uploads/keyPath";
 
 export const LIBRARY_PREFIX = "library/";
 /** Folder of the studio-wide («Общий») items. */
@@ -78,7 +79,7 @@ const HTTP_LINK_RE = /^https?:\/\//i;
 export const STAFF_ORDER_FILE_PREFIXES = ["uploads/", LIBRARY_PREFIX, "shop-orders/"] as const;
 
 function hasSafePath(key: string): boolean {
-  return !key.includes("..") && !key.includes("\\") && !/[\u0000-\u001f\u007f]/.test(key);
+  return isSafeKeyPath(key);
 }
 
 export function isStaffOrderFileUrl(value: string): boolean {

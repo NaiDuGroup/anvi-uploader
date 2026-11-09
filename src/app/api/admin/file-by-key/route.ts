@@ -4,6 +4,7 @@ import { isAdmin } from "@/lib/roles";
 import { readLocalFile } from "@/lib/local-storage";
 import { getPresignedDownloadUrl } from "@/lib/r2";
 import { applySafeFileHeaders } from "@/lib/files/safeFileHeaders";
+import { hasDotSegment } from "@/lib/uploads/keyPath";
 
 const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
 
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
   }
 
   const key = request.nextUrl.searchParams.get("key");
-  if (!key || key.includes("..")) {
+  if (!key || hasDotSegment(key)) {
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 

@@ -2,6 +2,7 @@ import { nanoid } from "nanoid";
 import { getPresignedDownloadUrl, getPresignedUploadUrl, isLocalObjectStorage, putObjectBuffer } from "@/lib/r2";
 import { readLocalFile, saveLocalFile } from "@/lib/local-storage";
 import { GOR_FACTORY_IMAGE_HOST } from "./gorFactory";
+import { hasDotSegment } from "@/lib/uploads/keyPath";
 
 /**
  * Import documents live in the main («uploads») bucket under `imports/<id>/` —
@@ -13,7 +14,7 @@ export function importDocumentKey(importId: string, fileName: string): string {
 }
 
 export function isImportDocumentKey(importId: string, key: string): boolean {
-  return key.startsWith(`imports/${importId}/`) && !key.includes("..");
+  return key.startsWith(`imports/${importId}/`) && !hasDotSegment(key);
 }
 
 /** URL the browser PUTs the file to (local dev: the app's own `/api/upload-url`). */

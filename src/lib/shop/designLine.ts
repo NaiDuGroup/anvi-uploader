@@ -8,6 +8,7 @@ import {
   type ShopEditorKind,
 } from "@/lib/storefront/design";
 import type { AdminOrderLineInput, FileInput } from "@/lib/validations";
+import { hasDotSegment } from "@/lib/uploads/keyPath";
 
 /**
  * Checkout side of a storefront design line (made in the shop-mode editor):
@@ -24,7 +25,7 @@ const photoKey = z
   .max(500)
   // An order-scope upload (`uploads/<13-digit ms>-…`), as `POST /api/upload-url` issues it.
   .regex(/^uploads\/\d{13}-[^\\]+$/, { message: "invalid_file_key" })
-  .refine((k) => !k.includes(".."), { message: "invalid_file_key" });
+  .refine((k) => !hasDotSegment(k), { message: "invalid_file_key" });
 
 /** Same fields as `mugLayoutDataSchema` (notebook / pen are identical), with storefront limits. */
 export const shopDesignLayoutSchema = z.object({

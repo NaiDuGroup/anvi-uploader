@@ -218,6 +218,14 @@ describe("upload keys", () => {
     expect(sanitizeUploadFileName("a\u0000b.pdf")).toBe("ab.pdf");
   });
 
+  it("collapses runs of dots so keys never contain `..`", () => {
+    expect(sanitizeUploadFileName("DTF_spate_ A3_tricou_negru_L....png")).toBe("DTF_spate_ A3_tricou_negru_L.png");
+    expect(sanitizeUploadFileName("a..png")).toBe("a.png");
+    expect(sanitizeUploadFileName("v1..2...final.pdf")).toBe("v1.2.final.pdf");
+    expect(sanitizeUploadFileName("...")).toBe("file");
+    expect(sanitizeUploadFileName("a.b.pdf")).toBe("a.b.pdf");
+  });
+
   it("caps long names and keeps the extension", () => {
     const out = sanitizeUploadFileName(`${"a".repeat(300)}.pdf`);
     expect(out.length).toBe(200);

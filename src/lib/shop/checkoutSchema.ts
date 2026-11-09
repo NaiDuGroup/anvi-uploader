@@ -9,6 +9,7 @@ import {
 } from "./constants";
 import { SHOP_PRINT_MAX_FILES } from "@/lib/storefront/printPrices";
 import { shopLineDesignSchema } from "./designLine";
+import { hasDotSegment } from "@/lib/uploads/keyPath";
 
 /**
  * `POST /api/shop/checkout` request body. Each line's `quote` stays raw here:
@@ -23,7 +24,7 @@ import { shopLineDesignSchema } from "./designLine";
  * company, workshop layouts, URLs — is refused.
  */
 export function isOrderUploadKey(key: string): boolean {
-  if (!key.startsWith("uploads/") || key.includes("..") || key.includes("\\")) return false;
+  if (!key.startsWith("uploads/") || hasDotSegment(key) || key.includes("\\")) return false;
   return parseOrderFileUploadedAt(key) != null;
 }
 
@@ -47,7 +48,7 @@ export function shopPhoneE164(phone: string): string {
  * for the signed-in owner of that file.
  */
 export function isStoredShopFileKey(key: string): boolean {
-  if (!key.startsWith(SHOP_ORDER_FILE_PREFIX) || key.includes("..") || key.includes("\\")) return false;
+  if (!key.startsWith(SHOP_ORDER_FILE_PREFIX) || hasDotSegment(key) || key.includes("\\")) return false;
   return /^\d{13}-/.test(key.slice(SHOP_ORDER_FILE_PREFIX.length));
 }
 

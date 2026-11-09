@@ -1,3 +1,4 @@
+import { hasDotSegment } from "@/lib/uploads/keyPath";
 /** Browser-safe helpers for company logo URL and validation (no Node / S3 imports). */
 
 export const PUBLIC_COMPANY_LOGO_API_PATH = "/api/public/company-logo";
@@ -5,7 +6,7 @@ export const PUBLIC_COMPANY_LOGO_API_PATH = "/api/public/company-logo";
 const COMPANY_LOGO_KEY_PREFIX = "company/logo/";
 
 export function isAllowedCompanyLogoStorageKey(key: string): boolean {
-  if (!key || key.includes("..") || key.includes("\\")) return false;
+  if (!key || hasDotSegment(key) || key.includes("\\")) return false;
   return key.startsWith(COMPANY_LOGO_KEY_PREFIX);
 }
 
@@ -16,7 +17,7 @@ export function isValidPersistedLogoPath(value: string | null | undefined): bool
   if (value === null || value === undefined) return true;
   const v = value.trim();
   if (!v) return true;
-  if (v.includes("..")) return false;
+  if (hasDotSegment(v)) return false;
   if (v.startsWith("http://") || v.startsWith("https://")) return true;
   if (v.startsWith("/")) return true;
   return isAllowedCompanyLogoStorageKey(v);
