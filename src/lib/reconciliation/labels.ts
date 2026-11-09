@@ -199,6 +199,7 @@ export interface ReconLabels {
     remaindersApplied?: number,
   ) => string;
   pulledFiscal: (n: number) => string;
+  pullTimedOut: string;
   syncOk: (s: {
     accepted: number;
     searched: number;
@@ -453,6 +454,7 @@ const RO: ReconLabels = {
     return `${parts.join("; ")}.`;
   },
   pulledFiscal: (n) => `Preluate din e-Factura: ${n} facturi noi.`,
+  pullTimedOut: "e-Factura răspunde lent — facturile noi din SFS nu au fost preluate acum; potrivirea s-a făcut pe cele existente.",
   syncOk: (s) =>
     `Sync OK: API ${s.accepted} · search ${s.searched} · arhivă +${s.archiveCreated} (din ${s.archiveListed}) · statusuri ${s.statusUpdated}${s.markedDead ? ` (${s.markedDead} respinse/anulate)` : ""} · detalii ${s.enrichProcessed}.`,
   importPortal: "Backfill portal",
@@ -699,6 +701,7 @@ const RU: ReconLabels = {
     return `${parts.join("; ")}.`;
   },
   pulledFiscal: (n) => `Подтянуто из e-Factura: ${n} новых фактур.`,
+  pullTimedOut: "e-Factura отвечает медленно — новые фактуры из SFS сейчас не подтянуты; сопоставлено по уже загруженным.",
   syncOk: (s) =>
     `Sync OK: API ${s.accepted} · search ${s.searched} · архив +${s.archiveCreated} (из ${s.archiveListed}) · статусы ${s.statusUpdated}${s.markedDead ? ` (${s.markedDead} откл./аннул.)` : ""} · детали ${s.enrichProcessed}.`,
   importPortal: "Backfill портала",
@@ -945,6 +948,7 @@ const EN: ReconLabels = {
     return `${parts.join("; ")}.`;
   },
   pulledFiscal: (n) => `Pulled ${n} new invoices from e-Factura.`,
+  pullTimedOut: "e-Factura is slow — new invoices were not pulled from SFS this time; matched against the ones already loaded.",
   syncOk: (s) =>
     `Sync OK: API ${s.accepted} · search ${s.searched} · archive +${s.archiveCreated} (of ${s.archiveListed}) · statuses ${s.statusUpdated}${s.markedDead ? ` (${s.markedDead} rejected/cancelled)` : ""} · details ${s.enrichProcessed}.`,
   importPortal: "Portal backfill",

@@ -484,6 +484,40 @@ export interface PullFromReferencesResult {
   fetched: number;
   notFound: number;
   errors: number;
+  /** True when the time budget ran out before every token was checked. */
+  timedOut: boolean;
+  /** Tokens left unchecked because the budget ran out (retried next run). */
+  skipped: number;
+}
+
+/** Default wall-clock budget for pull-on-reference inside an interactive request. */
+export const PULL_REFERENCES_BUDGET_MS = 8_000;
+
+const BUDGET_EXPIRED = Symbol("budget-expired");
+
+/**
+ * Waits for `promise` but gives up once `deadline` passes. The underlying work
+ * is not cancelled (the SOAP client has its own timeout); we just stop waiting.
+ */
+async function awaitWithDeadline<T>(
+  promise: Promise<T>,
+  deadline: number,
+): Promise<T | typeof BUDGET_EXPIRED> {
+  const remaining = deadline - Date.now();
+  if (remaining <= 0) {
+    promise.catch(() => {});
+    return BUDGET_EXPIRED;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expiry = new Promise<typeof BUDGET_EXPIRED>((resolve) => {
+    timer = setTimeout(() => resolve(BUDGET_EXPIRED), remaining);
+  });
+  try {
+    return await Promise.race([promise, expiry]);
+  } finally {
+    clearTimeout(timer);
+    promise.catch(() => {});
+  }
 }
 
 /** Splits a fiscal token like "EBJ000662654" into series + number. */
@@ -503,8 +537,15 @@ function splitFiscalToken(token: string): { seria: string; number: string } | nu
 export async function pullInvoicesFromBankReferences(options?: {
   statementId?: string;
   delayMs?: number;
+  /**
+   * Wall-clock budget (ms). Once spent, no new SFS calls are started and an
+   * in-flight call is no longer awaited; the result reports `timedOut`.
+   * Defaults to PULL_REFERENCES_BUDGET_MS. Pass Infinity for no limit.
+   */
+  budgetMs?: number;
 }): Promise<PullFromReferencesResult> {
   const delayMs = options?.delayMs ?? 400;
+  const deadline = Date.now() + (options?.budgetMs ?? PULL_REFERENCES_BUDGET_MS);
   const client = getEFacturaClient();
 
   const txs = await prisma.bankTransaction.findMany({
@@ -526,8 +567,17 @@ export async function pullInvoicesFromBankReferences(options?: {
   let fetched = 0;
   let notFound = 0;
   let errors = 0;
+  let timedOut = false;
+  let checked = 0;
+  let skipped = 0;
 
   for (const token of tokens) {
+    if (Date.now() >= deadline) {
+      timedOut = true;
+      skipped = tokens.size - checked;
+      break;
+    }
+    checked++;
     const parts = splitFiscalToken(token);
     if (!parts) continue;
 
@@ -544,14 +594,34 @@ export async function pullInvoicesFromBankReferences(options?: {
 
     let found: EFacturaInvoice | null = null;
     for (const num of candidates) {
+      if (Date.now() >= deadline) {
+        timedOut = true;
+        break;
+      }
       try {
-        found = await client.getInvoiceBySeriaNumber(parts.seria, num);
+        const res = await awaitWithDeadline(
+          client.getInvoiceBySeriaNumber(parts.seria, num),
+          deadline,
+        );
+        if (res === BUDGET_EXPIRED) {
+          timedOut = true;
+          break;
+        }
+        found = res;
       } catch {
         errors++;
         found = null;
       }
-      if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+      if (delayMs) {
+        const wait = Math.min(delayMs, Math.max(0, deadline - Date.now()));
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      }
       if (found) break;
+    }
+    if (timedOut) {
+      // This token was not fully checked either.
+      skipped = tokens.size - checked + 1;
+      break;
     }
 
     if (!found || !found.seria || !found.number) {
@@ -568,6 +638,8 @@ export async function pullInvoicesFromBankReferences(options?: {
     fetched,
     notFound,
     errors,
+    timedOut,
+    skipped,
   };
 }
 

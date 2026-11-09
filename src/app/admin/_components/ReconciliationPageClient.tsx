@@ -189,6 +189,9 @@ export default function ReconciliationPageClient() {
       if (data.pull?.fetched > 0) {
         toast.success(L.pulledFiscal(data.pull.fetched));
       }
+      if (data.pull?.timedOut) {
+        toast.info(L.pullTimedOut);
+      }
       toast.success(
         L.autoMatchOk(
           data.result.applied,

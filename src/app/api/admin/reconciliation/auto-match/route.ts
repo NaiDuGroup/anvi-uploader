@@ -22,13 +22,20 @@ export async function POST(request: NextRequest) {
 
     // Pull-on-reference: fetch fiscal invoices cited in the bank purposes that
     // we don't mirror yet, so they can be matched. Best-effort — never block
-    // matching if SFS is slow/throttling.
-    let pull = null;
+    // matching if SFS is slow/throttling: the pull has a hard time budget
+    // (PULL_REFERENCES_BUDGET_MS) so the button always gets a quick answer.
+    let pull: Awaited<ReturnType<typeof pullInvoicesFromBankReferences>> | null =
+      null;
     if ((validated.pullReferenced ?? true) && isEFacturaLive()) {
       try {
         pull = await pullInvoicesFromBankReferences({
           statementId: validated.statementId,
         });
+        if (pull.timedOut) {
+          console.warn(
+            `pull-on-reference: time budget spent, ${pull.skipped} of ${pull.tokensSeen} references left for next run (continuing)`,
+          );
+        }
       } catch (err) {
         console.error("pull-on-reference failed (continuing):", err);
       }
