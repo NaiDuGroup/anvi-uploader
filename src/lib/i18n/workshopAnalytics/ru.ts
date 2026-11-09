@@ -4,7 +4,7 @@ export const workshopAnalyticsRu: WorkshopAnalyticsDictionary = {
   nav: "Аналитика цеха",
   title: "Аналитика цеха",
   intro:
-    "Где заказы застревают, сколько проблем с файлами, переделок и отмен, когда приходит нагрузка. Всё считается из уже записанной истории заказов — сотрудникам ничего дополнительно отмечать не нужно.",
+    "Где заказы застревают, сколько проблем, переделок и отмен, когда приходит нагрузка. Всё считается из уже записанной истории заказов — сотрудникам ничего дополнительно отмечать не нужно.",
   dataNote: (orderLogSince, lineStatusSince) =>
     `Данные есть только с начала записи истории${orderLogSince ? ` (статусы заказов — с ${orderLogSince}` : ""}${
       lineStatusSince ? `, статусы позиций — с ${lineStatusSince})` : orderLogSince ? ", статусов позиций пока нет)" : ""
@@ -27,8 +27,8 @@ export const workshopAnalyticsRu: WorkshopAnalyticsDictionary = {
   kpiCreated: "Создано заказов",
   kpiDelivered: "Выдано",
   kpiDeliveredHint: "впервые «Передан клиенту» в периоде",
-  kpiProblems: "С проблемой файла",
-  kpiProblemsHint: "«Проблема» или позиция «Проблема с файлом»",
+  kpiProblems: "С проблемой",
+  kpiProblemsHint: "статус «Проблема» или позиция «Проблема с файлом»",
   kpiUrgent: "Срочные",
   kpiLead: "Срок до выдачи",
   kpiLeadHint: "медиана: создан → передан клиенту",
@@ -43,10 +43,15 @@ export const workshopAnalyticsRu: WorkshopAnalyticsDictionary = {
   allSections: "Все",
   colStatus: "Статус",
   slowest: "дольше всего",
+  waitingClient: "ждёт клиента",
   noLineData: "Статусы позиций пишутся недавно — данных пока нет.",
 
-  fileHeading: "Проблемы с файлами",
-  fileNote: "Заказы, созданные в периоде, которые попадали в «Проблему» или где позицию отметили «Проблема с файлом».",
+  fileHeading: "Проблемы",
+  fileNote: "Заказы, созданные в периоде, которые попадали в «Проблему» или где позицию отметили «Проблема с файлом». Причина бывает не только в файле: нет материала, просьба клиента и т. п.",
+  problemsFile: "Из-за файла",
+  problemsFileHint: "причина про файл или позиция «Проблема с файлом»",
+  problemsOther: "Другое",
+  problemsOtherHint: "свой текст: нет материала, просьба клиента…",
   issueOrders: "Заказов в «Проблеме»",
   flaggedOrders: "Заказов с отмеченной позицией",
   lineFlags: "Отметок позиций",
@@ -87,6 +92,7 @@ export const workshopAnalyticsRu: WorkshopAnalyticsDictionary = {
   perDayTitle: "Заказы по дням",
   ordersLegend: "заказы",
   linesLegend: "позиции",
+  dayTooltip: (day, orders, lines) => `${day}: заказов ${orders}, позиций ${lines}`,
   sectionsTitle: "По видам работ",
   colLines: "Позиций",
   colPerDay: "Позиций в день",
@@ -100,6 +106,7 @@ export const workshopAnalyticsRu: WorkshopAnalyticsDictionary = {
   staffHeading: "Активность сотрудников",
   staffNote: "Сколько раз меняли статусы (без автоматических) — просто количество, не оценка работы.",
   colUser: "Сотрудник",
+  unknownUser: "Неизвестный / удалённый пользователь",
   colStatusChanges: "Статусы заказов",
   colLineChanges: "Статусы позиций",
   colFlags: "Отметки «Проблема с файлом»",

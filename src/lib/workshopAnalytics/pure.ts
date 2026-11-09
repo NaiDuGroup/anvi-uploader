@@ -95,14 +95,38 @@ export function statsByStatus(segments: readonly StatusSegment[]): Map<string, D
   return new Map([...by].map(([k, v]) => [k, durationStats(v)]));
 }
 
+/** Final order status: its rare closed segments (reopened after delivery) are nonsense, not shown. */
+export const FINAL_STATUSES: readonly string[] = ["DELIVERED"];
+
+/**
+ * Statuses where the order only waits for the client to pick it up — not
+ * workshop / studio work. Shown with a «ждёт клиента» tag and never the
+ * «дольше всего» status. Line production statuses (WAITING / NEEDS_LAYOUT /
+ * PRINTING / DONE) have no such state.
+ */
+export const WAITING_CLIENT_STATUSES: readonly string[] = ["READY_IN_STUDIO", "RETURNED_TO_STUDIO"];
+
+/** Terminal statuses without a meaningful duration bar. */
+export const TERMINAL_STATUSES: readonly string[] = ["DELIVERED", "DONE"];
+
+export function isWaitingClientStatus(status: string): boolean {
+  return WAITING_CLIENT_STATUSES.includes(status);
+}
+
+/** Time-in-status rows to show: final statuses dropped. */
+export function visibleStatusRows<T extends { status: string }>(rows: readonly T[]): T[] {
+  return rows.filter((r) => !FINAL_STATUSES.includes(r.status));
+}
+
 /**
  * The status that holds work the longest: highest median among statuses with
- * at least `minCount` measurements, ignoring terminal ones (`exclude`).
+ * at least `minCount` measurements, ignoring terminal ones and those that only
+ * wait for the client (`exclude`).
  */
 export function slowestStatus(
   rows: readonly ({ status: string } & DurationStats)[],
   minCount = 3,
-  exclude: readonly string[] = ["DELIVERED", "DONE"],
+  exclude: readonly string[] = [...TERMINAL_STATUSES, ...WAITING_CLIENT_STATUSES],
 ): string | null {
   let best: { status: string; median: number } | null = null;
   for (const r of rows) {
@@ -110,6 +134,43 @@ export function slowestStatus(
     if (!best || r.medianSec > best.median) best = { status: r.status, median: r.medianSec };
   }
   return best?.status ?? null;
+}
+
+export interface StaffRow {
+  userId: string;
+  name: string;
+  role: string | null;
+  statusChanges: number;
+  lineChanges: number;
+  flags: number;
+}
+
+/** Id of the merged row for log entries without a (still existing) user. */
+export const UNKNOWN_USER_ID = "__unknown__";
+
+/**
+ * Staff activity rows: entries whose user is null or deleted (`known: false`)
+ * merge into one {@link UNKNOWN_USER_ID} row (name filled by the UI); empty
+ * rows dropped; sorted by total changes.
+ */
+export function mergeStaffRows(rows: readonly (StaffRow & { known: boolean })[]): StaffRow[] {
+  const out: StaffRow[] = [];
+  let unknown: StaffRow | null = null;
+  for (const { known, ...r } of rows) {
+    if (known) {
+      out.push(r);
+      continue;
+    }
+    if (!unknown) {
+      unknown = { userId: UNKNOWN_USER_ID, name: "", role: null, statusChanges: 0, lineChanges: 0, flags: 0 };
+      out.push(unknown);
+    }
+    unknown.statusChanges += r.statusChanges;
+    unknown.lineChanges += r.lineChanges;
+    unknown.flags += r.flags;
+  }
+  const total = (r: StaffRow) => r.statusChanges + r.lineChanges + r.flags;
+  return out.filter((r) => total(r) > 0).sort((a, b) => total(b) - total(a));
 }
 
 /** ISO weekday (0 = Monday … 6 = Sunday) and hour (0–23) of an instant in Chișinău. */
@@ -170,6 +231,25 @@ export function issueReasonCodeFromText(
 function matchesLabel(text: string, labels: readonly string[]): boolean {
   const t = normText(text);
   return labels.some((l) => normText(l) === t);
+}
+
+/** ISSUE reason keys that mean the file itself is the problem. */
+export const FILE_REASON_CODES: readonly IssueReasonCode[] = ["fileCorrupt", "wrongFormat", "lowQuality", "missingPages"];
+
+/**
+ * «Проблема» split: «из-за файла» when a line was flagged «Проблема с файлом»
+ * or any ISSUE reason maps to a file key; otherwise «другое» (own text such as
+ * «нет красных ручек», customer requests, no reason).
+ */
+export function problemKind(
+  order: { hadFlag: boolean; reasons: readonly { text: string | null; code: string | null }[] },
+  labels: ReasonLabelSets,
+): "file" | "other" {
+  if (order.hadFlag) return "file";
+  for (const r of order.reasons) {
+    if (FILE_REASON_CODES.includes(issueReasonCodeFromText(r.text, labels, r.code).code)) return "file";
+  }
+  return "other";
 }
 
 export interface FlagEvent {

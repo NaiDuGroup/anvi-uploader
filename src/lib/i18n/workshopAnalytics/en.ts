@@ -4,7 +4,7 @@ export const workshopAnalyticsEn: WorkshopAnalyticsDictionary = {
   nav: "Workshop analytics",
   title: "Workshop analytics",
   intro:
-    "Where orders get stuck, how many file problems, reworks and cancellations, when the load comes. Everything is computed from the order history already recorded — staff do not have to mark anything extra.",
+    "Where orders get stuck, how many problems, reworks and cancellations, when the load comes. Everything is computed from the order history already recorded — staff do not have to mark anything extra.",
   dataNote: (orderLogSince, lineStatusSince) =>
     `Data exists only since history logging started${orderLogSince ? ` (order statuses — since ${orderLogSince}` : ""}${
       lineStatusSince ? `, line statuses — since ${lineStatusSince})` : orderLogSince ? ", no line statuses yet)" : ""
@@ -27,8 +27,8 @@ export const workshopAnalyticsEn: WorkshopAnalyticsDictionary = {
   kpiCreated: "Orders created",
   kpiDelivered: "Delivered",
   kpiDeliveredHint: "first «Delivered to client» in the period",
-  kpiProblems: "With a file problem",
-  kpiProblemsHint: "«Issue» or a line flagged «File problem»",
+  kpiProblems: "With a problem",
+  kpiProblemsHint: "«Issue» status or a line flagged «File problem»",
   kpiUrgent: "Urgent",
   kpiLead: "Time to delivery",
   kpiLeadHint: "median: created → delivered",
@@ -43,10 +43,15 @@ export const workshopAnalyticsEn: WorkshopAnalyticsDictionary = {
   allSections: "All",
   colStatus: "Status",
   slowest: "slowest",
+  waitingClient: "awaiting client",
   noLineData: "Line statuses are logged only recently — no data yet.",
 
-  fileHeading: "File problems",
-  fileNote: "Orders created in the period that went to «Issue» or had a line flagged «File problem».",
+  fileHeading: "Problems",
+  fileNote: "Orders created in the period that went to «Issue» or had a line flagged «File problem». The cause is not always the file: out of stock, a customer request, etc.",
+  problemsFile: "Due to the file",
+  problemsFileHint: "file-related reason or a line flagged «File problem»",
+  problemsOther: "Other",
+  problemsOtherHint: "own text: out of stock, customer request…",
   issueOrders: "Orders in «Issue»",
   flaggedOrders: "Orders with a flagged line",
   lineFlags: "Line flags",
@@ -87,6 +92,7 @@ export const workshopAnalyticsEn: WorkshopAnalyticsDictionary = {
   perDayTitle: "Orders per day",
   ordersLegend: "orders",
   linesLegend: "lines",
+  dayTooltip: (day, orders, lines) => `${day}: orders ${orders}, lines ${lines}`,
   sectionsTitle: "By work type",
   colLines: "Lines",
   colPerDay: "Lines per day",
@@ -100,6 +106,7 @@ export const workshopAnalyticsEn: WorkshopAnalyticsDictionary = {
   staffHeading: "Staff activity",
   staffNote: "How many times statuses were changed (automatic ones excluded) — just counts, not a work rating.",
   colUser: "Staff member",
+  unknownUser: "Unknown / deleted user",
   colStatusChanges: "Order statuses",
   colLineChanges: "Line statuses",
   colFlags: "«File problem» flags",

@@ -8,9 +8,13 @@ import {
   heatmapGrid,
   issueReasonCodeFromText,
   percentile,
+  mergeStaffRows,
+  problemKind,
   slowestStatus,
   statsByStatus,
   timeInStatusSegments,
+  UNKNOWN_USER_ID,
+  visibleStatusRows,
 } from "./pure";
 import { issueReasonLabelSets } from "./reasonLabels";
 
@@ -70,6 +74,68 @@ describe("slowestStatus", () => {
       ]),
     ).toBe("SENT_TO_WORKSHOP");
     expect(slowestStatus([])).toBeNull();
+  });
+
+  it("ignores statuses that only wait for the client", () => {
+    expect(
+      slowestStatus([
+        { status: "IN_WORKSHOP", count: 10, medianSec: 3600, p90Sec: 7200 },
+        { status: "READY_IN_STUDIO", count: 20, medianSec: 86400, p90Sec: 300000 },
+        { status: "RETURNED_TO_STUDIO", count: 8, medianSec: 50000, p90Sec: 90000 },
+      ]),
+    ).toBe("IN_WORKSHOP");
+    expect(slowestStatus([{ status: "READY_IN_STUDIO", count: 20, medianSec: 86400, p90Sec: 1 }])).toBeNull();
+  });
+});
+
+describe("visibleStatusRows", () => {
+  it("drops the final DELIVERED status, keeps the rest", () => {
+    const rows = [
+      { status: "NEW", section: null },
+      { status: "DELIVERED", section: null },
+      { status: "DELIVERED", section: "dtf" },
+      { status: "READY_IN_STUDIO", section: null },
+    ];
+    expect(visibleStatusRows(rows).map((r) => r.status)).toEqual(["NEW", "READY_IN_STUDIO"]);
+  });
+});
+
+describe("mergeStaffRows", () => {
+  const row = (userId: string, name: string, known: boolean, s: number, l = 0, f = 0) => ({
+    userId,
+    name,
+    role: null,
+    statusChanges: s,
+    lineChanges: l,
+    flags: f,
+    known,
+  });
+  it("merges null / deleted users into one row and sorts by total", () => {
+    const out = mergeStaffRows([
+      row("u1", "Анна", true, 5),
+      row("", "", false, 3, 1),
+      row("gone", "", false, 2, 0, 1),
+      row("u2", "Ион", true, 1),
+      row("u3", "Пусто", true, 0),
+    ]);
+    expect(out.map((r) => r.userId)).toEqual([UNKNOWN_USER_ID, "u1", "u2"]);
+    expect(out[0]).toMatchObject({ statusChanges: 5, lineChanges: 1, flags: 1 });
+  });
+  it("no unknown row when every user exists", () => {
+    expect(mergeStaffRows([row("u1", "Анна", true, 1)]).map((r) => r.userId)).toEqual(["u1"]);
+  });
+});
+
+describe("problemKind", () => {
+  const labels = issueReasonLabelSets();
+  it("file when a line was flagged or a reason maps to a file key", () => {
+    expect(problemKind({ hadFlag: true, reasons: [] }, labels)).toBe("file");
+    expect(problemKind({ hadFlag: false, reasons: [{ text: "x", code: "lowQuality" }] }, labels)).toBe("file");
+    expect(problemKind({ hadFlag: false, reasons: [{ text: labels.fileCorrupt![0]!, code: null }] }, labels)).toBe("file");
+  });
+  it("other for own texts and missing reasons", () => {
+    expect(problemKind({ hadFlag: false, reasons: [{ text: "нет красных ручек", code: null }] }, labels)).toBe("other");
+    expect(problemKind({ hadFlag: false, reasons: [{ text: null, code: null }] }, labels)).toBe("other");
   });
 });
 

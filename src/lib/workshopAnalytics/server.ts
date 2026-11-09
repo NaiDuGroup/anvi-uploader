@@ -9,7 +9,10 @@ import {
   flagResolveSeconds,
   heatmapGrid,
   issueReasonCodeFromText,
+  mergeStaffRows,
+  problemKind,
   slowestStatus,
+  visibleStatusRows,
   type DurationStats,
   type FlagEvent,
 } from "./pure";
@@ -87,6 +90,7 @@ async function computeWorkshopAnalytics(period: ShopReportPeriod, includeTest: b
     cancelRows,
     staffRows,
     sinceRows,
+    problemKindRows,
   ] = await Promise.all([
     prisma.$queryRaw<{ section: string; orders: Num; urgent: Num; issue: Num; flag: Num; problem: Num }[]>(Prisma.sql`
       WITH ${po}
@@ -229,18 +233,30 @@ async function computeWorkshopAnalytics(period: ShopReportPeriod, includeTest: b
       FROM order_logs g JOIN orders o ON o.id = g.order_id
       WHERE g.action IN ('deleted', 'cancelled_by_dealer', 'restored') AND g.created_at >= ${S} AND g.created_at < ${E} ${notTest}
       GROUP BY 1, 2`),
-    prisma.$queryRaw<{ user_id: string; name: string | null; display_name: string | null; role: string | null; status_changes: Num; line_changes: Num; flags: Num }[]>(Prisma.sql`
-      SELECT g.user_id, u.name, u.display_name, u.role,
+    prisma.$queryRaw<{ user_id: string | null; u_id: string | null; name: string | null; display_name: string | null; role: string | null; status_changes: Num; line_changes: Num; flags: Num }[]>(Prisma.sql`
+      SELECT g.user_id, u.id AS u_id, u.name, u.display_name, u.role,
         count(*) FILTER (WHERE g.action = 'status_changed' AND COALESCE(g.metadata->>'derived', '') <> 'true') AS status_changes,
         count(*) FILTER (WHERE g.action = 'line_status_changed') AS line_changes,
         count(*) FILTER (WHERE g.action = 'line_layout_flagged') AS flags
       FROM order_logs g JOIN orders o ON o.id = g.order_id LEFT JOIN users u ON u.id = g.user_id
       WHERE g.action IN ('status_changed', 'line_status_changed', 'line_layout_flagged')
         AND g.created_at >= ${S} AND g.created_at < ${E} AND ${live}
-      GROUP BY g.user_id, u.name, u.display_name, u.role`),
+      GROUP BY g.user_id, u.id, u.name, u.display_name, u.role`),
     prisma.$queryRaw<{ order_log: Date | null; line_status: Date | null }[]>(Prisma.sql`
       SELECT (SELECT min(created_at) FROM order_logs WHERE action = 'status_changed') AS order_log,
         (SELECT min(created_at) FROM order_logs WHERE action = 'line_status_changed') AS line_status`),
+    // Problem orders with every ISSUE reason they got (log + current) → «из-за файла» / «другое».
+    prisma.$queryRaw<{ id: string; had_flag: boolean; reasons: { text: string | null; code: string | null }[] | null }[]>(Prisma.sql`
+      WITH ${po}
+      SELECT po.id, po.had_flag,
+        COALESCE(json_agg(json_build_object('text', g.new_value, 'code', g.metadata->>'issueReasonCode'))
+          FILTER (WHERE g.id IS NOT NULL), '[]'::json)::jsonb
+          || jsonb_build_array(jsonb_build_object('text', o.issue_reason, 'code', o.issue_reason_code)) AS reasons
+      FROM po JOIN orders o ON o.id = po.id
+      LEFT JOIN order_logs g ON g.order_id = po.id AND g.action = 'field_updated' AND g.field = 'issueReason'
+        AND COALESCE(g.new_value, '') <> ''
+      WHERE po.had_issue OR po.had_flag
+      GROUP BY po.id, po.had_flag, o.issue_reason, o.issue_reason_code`),
   ]);
 
   // ── KPI + sections ──
@@ -259,8 +275,8 @@ async function computeWorkshopAnalytics(period: ShopReportPeriod, includeTest: b
       section: n(r.all_sections) === 1 ? null : r.section,
       ...stats(r.cnt, r.med, r.p90),
     }));
-  const orderStatusTime = toStatusRows(orderStatusRows);
-  const lineStatusTime = toStatusRows(lineStatusRows);
+  const orderStatusTime = visibleStatusRows(toStatusRows(orderStatusRows));
+  const lineStatusTime = visibleStatusRows(toStatusRows(lineStatusRows));
 
   // ── Reasons ──
   const labels = issueReasonLabelSets();
@@ -282,6 +298,11 @@ async function computeWorkshopAnalytics(period: ShopReportPeriod, includeTest: b
     const cur = reasonMap.get(k) ?? { source: r.src, code, count: 0 };
     cur.count += n(r.cnt);
     reasonMap.set(k, cur);
+  }
+
+  let fileProblemOrders = 0;
+  for (const r of problemKindRows) {
+    if (problemKind({ hadFlag: r.had_flag, reasons: r.reasons ?? [] }, labels) === "file") fileProblemOrders += 1;
   }
 
   // ── Line flags ──
@@ -365,6 +386,8 @@ async function computeWorkshopAnalytics(period: ShopReportPeriod, includeTest: b
     slowestLineStatus: slowestStatus(lineStatusTime.filter((r) => r.section == null)),
     fileProblems: {
       problemOrders,
+      fileOrders: fileProblemOrders,
+      otherOrders: Math.max(0, problemOrders - fileProblemOrders),
       issueOrders: sum(sectionRows, "issue"),
       flaggedOrders: sum(sectionRows, "flag"),
       lineFlags,
@@ -414,17 +437,17 @@ async function computeWorkshopAnalytics(period: ShopReportPeriod, includeTest: b
       leadUrgent: leadU ? stats(leadU.cnt, leadU.med, leadU.p90) : EMPTY_STATS,
       leadNormal: leadN ? stats(leadN.cnt, leadN.med, leadN.p90) : EMPTY_STATS,
     },
-    staff: staffRows
-      .map((r) => ({
-        userId: r.user_id,
-        name: r.display_name || r.name || "—",
+    staff: mergeStaffRows(
+      staffRows.map((r) => ({
+        userId: r.user_id ?? "",
+        name: r.display_name || r.name || "",
         role: r.role,
         statusChanges: n(r.status_changes),
         lineChanges: n(r.line_changes),
         flags: n(r.flags),
-      }))
-      .filter((r) => r.statusChanges + r.lineChanges + r.flags > 0)
-      .sort((a, b) => b.statusChanges + b.lineChanges + b.flags - (a.statusChanges + a.lineChanges + a.flags)),
+        known: r.user_id != null && r.u_id != null,
+      })),
+    ),
   };
 }
 

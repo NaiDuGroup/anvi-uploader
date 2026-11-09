@@ -37,10 +37,16 @@ export type WorkshopAnalyticsDictionary = {
   allSections: string;
   colStatus: string;
   slowest: string;
+  /** Tag on statuses that only wait for the client to pick up. */
+  waitingClient: string;
   noLineData: string;
 
   fileHeading: string;
   fileNote: string;
+  problemsFile: string;
+  problemsFileHint: string;
+  problemsOther: string;
+  problemsOtherHint: string;
   issueOrders: string;
   flaggedOrders: string;
   lineFlags: string;
@@ -81,6 +87,8 @@ export type WorkshopAnalyticsDictionary = {
   perDayTitle: string;
   ordersLegend: string;
   linesLegend: string;
+  /** Daily chart tooltip: «12 авг.: заказов 39, позиций 66». */
+  dayTooltip: (day: string, orders: number, lines: number) => string;
   sectionsTitle: string;
   colLines: string;
   colPerDay: string;
@@ -94,6 +102,7 @@ export type WorkshopAnalyticsDictionary = {
   staffHeading: string;
   staffNote: string;
   colUser: string;
+  unknownUser: string;
   colStatusChanges: string;
   colLineChanges: string;
   colFlags: string;

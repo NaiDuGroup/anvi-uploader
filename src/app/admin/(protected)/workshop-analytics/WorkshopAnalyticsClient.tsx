@@ -5,7 +5,17 @@ import { DateRangeFilter } from "@/app/admin/_components/DateRangeFilter";
 import { PRODUCT_TYPE_UI } from "@/app/admin/_components/workshopBoard/productTypeUi";
 import { ADMIN_STATUSES } from "@/app/admin/_lib/orderStatus";
 import { addDays, dayKeyOf } from "@/lib/shop/report/period";
-import { formatDurationSec, share, type DurationStats } from "@/lib/workshopAnalytics/pure";
+import {
+  TERMINAL_STATUSES,
+  UNKNOWN_USER_ID,
+  WAITING_CLIENT_STATUSES,
+  formatDurationSec,
+  isWaitingClientStatus,
+  share,
+  slowestStatus,
+  visibleStatusRows,
+  type DurationStats,
+} from "@/lib/workshopAnalytics/pure";
 import type { StatusTimeRow, WorkshopAnalyticsReport } from "@/lib/workshopAnalytics/types";
 import { isBoardSectionKey } from "@/lib/workshopBoard/types";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -61,8 +71,8 @@ function Td({ children, right, strong }: { children?: ReactNode; right?: boolean
   return <td className={cn("px-2 py-1.5 align-top", right && "text-right tabular-nums", strong && "font-medium text-gray-900")}>{children}</td>;
 }
 
-function Bar({ value, tone = "amber" }: { value: number; tone?: "amber" | "red" | "sky" }) {
-  const color = tone === "red" ? "bg-red-500" : tone === "sky" ? "bg-sky-500" : "bg-amber-500";
+function Bar({ value, tone = "amber" }: { value: number; tone?: "amber" | "red" | "sky" | "gray" }) {
+  const color = tone === "red" ? "bg-red-500" : tone === "sky" ? "bg-sky-500" : tone === "gray" ? "bg-gray-300" : "bg-amber-500";
   return (
     <div className="h-1.5 w-full min-w-[3rem] rounded-full bg-gray-100">
       <div className={cn("h-1.5 rounded-full", color)} style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
@@ -214,8 +224,18 @@ export default function WorkshopAnalyticsClient() {
 
           {/* 3. File problems */}
           <Card title={w.fileHeading} note={w.fileNote}>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
               <MiniStat label={w.kpiProblems} value={`${report.fileProblems.problemOrders} (${pct(share(report.fileProblems.problemOrders, report.kpi.created))})`} />
+              <MiniStat
+                label={w.problemsFile}
+                value={`${report.fileProblems.fileOrders} (${pct(share(report.fileProblems.fileOrders, report.fileProblems.problemOrders))})`}
+                hint={w.problemsFileHint}
+              />
+              <MiniStat
+                label={w.problemsOther}
+                value={`${report.fileProblems.otherOrders} (${pct(share(report.fileProblems.otherOrders, report.fileProblems.problemOrders))})`}
+                hint={w.problemsOtherHint}
+              />
               <MiniStat label={w.issueOrders} value={String(report.fileProblems.issueOrders)} />
               <MiniStat label={w.flaggedOrders} value={String(report.fileProblems.flaggedOrders)} />
               <MiniStat label={w.issueTime} value={dur(report.fileProblems.issueTime.medianSec)} />
@@ -385,7 +405,7 @@ export default function WorkshopAnalyticsClient() {
                   <tbody>
                     {report.staff.map((r) => (
                       <tr key={r.userId} className="border-b border-gray-50">
-                        <Td strong>{r.name}</Td>
+                        <Td strong>{r.userId === UNKNOWN_USER_ID ? <span className="text-gray-500">{w.unknownUser}</span> : r.name || "—"}</Td>
                         <Td right>{r.statusChanges}</Td>
                         <Td right>{r.lineChanges}</Td>
                         <Td right>{r.flags}</Td>
@@ -484,7 +504,7 @@ function StatusTimeCard({
   );
   const activeSection = section && sections.includes(section) ? section : null;
   const order: readonly string[] = level === "order" ? ADMIN_STATUSES : LINE_STATUSES;
-  const rows: StatusTimeRow[] = all
+  const rows: StatusTimeRow[] = visibleStatusRows(all)
     .filter((r) => r.section === activeSection)
     .sort((a, b) => (order.indexOf(a.status) + 100) % 100 - ((order.indexOf(b.status) + 100) % 100));
   const slowest =
@@ -492,10 +512,12 @@ function StatusTimeCard({
       ? level === "order"
         ? report.slowestOrderStatus
         : report.slowestLineStatus
-      : (rows
-          .filter((r) => r.status !== "DELIVERED" && r.status !== "DONE" && r.count >= 3 && r.medianSec != null)
-          .sort((a, b) => (b.medianSec ?? 0) - (a.medianSec ?? 0))[0]?.status ?? null);
-  const maxMedian = Math.max(1, ...rows.filter((r) => r.status !== "DELIVERED" && r.status !== "DONE").map((r) => r.medianSec ?? 0));
+      : slowestStatus(rows);
+  // Bars scale to work statuses only (client waiting can be days long).
+  const maxMedian = Math.max(
+    1,
+    ...rows.filter((r) => !TERMINAL_STATUSES.includes(r.status) && !WAITING_CLIENT_STATUSES.includes(r.status)).map((r) => r.medianSec ?? 0),
+  );
 
   return (
     <Card title={w.statusTimeHeading} note={w.statusTimeNote}>
@@ -546,16 +568,20 @@ function StatusTimeCard({
           <tbody>
             {rows.map((r) => {
               const isSlow = r.status === slowest;
+              const waiting = isWaitingClientStatus(r.status);
               return (
                 <tr key={r.status} className={cn("border-b border-gray-50", isSlow && "bg-red-50")}>
                   <Td strong>
                     {statusName(r.status)}
                     {isSlow ? <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-700">{w.slowest}</span> : null}
+                    {waiting ? (
+                      <span className="ml-2 whitespace-nowrap rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-normal text-gray-500">{w.waitingClient}</span>
+                    ) : null}
                   </Td>
                   <Td right strong>{dur(r.medianSec)}</Td>
                   <td className="w-1/3 px-2 py-1.5 align-middle">
-                    {r.status !== "DELIVERED" && r.status !== "DONE" ? (
-                      <Bar value={(r.medianSec ?? 0) / maxMedian} tone={isSlow ? "red" : "amber"} />
+                    {!TERMINAL_STATUSES.includes(r.status) ? (
+                      <Bar value={Math.min(1, (r.medianSec ?? 0) / maxMedian)} tone={isSlow ? "red" : waiting ? "gray" : "amber"} />
                     ) : null}
                   </td>
                   <Td right>{dur(r.p90Sec)}</Td>
@@ -646,7 +672,9 @@ function LoadCard({
                 <div
                   key={d.day}
                   className="flex h-full flex-1 items-end gap-px"
-                  title={`${dayLabel(d.day)}: ${d.orders} ${w.ordersLegend}, ${d.lines} ${w.linesLegend}`}
+                  title={w.dayTooltip(dayLabel(d.day), d.orders, d.lines)}
+                  role="img"
+                  aria-label={w.dayTooltip(dayLabel(d.day), d.orders, d.lines)}
                 >
                   <div className="flex-1 rounded-t-sm bg-amber-500" style={{ height: `${(d.orders / dayMax) * 100}%` }} />
                   <div className="flex-1 rounded-t-sm bg-sky-300" style={{ height: `${(d.lines / dayMax) * 100}%` }} />

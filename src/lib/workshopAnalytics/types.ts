@@ -1,4 +1,4 @@
-import type { DurationStats } from "./pure";
+import type { DurationStats, StaffRow } from "./pure";
 
 /** One row of «время в статусе»: `section` null = all sections. */
 export interface StatusTimeRow extends DurationStats {
@@ -26,6 +26,10 @@ export interface WorkshopAnalyticsReport {
   slowestLineStatus: string | null;
   fileProblems: {
     problemOrders: number;
+    /** Problem orders «из-за файла»: a flagged line or a file reason key (fileCorrupt / wrongFormat / lowQuality / missingPages). */
+    fileOrders: number;
+    /** The rest: «другое» / own text (out of stock, customer requests) / no reason. */
+    otherOrders: number;
     issueOrders: number;
     flaggedOrders: number;
     lineFlags: number;
@@ -66,5 +70,6 @@ export interface WorkshopAnalyticsReport {
     leadUrgent: DurationStats;
     leadNormal: DurationStats;
   };
-  staff: { userId: string; name: string; role: string | null; statusChanges: number; lineChanges: number; flags: number }[];
+  /** `userId` `UNKNOWN_USER_ID` (pure.ts): merged rows without a (still existing) user, name empty. */
+  staff: StaffRow[];
 }

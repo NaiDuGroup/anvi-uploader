@@ -4,7 +4,7 @@ export const workshopAnalyticsRo: WorkshopAnalyticsDictionary = {
   nav: "Analiza atelierului",
   title: "Analiza atelierului",
   intro:
-    "Unde se blochează comenzile, câte probleme cu fișierele, refaceri și anulări, când vine încărcarea. Totul se calculează din istoricul comenzilor deja înregistrat — angajații nu trebuie să marcheze nimic în plus.",
+    "Unde se blochează comenzile, câte probleme, refaceri și anulări, când vine încărcarea. Totul se calculează din istoricul comenzilor deja înregistrat — angajații nu trebuie să marcheze nimic în plus.",
   dataNote: (orderLogSince, lineStatusSince) =>
     `Datele există doar de la începutul înregistrării istoricului${orderLogSince ? ` (statusurile comenzilor — din ${orderLogSince}` : ""}${
       lineStatusSince ? `, statusurile pozițiilor — din ${lineStatusSince})` : orderLogSince ? ", statusuri de poziții încă nu sunt)" : ""
@@ -27,8 +27,8 @@ export const workshopAnalyticsRo: WorkshopAnalyticsDictionary = {
   kpiCreated: "Comenzi create",
   kpiDelivered: "Predate",
   kpiDeliveredHint: "prima dată «Predat clientului» în perioadă",
-  kpiProblems: "Cu problemă de fișier",
-  kpiProblemsHint: "«Problemă» sau poziție «Problemă cu fișierul»",
+  kpiProblems: "Cu problemă",
+  kpiProblemsHint: "statut «Problemă» sau poziție «Problemă cu fișierul»",
   kpiUrgent: "Urgente",
   kpiLead: "Termen până la predare",
   kpiLeadHint: "mediana: creată → predată clientului",
@@ -43,10 +43,15 @@ export const workshopAnalyticsRo: WorkshopAnalyticsDictionary = {
   allSections: "Toate",
   colStatus: "Status",
   slowest: "cel mai lung",
+  waitingClient: "așteaptă clientul",
   noLineData: "Statusurile pozițiilor se înregistrează de curând — încă nu sunt date.",
 
-  fileHeading: "Probleme cu fișierele",
-  fileNote: "Comenzi create în perioadă care au ajuns în «Problemă» sau unde o poziție a fost marcată «Problemă cu fișierul».",
+  fileHeading: "Probleme",
+  fileNote: "Comenzi create în perioadă care au ajuns în «Problemă» sau unde o poziție a fost marcată «Problemă cu fișierul». Cauza nu e mereu fișierul: lipsă de material, cererea clientului etc.",
+  problemsFile: "Din cauza fișierului",
+  problemsFileHint: "cauză legată de fișier sau poziție «Problemă cu fișierul»",
+  problemsOther: "Altele",
+  problemsOtherHint: "text propriu: lipsă de material, cererea clientului…",
   issueOrders: "Comenzi în «Problemă»",
   flaggedOrders: "Comenzi cu poziție marcată",
   lineFlags: "Marcări de poziții",
@@ -87,6 +92,7 @@ export const workshopAnalyticsRo: WorkshopAnalyticsDictionary = {
   perDayTitle: "Comenzi pe zile",
   ordersLegend: "comenzi",
   linesLegend: "poziții",
+  dayTooltip: (day, orders, lines) => `${day}: comenzi ${orders}, poziții ${lines}`,
   sectionsTitle: "Pe tipuri de lucrări",
   colLines: "Poziții",
   colPerDay: "Poziții pe zi",
@@ -100,6 +106,7 @@ export const workshopAnalyticsRo: WorkshopAnalyticsDictionary = {
   staffHeading: "Activitatea angajaților",
   staffNote: "De câte ori au schimbat statusuri (fără cele automate) — doar număr, nu evaluarea muncii.",
   colUser: "Angajat",
+  unknownUser: "Utilizator necunoscut / șters",
   colStatusChanges: "Statusuri comenzi",
   colLineChanges: "Statusuri poziții",
   colFlags: "Marcări «Problemă cu fișierul»",
