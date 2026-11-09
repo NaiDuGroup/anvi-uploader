@@ -1,5 +1,6 @@
 import { loadUvCatalog } from "@/lib/uv/uvCatalog";
-import { uvPrintCostPerPieceByVariant } from "@/lib/uv/uvItemPrintCost";
+import { uvItemPrintCostPerPieceMdl, uvPrintCostPerPieceByVariant } from "@/lib/uv/uvItemPrintCost";
+import { DEFAULT_UV_PRINT_NORMS } from "@/lib/uv/uvPrintNorms";
 import { NextRequest, NextResponse } from "next/server";
 import type { BusinessExpense } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -167,6 +168,12 @@ export async function GET(request: NextRequest) {
     notebook: variantCosts,
     pen: variantCosts,
     uvPrintPerPiece: uvPrintCostPerPieceByVariant(uvCatalog.items, uvCatalog.settings, uvCatalog.inkCosts),
+    uvPrintCostForArea: (widthCm, heightCm) =>
+      uvItemPrintCostPerPieceMdl(
+        { printArea: { widthCm, heightCm }, printNorms: DEFAULT_UV_PRINT_NORMS },
+        uvCatalog.settings,
+        uvCatalog.inkCosts,
+      ),
     giftSetUnitBySku: new Map(setUnitRows.map((r) => [r.sku, effectiveUnitCost(r.avgCost, r.purchaseCost)])),
   };
 

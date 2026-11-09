@@ -211,6 +211,26 @@ describe("computeOrderProductionCost", () => {
     // Without UV costs: only mugs and the per-order costs.
     expect(computeOrderProductionCost(lines, production)).toBe(28);
   });
+
+  it("prices the print of a notebook / pen without a stock item by its print size (China set)", () => {
+    const base = { mugProductSnapshot: null, largeFormatLineData: null };
+    const lines: ProfitOrderLineInput[] = [
+      {
+        ...base,
+        productType: "notebook",
+        notebookProductSnapshot: {
+          id: "68b3529c-fbb0-47fc-b09d-1126b1ae3eee", sku: "GIFT-SET-THERMOS-RED", nameRu: "Блокнот из набора", imageUrl: null,
+          coverColorHex: "#b91c1c", strapColorHex: "#b91c1c", bookmarkColorHex: "#b91c1c",
+          isOther: true, printWidthCm: 10, printHeightCm: 15, purchaseCost: 0,
+        },
+        files: [{ copies: 2 }],
+      },
+      { ...base, productType: "notebook", notebookProductSnapshot: null, files: [{ copies: 3 }] },
+    ];
+    const uvPrintCostForArea = (w: number, h: number): number => (w * h) / 100;
+    // 5 + 3 + 2 × 1.5 (10×15 cm); a line without a print size adds nothing.
+    expect(computeOrderProductionCost(lines, production, { uvPrintCostForArea })).toBe(11);
+  });
 });
 
 describe("computeOrderProductPurchaseTotal", () => {

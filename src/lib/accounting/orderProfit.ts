@@ -68,6 +68,12 @@ export type LiveUnitCosts = {
    */
   uvPrintPerPiece?: ReadonlyMap<string, number>;
   /**
+   * UV print cost of one piece by print size (cm), default UV norms — for
+   * pen / notebook lines without a stock item (the China set's notebook and
+   * pen), whose snapshot holds only the print size.
+   */
+  uvPrintCostForArea?: (widthCm: number, heightCm: number) => number;
+  /**
    * «Набор»: unit cost of a set's stock unit (box / ready set item) by SKU.
    * Missing key = not a stock item (nothing written off, no cost); null = in
    * stock but no purchase cost yet.
@@ -272,7 +278,7 @@ export function computeOrderProductPurchaseTotal(
 export function computeOrderProductionCost(
   lines: readonly ProfitOrderLineInput[],
   cfg: ProductionCostsConfig,
-  liveCosts: Pick<LiveUnitCosts, "uvPrintPerPiece"> = EMPTY_LIVE_UNIT_COSTS,
+  liveCosts: Pick<LiveUnitCosts, "uvPrintPerPiece" | "uvPrintCostForArea"> = EMPTY_LIVE_UNIT_COSTS,
 ): number {
   const variable = lines.reduce((acc, line) => acc + linePrintCost(line, cfg, liveCosts), 0);
   const total =
@@ -286,13 +292,26 @@ export function computeOrderProductionCost(
 function linePrintCost(
   line: ProfitOrderLineInput,
   cfg: ProductionCostsConfig,
-  liveCosts: Pick<LiveUnitCosts, "uvPrintPerPiece">,
+  liveCosts: Pick<LiveUnitCosts, "uvPrintPerPiece" | "uvPrintCostForArea">,
 ): number {
-  const uvPerPiece = (): number =>
-    (line.stockVariantId ? liveCosts.uvPrintPerPiece?.get(line.stockVariantId) : undefined) ?? 0;
+  const uvPerPiece = (snap: { printWidthCm?: number | null; printHeightCm?: number | null } | null): number => {
+    const byItem = line.stockVariantId ? liveCosts.uvPrintPerPiece?.get(line.stockVariantId) : undefined;
+    if (byItem != null) return byItem;
+    // No stock item (China set notebook / pen): price the print by its size.
+    const w = snap?.printWidthCm;
+    const h = snap?.printHeightCm;
+    if (!line.stockVariantId && liveCosts.uvPrintCostForArea && typeof w === "number" && typeof h === "number" && w > 0 && h > 0) {
+      return liveCosts.uvPrintCostForArea(w, h);
+    }
+    return 0;
+  };
   if (line.productType === "mug") return cfg.mugPrintPerUnit * mugOrderStockQuantityFromFiles(line.files);
-  if (line.productType === "notebook") return uvPerPiece() * notebookOrderStockQuantityFromFiles(line.files);
-  if (line.productType === "pen") return uvPerPiece() * penOrderStockQuantityFromFiles(line.files);
+  if (line.productType === "notebook") {
+    return uvPerPiece(parseNotebookProductSnapshot(line.notebookProductSnapshot)) * notebookOrderStockQuantityFromFiles(line.files);
+  }
+  if (line.productType === "pen") {
+    return uvPerPiece(parsePenProductSnapshot(line.penProductSnapshot)) * penOrderStockQuantityFromFiles(line.files);
+  }
   return 0;
 }
 
