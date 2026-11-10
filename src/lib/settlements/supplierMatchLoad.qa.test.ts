@@ -172,3 +172,45 @@ describe("QA negative invoices (credit notes / storno)", () => {
     expect(invoicePaymentStatus(-855, 0, true)).toBe("credit");
   });
 });
+
+describe("rejected suggestions on the card («Отклонённые»)", () => {
+  it("are returned with ids and summary (newest first), never counted as links or suggestions", () => {
+    const src = sources({
+      purchases: [purchase("I", "100", 500, "2026-10-01"), purchase("J", "100", 300, "2026-10-02")] as never,
+      debits: [debit("P", "100", 500, "2026-10-05")] as never,
+    });
+    const allocations = [
+      { ...alloc("r1", "P", "I", 500, "rejected"), confidence: 60, reason: "сумма", confirmedById: "u1", confirmedAt: day("2026-10-06") },
+      { ...alloc("r2", "P", "J", 300, "rejected"), confidence: 40, confirmedById: null, confirmedAt: day("2026-10-08") },
+      alloc("s1", "P", "J", 300, "suggested"),
+    ];
+    const card = toSupplierCard(buildSupplierContexts(src, allocations).get("100"), "100");
+    expect(card.rejected.map((l) => l.allocationId)).toEqual(["r2", "r1"]);
+    expect(card.rejected[1]).toMatchObject({
+      allocationId: "r1",
+      paymentId: "P",
+      invoiceId: "I",
+      amount: 500,
+      status: "rejected",
+      confidence: 60,
+      reason: "сумма",
+      paymentDate: day("2026-10-05").toISOString(),
+      paymentAmount: 500,
+      paymentKind: "bank",
+      paymentDocument: "P",
+      invoiceDocument: "EAAI",
+      invoiceDate: day("2026-10-01").toISOString(),
+      invoiceTotal: 500,
+      rejectedAt: day("2026-10-06").toISOString(),
+      rejectedById: "u1",
+    });
+    expect(card.suggestions.map((s) => s.allocationId)).toEqual(["s1"]);
+    expect(card.invoices.flatMap((i) => i.links).some((l) => l.status === "rejected")).toBe(false);
+    expect(card.payments[0]!.links.some((l) => l.status === "rejected")).toBe(false);
+    expect(card.stale).toHaveLength(0);
+  });
+
+  it("empty card has an empty rejected list", () => {
+    expect(toSupplierCard(undefined, "100").rejected).toEqual([]);
+  });
+});

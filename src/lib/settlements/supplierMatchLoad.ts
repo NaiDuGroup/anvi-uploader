@@ -584,6 +584,12 @@ export interface SupplierLinkDto {
   staleReason: StaleReason | null;
 }
 
+/** A rejected suggestion: kept so the rejection can be seen and undone («Вернуть»). */
+export interface SupplierRejectedLinkDto extends SupplierLinkDto {
+  rejectedAt: string | null;
+  rejectedById: string | null;
+}
+
 export interface SupplierInvoiceDto {
   id: string;
   document: string;
@@ -620,12 +626,14 @@ export interface SupplierMatchCardResponse {
   suggestions: SupplierLinkDto[];
   /** Confirmed links that no longer hold: shown with «Отвязать». */
   stale: SupplierLinkDto[];
+  /** Rejected suggestions, newest first: shown collapsed with «Вернуть». */
+  rejected: SupplierRejectedLinkDto[];
   counts: Record<InvoicePaymentStatus, number>;
 }
 
 export function toSupplierCard(ctx: SupplierContext | undefined, idno: string): SupplierMatchCardResponse {
   const counts: Record<InvoicePaymentStatus, number> = { paid: 0, partial: 0, unpaid: 0, receipt: 0, credit: 0 };
-  if (!ctx) return { idno, invoices: [], payments: [], suggestions: [], stale: [], counts };
+  if (!ctx) return { idno, invoices: [], payments: [], suggestions: [], stale: [], rejected: [], counts };
   const payById = new Map(ctx.payments.map((p) => [p.id, p]));
   const invById = new Map(ctx.invoices.map((i) => [i.id, i]));
   const link = (a: SupplierAllocationRow): SupplierLinkDto => {
@@ -699,7 +707,16 @@ export function toSupplierCard(ctx: SupplierContext | undefined, idno: string): 
   const stale = ctx.allocations
     .filter((a) => a.status === "confirmed" && a.staleReason && !seenStale.has(a.id) && seenStale.add(a.id))
     .map(link);
-  return { idno, invoices, payments, suggestions, stale, counts };
+  const seenRejected = new Set<string>();
+  const rejected = ctx.allocations
+    .filter((a) => a.status === "rejected" && !seenRejected.has(a.id) && seenRejected.add(a.id))
+    .sort((a, b) => (b.confirmedAt?.getTime() ?? 0) - (a.confirmedAt?.getTime() ?? 0))
+    .map((a): SupplierRejectedLinkDto => ({
+      ...link(a),
+      rejectedAt: a.confirmedAt?.toISOString() ?? null,
+      rejectedById: a.confirmedById,
+    }));
+  return { idno, invoices, payments, suggestions, stale, rejected, counts };
 }
 
 export async function loadSupplierCard(idno: string): Promise<SupplierMatchCardResponse> {

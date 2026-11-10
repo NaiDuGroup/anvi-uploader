@@ -64,6 +64,10 @@ export interface SettlementExtraLabels {
     linkOpen: (money: string) => string;
     undo: string;
     undoConfirm: string;
+    rejectedTitle: string;
+    rejectedHint: string;
+    rejectedAt: (date: string) => string;
+    restore: string;
     paidOf: (paid: string, total: string) => string;
     linkedTo: string;
     auto: string;
@@ -242,6 +246,10 @@ const RU: SettlementExtraLabels = {
     linkOpen: (m) => `не оплачено ${m}`,
     undo: "Отвязать",
     undoConfirm: "Отвязать платёж от фактуры?",
+    rejectedTitle: "Отклонённые",
+    rejectedHint: "«Вернуть» снимает отказ и сразу заново подбирает связи — подсказка снова появится в списке.",
+    rejectedAt: (d) => `отклонено ${d}`,
+    restore: "Вернуть",
     paidOf: (paid, total) => `${paid} из ${total}`,
     linkedTo: "Связи",
     auto: "авто",

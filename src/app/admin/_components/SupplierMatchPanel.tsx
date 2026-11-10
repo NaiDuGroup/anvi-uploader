@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { Check, CreditCard, Landmark, Link2, Loader2, Sparkles, X as XIcon } from "lucide-react";
+import { Check, ChevronDown, CreditCard, Landmark, Link2, Loader2, RotateCcw, Sparkles, X as XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetcher } from "@/lib/swr/fetcher";
@@ -85,6 +85,7 @@ export default function SupplierMatchPanel({
   const [undoLink, setUndoLink] = useState<SupplierLinkDto | null>(null);
   const [showAllInvoices, setShowAllInvoices] = useState(false);
   const [showAllPayments, setShowAllPayments] = useState(false);
+  const [showRejected, setShowRejected] = useState(false);
 
   async function run(key: string, fn: () => Promise<{ done?: number; skipped?: number; suggested?: number; confirmed?: number }>) {
     setBusy(key);
@@ -228,6 +229,71 @@ export default function SupplierMatchPanel({
             ))}
           </ul>
         )}
+        {data.rejected.length > 0 ? (
+          <div className="mt-2 border-t border-violet-100 pt-2">
+            <button
+              type="button"
+              className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700"
+              aria-expanded={showRejected}
+              onClick={() => setShowRejected((v) => !v)}
+            >
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showRejected ? "" : "-rotate-90")} />
+              {M.rejectedTitle} · {data.rejected.length}
+            </button>
+            {showRejected ? (
+              <>
+                <p className="mb-1.5 mt-1 text-[11px] text-gray-400">{M.rejectedHint}</p>
+                <ul className="space-y-1.5">
+                  {data.rejected.map((s) => (
+                    <li
+                      key={s.allocationId}
+                      className="flex flex-col gap-2 rounded-md border border-gray-200 bg-white/70 px-2.5 py-2 text-xs sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0 space-y-0.5 text-gray-500">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className={cn("rounded-full px-1.5 py-0.5 text-[11px] font-medium ring-1", confidenceTone(s.confidence))}>
+                            {M.confidence(s.confidence)}
+                          </span>
+                          <span className="font-medium tabular-nums text-gray-700">{money(s.amount)}</span>
+                          <span>
+                            {formatShortDate(s.paymentDate)} · {s.paymentKind === "card" ? M.card : M.bank} {s.paymentDocument}
+                          </span>
+                          <span className="text-gray-400">→</span>
+                          <span className="font-medium text-gray-700">{s.invoiceDocument}</span>
+                          <span>
+                            {formatShortDate(s.invoiceDate)} · {s.invoiceTotal != null ? money(s.invoiceTotal) : ""}
+                          </span>
+                        </div>
+                        {s.reason ? <div>{s.reason}</div> : null}
+                        {s.rejectedAt ? <div className="text-gray-400">{M.rejectedAt(formatShortDate(s.rejectedAt))}</div> : null}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 shrink-0 gap-1 self-start text-xs sm:self-auto"
+                        disabled={busy !== null}
+                        onClick={() =>
+                          run(`u${s.allocationId}`, async () => {
+                            await post(`/api/admin/settlements/supplier-match/${encodeURIComponent(s.allocationId)}`, null, "DELETE");
+                            // Re-run matching so the suggestion comes back right away.
+                            return post("/api/admin/settlements/supplier-match/auto", { idno });
+                          })
+                        }
+                      >
+                        {busy === `u${s.allocationId}` ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-3.5 w-3.5" />
+                        )}
+                        {M.restore}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {data.stale.length > 0 ? (
