@@ -66,6 +66,9 @@ export interface SettlementRow {
   name: string;
   category: CounterpartyCategoryCode | null;
   categorySource: CategorySource | null;
+  /** Category without the manual row: what «Авто» in the picker goes back to. */
+  autoCategory: CounterpartyCategoryCode | null;
+  autoCategorySource: Exclude<CategorySource, "manual"> | null;
   /** Our sales invoices (+ pre-e-Factura settlements), as in «Должники». */
   salesInvoiced: number;
   /** Money they paid us (third-party payers attributed, refunds deducted, B/f receipts). */
@@ -273,6 +276,9 @@ export interface SettlementLedgerResponse {
   name: string;
   category: CounterpartyCategoryCode | null;
   categorySource: CategorySource | null;
+  /** Category without the manual row: what «Авто» in the picker goes back to. */
+  autoCategory: CounterpartyCategoryCode | null;
+  autoCategorySource: Exclude<CategorySource, "manual"> | null;
   /** All entries (or the period's), chronological, running balance from `opening`. */
   entries: LedgerEntry[];
   /** Balance today (all entries). */

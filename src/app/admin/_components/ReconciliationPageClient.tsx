@@ -70,6 +70,7 @@ type Loc = ReturnType<typeof useLanguageStore.getState>["locale"];
 type Labels = ReturnType<typeof getReconLabels>;
 
 type Tab = "queue" | "ledger" | "debtors" | "act" | "statements";
+const TABS: readonly Tab[] = ["queue", "ledger", "debtors", "act", "statements"];
 
 const PAGE_SIZES = [25, 50, 100];
 
@@ -78,6 +79,16 @@ export default function ReconciliationPageClient() {
   const { t } = useLanguageStore();
   const L = getReconLabels(locale);
   const [tab, setTab] = useState<Tab>("queue");
+  /** `?tab=act&idno=<IDNO>` (links from «Взаиморасчёты»): open that client's act. */
+  const [actIdno, setActIdno] = useState("");
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const t = q.get("tab");
+    const idno = q.get("idno")?.trim() ?? "";
+    if (idno) setActIdno(idno);
+    if (t && (TABS as readonly string[]).includes(t)) setTab(t as Tab);
+    else if (idno) setTab("act");
+  }, []);
   const [uploading, setUploading] = useState(false);
   const [autoMatching, setAutoMatching] = useState(false);
   const [busyTxId, setBusyTxId] = useState<string | null>(null);
@@ -543,7 +554,7 @@ export default function ReconciliationPageClient() {
         />
       ) : null}
 
-      {tab === "act" ? <ActView L={L} locale={locale} /> : null}
+      {tab === "act" ? <ActView L={L} locale={locale} initialIdno={actIdno} /> : null}
 
       {tab === "statements" ? <StatementsView L={L} locale={locale} /> : null}
 
@@ -2356,9 +2367,9 @@ function Pagination({
   );
 }
 
-function ActView({ L, locale }: { L: Labels; locale: Loc }) {
+function ActView({ L, locale, initialIdno = "" }: { L: Labels; locale: Loc; initialIdno?: string }) {
   const { clients } = useReconClients();
-  const [idno, setIdno] = useState("");
+  const [idno, setIdno] = useState(initialIdno);
   const [fiscalId, setFiscalId] = useState<string | null>(null);
   const { statement, isLoading } = useClientStatement(idno || null);
 
@@ -2370,8 +2381,10 @@ function ActView({ L, locale }: { L: Labels; locale: Loc }) {
         label: c.name,
         description: c.idno,
       })),
+      // Preselected from the URL but not in the list: still selectable / shown.
+      ...(idno && clients && !clients.some((c) => c.idno === idno) ? [{ value: idno, label: idno }] : []),
     ],
-    [clients, L.selectClient],
+    [clients, L.selectClient, idno],
   );
 
   return (

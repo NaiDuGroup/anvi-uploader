@@ -18,6 +18,8 @@ function row(idno: string, extra: Partial<SettlementRow> = {}): SettlementRow {
     name: `Party ${idno}`,
     category: "supplier",
     categorySource: "auto",
+    autoCategory: "supplier",
+    autoCategorySource: "auto",
     salesInvoiced: 0,
     receivedFromThem: 0,
     purchasesInvoiced: 0,

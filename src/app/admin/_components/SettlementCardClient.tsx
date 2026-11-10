@@ -12,6 +12,7 @@ import { fetcher } from "@/lib/swr/fetcher";
 import { formatMoney, formatShortDate } from "@/lib/reconciliation/labels";
 import { downloadPdf } from "@/lib/reconciliation/downloadActPdf";
 import { dayKeyOf } from "@/lib/shop/report/period";
+import { actFileName } from "@/lib/settlements/http";
 import { getSettlementLabels, type PeriodPreset, type SettlementLabels } from "@/lib/settlements/labels";
 import type { OpeningBalanceDto, SettlementLedgerResponse } from "@/lib/settlements/types";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,12 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
   const [preset, setPreset] = useState<PeriodPreset>("all");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  // Reversed dates are swapped right away (the server swaps them too).
+  function setCustomRange(from: string, to: string) {
+    if (from && to && from > to) [from, to] = [to, from];
+    setCustomFrom(from);
+    setCustomTo(to);
+  }
   const range = preset === "custom" ? { from: customFrom, to: customTo } : presetRange(preset, today);
   const qs = new URLSearchParams();
   if (range.from) qs.set("from", range.from);
@@ -83,8 +90,8 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
     try {
       const p = new URLSearchParams(qs);
       p.set("locale", actLocale);
-      const safe = (data?.name ?? idno).replace(/[^\p{L}\p{N}_-]+/gu, "_").slice(0, 40);
-      await downloadPdf(`${base}/act?${p.toString()}`, `act-sverki-${safe}-${idno}.pdf`);
+      const file = actFileName("act-sverki", data?.name === "—" ? null : data?.name, idno);
+      await downloadPdf(`${base}/act?${p.toString()}`, `${file.ascii}.pdf`);
     } catch {
       toast.error(C.act.error);
     } finally {
@@ -126,7 +133,7 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
               <div className="text-sm text-gray-500">IDNO {data.idno}</div>
               <div className="max-w-xs">
                 <CategorySelect
-                  row={{ idno: data.idno, category: data.category, categorySource: data.categorySource }}
+                  row={{ idno: data.idno, category: data.category, categorySource: data.categorySource, autoCategory: data.autoCategory }}
                   L={L}
                   saving={savingCategory}
                   onChange={saveCategory}
@@ -195,7 +202,7 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
                       type="date"
                       value={customFrom}
                       max={customTo || undefined}
-                      onChange={(e) => setCustomFrom(e.target.value)}
+                      onChange={(e) => setCustomRange(e.target.value, customTo)}
                       className="h-8 w-[9.5rem] text-xs"
                     />
                   </label>
@@ -205,7 +212,7 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
                       type="date"
                       value={customTo}
                       min={customFrom || undefined}
-                      onChange={(e) => setCustomTo(e.target.value)}
+                      onChange={(e) => setCustomRange(customFrom, e.target.value)}
                       className="h-8 w-[9.5rem] text-xs"
                     />
                   </label>
@@ -251,7 +258,7 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
             </div>
           ) : null}
 
-          <LedgerTable data={data} L={L} money={money} hasPeriod={hasPeriod} range={range} />
+          <LedgerTable data={data} L={L} money={money} hasPeriod={hasPeriod} />
 
           <SupplierMatchPanel idno={idno} X={X} money={money} onChanged={() => setJournalKey((k) => k + 1)} />
 
@@ -281,13 +288,11 @@ function LedgerTable({
   L,
   money,
   hasPeriod,
-  range,
 }: {
   data: SettlementLedgerResponse;
   L: SettlementLabels;
   money: (n: number) => string;
   hasPeriod: boolean;
-  range: { from: string; to: string };
 }) {
   const C = L.cardPage;
   const cell = (n: number) => (n === 0 ? "" : money(n));
@@ -295,12 +300,13 @@ function LedgerTable({
   const openingLabel = hasPeriod
     ? C.openingRow
     : `${L.ledgerKinds.opening_balance}${data.openingBalance?.note ? ` · ${data.openingBalance.note}` : ""}`;
-  const openingDate = range.from
-    ? ymd(range.from)
+  // The server's period: already normalized (reversed dates swapped).
+  const openingDate = data.period.from
+    ? ymd(data.period.from)
     : data.openingBalance
       ? ymd(data.openingBalance.asOfDate)
       : "";
-  const closingDate = range.to ? ymd(range.to) : "";
+  const closingDate = data.period.to ? ymd(data.period.to) : "";
 
   return (
     <div>

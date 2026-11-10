@@ -49,10 +49,16 @@ const STATE_PILL: Record<SettlementState, string> = {
 
 const VIEWS: SettlementsView[] = ["balances", "checks", "journal"];
 
-function matchesFilter(row: SettlementRow, filter: SettlementFilter, checkIdnos: ReadonlySet<string> | null): boolean {
+/** `searching`: a search query is set — «Все» then includes service rows (bank, taxes…). */
+export function matchesFilter(
+  row: SettlementRow,
+  filter: SettlementFilter,
+  checkIdnos: ReadonlySet<string> | null,
+  searching = false,
+): boolean {
   switch (filter) {
     case "all":
-      return row.state !== "service";
+      return searching || row.state !== "service";
     case "check":
       return checkIdnos ? checkIdnos.has(row.idno) : row.flags.length > 0;
     default:
@@ -116,22 +122,26 @@ export default function SettlementsPageClient() {
   const checkIdnos = useMemo(() => (signalsByIdno ? new Set(signalsByIdno.keys()) : null), [signalsByIdno]);
   const names = useMemo(() => new Map((data?.rows ?? []).map((r) => [r.idno, r.name])), [data]);
 
-  const filtered = useMemo(() => {
+  // With a query the chips count (and «Все» shows) matches across all rows, service ones included.
+  const searched = useMemo(() => {
     const q = debounced.trim().toLowerCase();
-    return (data?.rows ?? []).filter(
-      (r) =>
-        matchesFilter(r, filter, checkIdnos) &&
-        (!q || r.name.toLowerCase().includes(q) || r.idno.includes(q)),
-    );
-  }, [data, filter, debounced, checkIdnos]);
+    const rows = data?.rows ?? [];
+    return q ? rows.filter((r) => r.name.toLowerCase().includes(q) || r.idno.includes(q)) : rows;
+  }, [data, debounced]);
+  const searching = debounced.trim() !== "";
+
+  const filtered = useMemo(
+    () => searched.filter((r) => matchesFilter(r, filter, checkIdnos, searching)),
+    [searched, filter, checkIdnos, searching],
+  );
 
   const counts = useMemo(() => {
     const out = {} as Record<SettlementFilter, number>;
     for (const f of SETTLEMENT_FILTERS) {
-      out[f] = (data?.rows ?? []).filter((r) => matchesFilter(r, f, checkIdnos)).length;
+      out[f] = searched.filter((r) => matchesFilter(r, f, checkIdnos, searching)).length;
     }
     return out;
-  }, [data, checkIdnos]);
+  }, [searched, checkIdnos, searching]);
 
   const visible = filtered.slice(0, limit);
 
@@ -477,7 +487,7 @@ function StatePill({ row, L, flagged }: { row: SettlementRow; L: SettlementLabel
   );
 }
 
-export type CategoryTarget = Pick<SettlementRow, "idno" | "category" | "categorySource">;
+export type CategoryTarget = Pick<SettlementRow, "idno" | "category" | "categorySource" | "autoCategory">;
 
 export function CategorySelect({
   row,
@@ -499,7 +509,8 @@ export function CategorySelect({
         className="h-8 w-full min-w-[9rem] rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none md:w-auto"
         aria-label={L.colCategory}
       >
-        <option value="">{L.noCategory}</option>
+        {/* Empty = drop the manual row: the party goes back to its automatic category. */}
+        <option value="">{row.autoCategory ? L.autoCategory(L.categories[row.autoCategory]) : L.noCategory}</option>
         {COUNTERPARTY_CATEGORIES.map((c) => (
           <option key={c} value={c}>
             {L.categories[c]}

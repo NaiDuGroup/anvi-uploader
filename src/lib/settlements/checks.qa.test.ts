@@ -11,7 +11,7 @@ const NOW = day("2026-11-10");
 
 function row(idno: string, extra: Partial<SettlementRow> = {}): SettlementRow {
   return {
-    idno, name: `Party ${idno}`, category: "supplier", categorySource: "auto", salesInvoiced: 0, receivedFromThem: 0,
+    idno, name: `Party ${idno}`, category: "supplier", categorySource: "auto", autoCategory: "supplier", autoCategorySource: "auto", salesInvoiced: 0, receivedFromThem: 0,
     purchasesInvoiced: 0, paidToThem: 0, paidByCard: 0, paidByReceipt: 0, salesNet: 0, purchaseNet: 0, openingBalance: 0,
     balance: 0, state: "settled", flags: [], salesInvoiceCount: 0, purchaseInvoiceCount: 0, lastActivity: null, ...extra,
   };

@@ -28,7 +28,12 @@ const TYPE_TONE: Record<CheckType, string> = {
 
 function actionHref(s: CheckSignal): string | null {
   if (s.type === "card_unattributed") return null;
-  if (s.type === "low_confidence_sales") return "/admin/bookkeeping/reconciliation";
+  if (s.type === "low_confidence_sales") {
+    // «Акт сверки» of that client: its invoices with the matched payments.
+    return s.idno
+      ? `/admin/bookkeeping/reconciliation?tab=act&idno=${encodeURIComponent(s.idno)}`
+      : "/admin/bookkeeping/reconciliation";
+  }
   if (!s.idno) return null;
   const base = `/admin/bookkeeping/settlements/${encodeURIComponent(s.idno)}`;
   return s.type === "supplier_unpaid" ||

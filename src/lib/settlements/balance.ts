@@ -388,6 +388,8 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
       hasPurchaseInvoices: acc.purchaseInvoiceCount > 0,
       hasSalesInvoices: acc.salesInvoiceCount > 0,
       operational: input.operationalIdnos.has(acc.idno),
+      salesInvoiced: acc.salesInvoiced,
+      purchasesInvoiced: acc.purchases,
     });
 
     const salesNet = acc.salesInvoiced - acc.received;
@@ -465,6 +467,8 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
       name: manual?.name?.trim() || acc.name || input.names?.get(acc.idno) || "—",
       category: resolved.category,
       categorySource: resolved.source,
+      autoCategory: resolved.autoCategory,
+      autoCategorySource: resolved.autoSource,
       salesInvoiced: mdl(acc.salesInvoiced),
       receivedFromThem: mdl(acc.received),
       purchasesInvoiced: mdl(acc.purchases),

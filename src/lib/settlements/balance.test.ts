@@ -225,6 +225,38 @@ describe("computeSettlements", () => {
     });
   });
 
+  it("mixed party: category by the larger invoiced side; supplier checks still run", () => {
+    // We invoiced 976 401.92, they invoiced 15 798.29 (CRAFTI BUSINESS) → customer.
+    const mostlySales = scenario({
+      invoices: [{ buyer: SUPPLIER, total: 976401.92, date: "2026-02-01", doc: "EAA1" }],
+      credits: [{ id: "c1", payer: SUPPLIER, amount: 976401.92, date: "2026-02-10" }],
+      purchases: [{ supplier: SUPPLIER, total: 15798.29, date: "2026-02-15", doc: "SUP1" }],
+      debits: [{ id: "d1", to: SUPPLIER, amount: 20000, date: "2026-02-20" }],
+    });
+    expect(mostlySales.row(SUPPLIER)).toMatchObject({
+      category: "customer",
+      categorySource: "auto",
+      autoCategory: "customer",
+      autoCategorySource: "auto",
+    });
+    // Paid more than they invoiced: still flagged although the party is a customer.
+    expect(mostlySales.row(SUPPLIER)!.flags.map((f) => f.kind)).toContain("supplier_overpaid");
+
+    const mostlyPurchases = scenario({
+      invoices: [{ buyer: SUPPLIER, total: 100, date: "2026-02-01", doc: "EAA2" }],
+      purchases: [{ supplier: SUPPLIER, total: 9000, date: "2026-02-15", doc: "SUP2" }],
+    });
+    expect(mostlyPurchases.row(SUPPLIER)!.category).toBe("supplier");
+  });
+
+  it("manual category keeps the auto one for the picker", () => {
+    const { row } = scenario({
+      purchases: [{ supplier: SUPPLIER, total: 700, date: "2026-02-15", doc: "SUP3" }],
+      categories: { [SUPPLIER]: "other" },
+    });
+    expect(row(SUPPLIER)).toMatchObject({ category: "other", categorySource: "manual", autoCategory: "supplier" });
+  });
+
   it("third-party payer: allocated money settles the buyer, not the payer", () => {
     const { row } = scenario({
       invoices: [{ buyer: CLIENT, total: 5338, date: "2026-01-10", doc: "EAA5338" }],

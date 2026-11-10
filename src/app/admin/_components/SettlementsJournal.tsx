@@ -227,17 +227,20 @@ export default function SettlementsJournal({
             </div>
           ) : null}
 
-          {pages > 1 ? (
-            <div className="mt-2 flex items-center justify-between gap-2 text-xs text-gray-500">
-              <span>{J.page(data.page, pages, data.total)}</span>
-              <div className="flex gap-1.5">
+          {/* Full view: page X of Y + total always; compact card block only when it pages. */}
+          {pages > 1 || !compact ? (
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs text-gray-600">
+              {pages > 1 ? (
                 <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page <= 1} onClick={() => setPage(page - 1)}>
                   {J.prev}
                 </Button>
+              ) : null}
+              <span className="tabular-nums">{J.page(Math.min(data.page, pages), pages, data.total)}</span>
+              {pages > 1 ? (
                 <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page >= pages} onClick={() => setPage(page + 1)}>
                   {J.next}
                 </Button>
-              </div>
+              ) : null}
             </div>
           ) : null}
         </>

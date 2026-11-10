@@ -3,7 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { buildSettlementAct } from "@/lib/settlements/act";
 import { parseIdno } from "@/lib/settlements/guard";
-import { pdfContentDisposition } from "@/lib/settlements/http";
+import { actFileName, pdfContentDisposition } from "@/lib/settlements/http";
 import { loadSettlementLedger } from "@/lib/settlements/load";
 import { actPeriodStart, parseSettlementPeriod } from "@/lib/settlements/period";
 
@@ -38,12 +38,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ idno
       act,
       locale,
     });
-    const safeName = ledger.name.replace(/[^\p{L}\p{N}_-]+/gu, "_").slice(0, 40) || idno;
+    const file = actFileName("act-sverki", ledger.name === "—" ? null : ledger.name, idno);
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": pdfContentDisposition(`act-sverki-${safeName}`),
+        "Content-Disposition": pdfContentDisposition(file.ascii, file.utf8),
         "Cache-Control": "no-store",
       },
     });

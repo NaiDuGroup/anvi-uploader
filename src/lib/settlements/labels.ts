@@ -1,4 +1,5 @@
 import type { Locale } from "@/lib/i18n/types";
+import { countEn, countRo, countRu, pluralRu } from "./plural";
 import type {
   CardMerchantSource,
   CategorySource,
@@ -51,6 +52,8 @@ export interface SettlementLabels {
   states: Record<SettlementState, string>;
   categories: Record<CounterpartyCategoryCode, string>;
   noCategory: string;
+  /** Empty option of the category picker when the party has an automatic category. */
+  autoCategory: (name: string) => string;
   categorySource: Record<CategorySource, string>;
   empty: string;
   loadError: string;
@@ -212,6 +215,7 @@ const RU: SettlementLabels = {
     other: "Прочее",
   },
   noCategory: "Не размечено",
+  autoCategory: (name) => `Авто: ${name}`,
   categorySource: {
     manual: "вручную",
     default: "по умолчанию",
@@ -222,9 +226,9 @@ const RU: SettlementLabels = {
   loadError: "Не удалось загрузить взаиморасчёты.",
   saveError: "Не удалось сохранить категорию.",
   showMore: (n) => `Показать ещё ${n}`,
-  rowsCount: (n) => `${n} контрагентов`,
+  rowsCount: (n) => countRu(n, "контрагент", "контрагента", "контрагентов"),
   purchasesWithoutTotals: (n) =>
-    `${n} фактур поставщиков ещё без сумм (загрузка истории не закончена) — сальдо по закупкам может быть неполным.`,
+    `${countRu(n, "фактура", "фактуры", "фактур")} поставщиков ещё без сумм (загрузка истории не закончена) — сальдо по закупкам может быть неполным.`,
   ledgerTitle: "Документы и платежи",
   ledgerEmpty: "Движений нет.",
   ledgerKinds: {
@@ -268,7 +272,7 @@ const RU: SettlementLabels = {
     attributed: "Привязано к поставщикам",
     unattributed: "Не привязано",
     ignored: "Не поставщик",
-    byAmount: (n) => `из них ${n} по совпадению суммы с фактурой`,
+    byAmount: (n) => `из них ${n} ${pluralRu(n, "покупка", "покупки", "покупок")} — по совпадению суммы с фактурой`,
     countSum: (n, m) => `${n} шт. · ${m}`,
     colMerchant: "Продавец (из банка)",
     colCount: "Покупок",
@@ -356,7 +360,6 @@ const RU: SettlementLabels = {
 };
 
 const RO: SettlementLabels = {
-  ...RU,
   title: "Decontări",
   hint: "Soldul pe fiecare IDNO pe ambele părți: facturile noastre și plățile clienților, facturile furnizorilor și plățile noastre. Plus — ni se datorează, minus — datorăm noi.",
   search: "Denumire sau IDNO",
@@ -374,9 +377,9 @@ const RO: SettlementLabels = {
     they_overpaid: "Ne-au plătit în plus",
     check: "Cu semnale",
     unclassified: "Neclasificat",
-    service: "Servicii",
+    service: "De serviciu",
   },
-  colParty: "Contrapartidă",
+  colParty: "Contragent",
   colSalesInvoiced: "Am facturat",
   colReceived: "Ne-au plătit",
   colPurchasesInvoiced: "Ne-au facturat",
@@ -391,7 +394,7 @@ const RO: SettlementLabels = {
     they_overpaid: "Clientul a plătit în plus",
     settled: "Închis",
     unclassified: "Neclasificat",
-    service: "Serviciu",
+    service: "De serviciu",
   },
   categories: {
     supplier: "Furnizor",
@@ -404,26 +407,27 @@ const RO: SettlementLabels = {
     other: "Altele",
   },
   noCategory: "Neclasificat",
+  autoCategory: (name) => `Auto: ${name}`,
   categorySource: {
     manual: "manual",
     default: "implicit",
     auto: "după facturi",
     operational: "din «Nu sunt clienți»",
   },
-  empty: "Nicio contrapartidă pentru acest filtru.",
+  empty: "Niciun contragent pentru acest filtru.",
   loadError: "Nu s-au putut încărca decontările.",
   saveError: "Nu s-a putut salva categoria.",
   showMore: (n) => `Arată încă ${n}`,
-  rowsCount: (n) => `${n} contrapartide`,
+  rowsCount: (n) => countRo(n, "contragent", "contragenți"),
   purchasesWithoutTotals: (n) =>
-    `${n} facturi de la furnizori încă fără sume (importul istoricului nu e gata) — soldul achizițiilor poate fi incomplet.`,
+    `${countRo(n, "factură", "facturi")} de la furnizori încă fără sume (importul istoricului nu e gata) — soldul achizițiilor poate fi incomplet.`,
   ledgerTitle: "Documente și plăți",
   ledgerEmpty: "Nicio mișcare.",
   ledgerKinds: {
     opening_balance: "Sold inițial (1C)",
     sale_invoice: "Factura noastră",
     payment_in: "Plată primită",
-    receipt: "Bon (B/f)",
+    receipt: "Bon fiscal (B/f)",
     historical_invoice: "Factură pe hârtie",
     refund: "Restituire client",
     purchase_invoice: "Factura furnizorului",
@@ -441,18 +445,113 @@ const RO: SettlementLabels = {
       return `Două facturi de ${money(f.amount)} (${f.documents.join(", ")}; ${f.dates.map(date).join(" și ")}), dar o singură plată de această sumă — posibil dublură.`;
     }
     if (f.kind === "payment_without_invoice") {
-      return `Plată fără factură în apropiere (±60 zile): ${money(f.amount)}, ${f.dates.map(date).join(", ")}.`;
+      return `Plată fără factura noastră în apropiere (±60 de zile): ${money(f.amount)}, ${f.dates.map(date).join(", ")}.`;
     }
     if (f.kind === "supplier_overpaid") {
       return `Furnizorului i s-a plătit cu ${money(f.amount)} mai mult decât a facturat.`;
     }
-    return `Aceeași sumă ${money(f.amount)} plătită de două ori (${f.dates.map(date).join(" și ")}), dar o singură factură.`;
+    return `Aceeași sumă ${money(f.amount)} a fost plătită de două ori (${f.dates.map(date).join(" și ")}), dar factura e una singură.`;
   },
   checkPill: "De verificat",
+  paidByCard: (m) => `inclusiv cu cardul ${m}`,
+  paidByReceipt: (m) => `inclusiv pe loc (B/f) ${m}`,
+  receiptOutText: (ref, method) =>
+    `achitat pe loc: ${ref?.trim() || "B/f"}${method === "card" ? " (card)" : method === "cash" ? " (numerar)" : ""}`,
+  cardSourceShort: { alias: "manual", name: "după denumire", amount: "după sumă" },
+  card: {
+    title: "Plăți cu cardul",
+    hint: "Banca înregistrează cumpărăturile cu cardul corporativ ca plată către MAIB. Cele legate de un furnizor contează ca plata noastră către el; restul rămân operațiuni bancare.",
+    attributed: "Legate de furnizori",
+    unattributed: "Nelegate",
+    ignored: "Nu e furnizor",
+    byAmount: (n) => `dintre ele ${countRo(n, "cumpărătură", "cumpărături")} — după coincidența sumei cu factura`,
+    countSum: (n, m) => `${n} buc. · ${m}`,
+    colMerchant: "Comerciant (din bancă)",
+    colCount: "Cumpărături",
+    colSum: "Suma",
+    colLast: "Ultima",
+    colSupplier: "Furnizor",
+    sources: {
+      alias: "manual",
+      ignored: "nu e furnizor",
+      name: "după denumire",
+      amount: "după sumă",
+      mixed: "parțial după sumă",
+    },
+    partly: (a, t) => `legate ${a} din ${t}`,
+    pick: "Alege furnizorul",
+    change: "Modifică",
+    notSupplier: "Nu e furnizor",
+    reset: "Resetează (auto)",
+    resetDone: "automat",
+    undo: "Anulează",
+    search: "Denumirea sau IDNO furnizorului",
+    noMatches: "Nu s-a găsit nimic.",
+    bindIdno: (idno) => `Leagă de IDNO ${idno}`,
+    cancel: "Renunță",
+    allDone: "Toate cumpărăturile cu cardul sunt repartizate.",
+    showAttributed: (n) => `Arată cele legate și «nu e furnizor» (${n})`,
+    hideAttributed: "Ascunde cele legate",
+    saveError: "Nu s-a putut salva legătura.",
+  },
+  cardPage: {
+    back: "Toți contragenții",
+    open: "Deschide fișa",
+    notFound: "Pentru acest IDNO nu există nici documente, nici plăți.",
+    balanceText: (n, money) =>
+      n > 0 ? `Ni se datorează ${money(n)}` : n < 0 ? `Datorăm ${money(-n)}` : "Decontări închise",
+    balanceToday: "Soldul la zi",
+    totSalesInvoiced: "Facturat de noi",
+    totReceived: "Primit de la ei",
+    totPurchasesInvoiced: "Facturat de ei",
+    totPaid: "Plătit de noi",
+    totalsHint: "Sume pentru perioada aleasă, fără soldul inițial.",
+    presets: { all: "Toată perioada", this_year: "Anul curent", last_year: "Anul trecut", custom: "Perioadă" },
+    from: "De la",
+    to: "Până la",
+    colDebit: "Debit",
+    colCredit: "Credit",
+    debitHint: "mărește datoria lor față de noi",
+    creditHint: "micșorează datoria lor față de noi",
+    colKind: "Tip",
+    colDescription: "Descriere",
+    openingRow: "Sold la începutul perioadei",
+    closingRow: "Sold la sfârșitul perioadei",
+    turnoverRow: "Rulaj pe perioadă",
+    noMovements: "Nicio mișcare în această perioadă.",
+    ob: {
+      title: "Sold inițial (din 1C)",
+      hint: "Datoria existentă înainte de e-Factura și de extrasul bancar. Apare ca primul rând și intră în soldul din listă.",
+      none: "Nestabilit",
+      add: "Stabilește",
+      edit: "Modifică",
+      date: "La data",
+      amount: "Suma, MDL",
+      side: "Cine datorează",
+      theyOwe: "Ni se datorează",
+      weOwe: "Datorăm",
+      note: "Comentariu",
+      save: "Salvează",
+      remove: "Șterge",
+      removeConfirm: "Ștergeți soldul inițial?",
+      cancel: "Renunță",
+      saved: "Soldul inițial a fost salvat",
+      removed: "Soldul inițial a fost șters",
+      error: "Nu s-a putut salva soldul inițial.",
+      invalid: "Indicați data și o sumă mai mare de zero.",
+      afterFirstDoc: (date) =>
+        `Primul document — ${date}. De obicei soldul se stabilește la o dată anterioară, altfel documentele timpurii vor fi numărate de două ori.`,
+      asOf: (date) => `la ${date}`,
+    },
+    act: {
+      download: "Descarcă actul",
+      lang: "Limba actului",
+      error: "Nu s-a putut genera actul de verificare.",
+    },
+  },
 };
 
 const EN: SettlementLabels = {
-  ...RU,
   title: "Settlements",
   hint: "Balance per fiscal code on both sides: our invoices and client payments, supplier invoices and our payments. Plus — they owe us, minus — we owe them.",
   search: "Name or IDNO",
@@ -500,6 +599,7 @@ const EN: SettlementLabels = {
     other: "Other",
   },
   noCategory: "Unclassified",
+  autoCategory: (name) => `Auto: ${name}`,
   categorySource: {
     manual: "manual",
     default: "default",
@@ -510,9 +610,9 @@ const EN: SettlementLabels = {
   loadError: "Could not load settlements.",
   saveError: "Could not save the category.",
   showMore: (n) => `Show ${n} more`,
-  rowsCount: (n) => `${n} counterparties`,
+  rowsCount: (n) => countEn(n, "counterparty", "counterparties"),
   purchasesWithoutTotals: (n) =>
-    `${n} supplier invoices still have no totals (history import not finished) — purchase balances may be incomplete.`,
+    `${countEn(n, "supplier invoice", "supplier invoices")} still without totals (history import not finished) — purchase balances may be incomplete.`,
   ledgerTitle: "Documents and payments",
   ledgerEmpty: "No movements.",
   ledgerKinds: {
@@ -545,10 +645,107 @@ const EN: SettlementLabels = {
     return `Same amount ${money(f.amount)} paid twice (${f.dates.map(date).join(" and ")}) with one invoice.`;
   },
   checkPill: "To check",
+  paidByCard: (m) => `incl. by card ${m}`,
+  paidByReceipt: (m) => `incl. on the spot (B/f) ${m}`,
+  receiptOutText: (ref, method) =>
+    `paid on the spot: ${ref?.trim() || "B/f"}${method === "card" ? " (card)" : method === "cash" ? " (cash)" : ""}`,
+  cardSourceShort: { alias: "manual", name: "by name", amount: "by amount" },
+  card: {
+    title: "Card payments",
+    hint: "The bank books company-card purchases as a payment to MAIB. Those linked to a supplier count as our payment to them; the rest stay bank operations.",
+    attributed: "Linked to suppliers",
+    unattributed: "Not linked",
+    ignored: "Not a supplier",
+    byAmount: (n) => `of them ${countEn(n, "purchase", "purchases")} by amount matching an invoice`,
+    countSum: (n, m) => `${n} pcs · ${m}`,
+    colMerchant: "Merchant (from bank)",
+    colCount: "Purchases",
+    colSum: "Amount",
+    colLast: "Last",
+    colSupplier: "Supplier",
+    sources: {
+      alias: "manual",
+      ignored: "not a supplier",
+      name: "by name",
+      amount: "by amount",
+      mixed: "partly by amount",
+    },
+    partly: (a, t) => `linked ${a} of ${t}`,
+    pick: "Pick supplier",
+    change: "Change",
+    notSupplier: "Not a supplier",
+    reset: "Reset (auto)",
+    resetDone: "automatic",
+    undo: "Undo",
+    search: "Supplier name or IDNO",
+    noMatches: "Nothing found.",
+    bindIdno: (idno) => `Link to IDNO ${idno}`,
+    cancel: "Cancel",
+    allDone: "All card purchases are sorted out.",
+    showAttributed: (n) => `Show linked and «not a supplier» (${n})`,
+    hideAttributed: "Hide linked",
+    saveError: "Could not save the link.",
+  },
+  cardPage: {
+    back: "All counterparties",
+    open: "Open card",
+    notFound: "No documents or payments for this IDNO.",
+    balanceText: (n, money) =>
+      n > 0 ? `They owe us ${money(n)}` : n < 0 ? `We owe ${money(-n)}` : "Settled",
+    balanceToday: "Balance today",
+    totSalesInvoiced: "Invoiced by us",
+    totReceived: "Received from them",
+    totPurchasesInvoiced: "Invoiced by them",
+    totPaid: "Paid by us",
+    totalsHint: "Totals for the selected period, opening balance excluded.",
+    presets: { all: "All time", this_year: "This year", last_year: "Last year", custom: "Period" },
+    from: "From",
+    to: "To",
+    colDebit: "Debit",
+    colCredit: "Credit",
+    debitHint: "raises their debt to us",
+    creditHint: "lowers their debt to us",
+    colKind: "Type",
+    colDescription: "Description",
+    openingRow: "Balance at period start",
+    closingRow: "Balance at period end",
+    turnoverRow: "Turnover for the period",
+    noMovements: "No movements in this period.",
+    ob: {
+      title: "Opening balance (from 1C)",
+      hint: "Debt that existed before e-Factura and the bank statement. Comes first and is part of the balance in the list.",
+      none: "Not set",
+      add: "Set",
+      edit: "Change",
+      date: "As of",
+      amount: "Amount, MDL",
+      side: "Who owes",
+      theyOwe: "They owe us",
+      weOwe: "We owe",
+      note: "Comment",
+      save: "Save",
+      remove: "Delete",
+      removeConfirm: "Delete the opening balance?",
+      cancel: "Cancel",
+      saved: "Opening balance saved",
+      removed: "Opening balance deleted",
+      error: "Could not save the opening balance.",
+      invalid: "Enter a date and an amount above zero.",
+      afterFirstDoc: (date) =>
+        `First document — ${date}. The balance is usually set before it, otherwise early documents count twice.`,
+      asOf: (date) => `as of ${date}`,
+    },
+    act: {
+      download: "Download act",
+      lang: "Act language",
+      error: "Could not build the reconciliation act.",
+    },
+  },
 };
 
+/** Exposed for tests (every leaf filled, RO without Cyrillic). */
+export const SETTLEMENT_LABELS: Readonly<Record<Locale, SettlementLabels>> = { ru: RU, ro: RO, en: EN };
+
 export function getSettlementLabels(locale: Locale): SettlementLabels {
-  if (locale === "ru") return RU;
-  if (locale === "en") return EN;
-  return RO;
+  return SETTLEMENT_LABELS[locale] ?? RO;
 }

@@ -72,6 +72,10 @@ export default function SettlementsCardPayments({
     ];
   }
 
+  // Rows changed in this session stay in place (frozen), so count only the ones really hidden.
+  const shownKeys = new Set(rows.map((r) => r.merchantKey));
+  const hiddenDone = done.filter((m) => !shownKeys.has(m.merchantKey)).length;
+
   /** `next` = label of the new state; omitted for «Отменить» (back to `prev`). */
   async function save(m: CardMerchantGroup, body: AliasBody, next?: string) {
     const key = m.merchantKey;
@@ -196,7 +200,7 @@ export default function SettlementsCardPayments({
             </div>
           )}
 
-          {done.length > 0 ? (
+          {showDone || hiddenDone > 0 ? (
             <div className="mt-2">
               <Button
                 variant="outline"
@@ -208,7 +212,7 @@ export default function SettlementsCardPayments({
                   setFrozen(null);
                 }}
               >
-                {showDone ? C.hideAttributed : C.showAttributed(done.length)}
+                {showDone ? C.hideAttributed : C.showAttributed(hiddenDone)}
               </Button>
             </div>
           ) : null}

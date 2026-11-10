@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseAmountValue, parseIdnoValue, pdfContentDisposition } from "./http";
+import { actFileName, fileNameSlug, parseAmountValue, parseIdnoValue, pdfContentDisposition } from "./http";
 
 describe("parseIdnoValue", () => {
   it("accepts trimmed alphanumerics 4–20", () => {
@@ -37,5 +37,27 @@ describe("pdfContentDisposition", () => {
   });
   it("never an empty ASCII name", () => {
     expect(pdfContentDisposition("Щука")).toContain('filename="document.pdf"');
+  });
+});
+
+describe("act file names", () => {
+  it("drops dots / quotes, one «-» between words", () => {
+    expect(actFileName("act-sverki", "CRAFTI BUSINESS S.R.L.", "1004600069507").ascii).toBe(
+      "act-sverki-CRAFTI-BUSINESS-SRL-1004600069507",
+    );
+    expect(fileNameSlug('«Tipografia „Știința”» SRL', true)).toBe("Tipografia-Stiinta-SRL");
+    expect(fileNameSlug("  A -- B__C  ", true)).toBe("A-B-C");
+  });
+  it("transliterates Cyrillic for ASCII, keeps it for UTF-8", () => {
+    const f = actFileName("act-sverki", "ООО «Щука»", "100");
+    expect(f.ascii).toBe("act-sverki-OOO-Schuka-100");
+    expect(f.utf8).toBe("act-sverki-ООО-Щука-100");
+    const h = pdfContentDisposition(f.ascii, f.utf8);
+    expect(h).toContain('filename="act-sverki-OOO-Schuka-100.pdf"');
+    expect(h).toContain(`filename*=UTF-8''${encodeURIComponent("act-sverki-ООО-Щука-100.pdf")}`);
+  });
+  it("no name → prefix + IDNO", () => {
+    expect(actFileName("act-sverki", null, "100").ascii).toBe("act-sverki-100");
+    expect(actFileName("act-sverki", "...", "100").ascii).toBe("act-sverki-100");
   });
 });

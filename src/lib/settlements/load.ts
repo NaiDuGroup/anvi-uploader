@@ -698,12 +698,20 @@ export async function loadSettlementLedger(
     "—";
 
   const manual = categories.get(idno);
+  let salesInvoicedTotal = 0;
+  let purchasesInvoicedTotal = 0;
+  for (const e of all) {
+    if (e.kind === "sale_invoice" || e.kind === "historical_invoice") salesInvoicedTotal += e.amount;
+    else if (e.kind === "purchase_invoice") purchasesInvoicedTotal -= e.amount;
+  }
   const resolved = resolveCategory({
     idno,
     manual: manual?.category,
     hasPurchaseInvoices: purchases.length > 0,
     hasSalesInvoices: (statement?.entries ?? []).some((e) => e.kind === "invoice"),
     operational: operational.has(idno),
+    salesInvoiced: salesInvoicedTotal,
+    purchasesInvoiced: purchasesInvoicedTotal,
   });
 
   return {
@@ -711,6 +719,8 @@ export async function loadSettlementLedger(
     name: manual?.name?.trim() || name,
     category: resolved.category,
     categorySource: resolved.source,
+    autoCategory: resolved.autoCategory,
+    autoCategorySource: resolved.autoSource,
     entries: slice.entries,
     balance,
     period,
