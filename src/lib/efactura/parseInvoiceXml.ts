@@ -163,11 +163,32 @@ function interpretReceipt(ref: string | null): {
   return { settledByReceipt: true, receiptMethod, receiptDate };
 }
 
+/**
+ * Some signed invoices carry a broken document-level <TotalTVA> (the decimal
+ * point lost: 2083.33 -> 208333) while the line TotalTVA values are right.
+ * VAT can never exceed the invoice total, so in that case trust the lines.
+ */
+function pickDocumentVat(
+  headerVat: string | null,
+  total: string | null,
+  lines: ParsedInvoiceLine[],
+): string | null {
+  const vat = headerVat == null ? NaN : Number(headerVat);
+  const sum = total == null ? NaN : Number(total);
+  if (!Number.isFinite(vat) || !Number.isFinite(sum)) return headerVat;
+  if (Math.abs(vat) <= Math.abs(sum)) return headerVat;
+  const lineVats = lines.map((l) => Number(l.vatAmount));
+  if (lineVats.length === 0 || lineVats.some((v) => !Number.isFinite(v))) return headerVat;
+  return lineVats.reduce((a, b) => a + b, 0).toFixed(2);
+}
+
 export function parseInvoiceXml(xml: string): ParsedInvoiceXml {
   const supplierTag = xml.match(/<Supplier\b[^>]*>/)?.[0] ?? "";
   const buyerTag = xml.match(/<Buyer\b[^>]*>/)?.[0] ?? "";
   const receiptRef = parseAttachedRef(xml);
   const receipt = interpretReceipt(receiptRef);
+  const totalAmount = firstTagText(xml, "Total");
+  const lines = parseLines(xml);
 
   return {
     seria: firstTagText(xml, "Seria"),
@@ -179,9 +200,9 @@ export function parseInvoiceXml(xml: string): ParsedInvoiceXml {
     buyerAddress: attr(buyerTag, "Address"),
     supplierIdno: attr(supplierTag, "IDNO"),
     supplierName: attr(supplierTag, "Title"),
-    totalAmount: firstTagText(xml, "Total"),
-    vatAmount: firstTagText(xml, "TotalTVA"),
-    lines: parseLines(xml),
+    totalAmount,
+    vatAmount: pickDocumentVat(firstTagText(xml, "TotalTVA"), totalAmount, lines),
+    lines,
     receiptRef,
     settledByReceipt: receipt.settledByReceipt,
     receiptMethod: receipt.receiptMethod,

@@ -37,3 +37,24 @@ describe("parseInvoiceXml receipt settlement", () => {
     expect(parsed.receiptMethod).toBe("card");
   });
 });
+
+describe("parseInvoiceXml document VAT", () => {
+  const doc = (headerVat: string) => `
+    <Document>
+      <SupplierInfo><Seria>EAZ</Seria><Number>000438701</Number>
+        <Merchandises>
+          <Row Name="A" TotalPriceWithoutTVA="54.17" TVA="20" TotalTVA="10.83" TotalPrice="65"/>
+          <Row Name="B" TotalPriceWithoutTVA="562.50" TVA="20" TotalTVA="112.50" TotalPrice="675"/>
+        </Merchandises>
+        <Total>740</Total><TotalTVA>${headerVat}</TotalTVA>
+      </SupplierInfo>
+    </Document>`;
+
+  it("keeps a sane header TotalTVA", () => {
+    expect(parseInvoiceXml(doc("123.33")).vatAmount).toBe("123.33");
+  });
+
+  it("falls back to line VAT when header VAT exceeds the total", () => {
+    expect(parseInvoiceXml(doc("12333")).vatAmount).toBe("123.33");
+  });
+});
