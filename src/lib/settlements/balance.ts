@@ -3,7 +3,10 @@
  *
  *   salesNet    = salesInvoiced − receivedFromThem     (> 0 they owe us)
  *   purchaseNet = purchasesInvoiced − paidToThem       (> 0 we owe them)
- *   balance     = salesNet − purchaseNet               (> 0 they owe us)
+ *   balance     = opening + salesNet − purchaseNet     (> 0 they owe us)
+ *
+ * `opening` is the carried-over balance from 1C (counterparty_opening_balances):
+ * a positive one adds to the sales side, a negative one to the purchase side.
  *
  * The sales side is taken as-is from `computeSalesBalances` (the «Должники»
  * figure). Pure: everything arrives as plain data, amounts are summed in cents.
@@ -92,6 +95,8 @@ export interface SettlementInput {
   /** Fallback names by IDNO (bank counterparty names). */
   names?: ReadonlyMap<string, string>;
   purchasesWithoutTotals?: number;
+  /** Carried-over balances by IDNO, + they owe us. */
+  openingBalances?: ReadonlyMap<string, number>;
 }
 
 export interface SettlementResult {
@@ -115,6 +120,7 @@ interface Acc {
   paid: number;
   paidCard: number;
   paidReceipt: number;
+  opening: number;
   salesInvoiceCount: number;
   purchaseInvoiceCount: number;
   last: number;
@@ -238,6 +244,7 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
         paid: 0,
         paidCard: 0,
         paidReceipt: 0,
+        opening: 0,
         salesInvoiceCount: 0,
         purchaseInvoiceCount: 0,
         last: 0,
@@ -315,6 +322,11 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
     acc.paidOut.push({ amount, date: r.date, document: r.document });
   }
 
+  for (const [idno, amount] of input.openingBalances ?? []) {
+    const c = cents(amount);
+    if (c !== 0) get(idno, null).opening += c;
+  }
+
   // Payments per owner (for flags a/b) and sales invoices per buyer.
   const paymentsByOwner = new Map<string, Array<SettlementCredit & { date: Date }>>();
   for (const c of input.credits) {
@@ -358,7 +370,13 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
 
   for (const acc of accs.values()) {
     if (input.ownIdno && acc.idno === input.ownIdno) continue;
-    if (acc.salesInvoiced === 0 && acc.received === 0 && acc.purchases === 0 && acc.paid === 0) {
+    if (
+      acc.salesInvoiced === 0 &&
+      acc.received === 0 &&
+      acc.purchases === 0 &&
+      acc.paid === 0 &&
+      acc.opening === 0
+    ) {
       continue;
     }
     const manual = input.categories.get(acc.idno);
@@ -372,19 +390,22 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
 
     const salesNet = acc.salesInvoiced - acc.received;
     const purchaseNet = acc.purchases - acc.paid;
+    // Opening balance joins the side it belongs to: + old sales debt, − old purchase debt.
+    const openSales = salesNet + Math.max(acc.opening, 0);
+    const openPurchases = purchaseNet + Math.max(-acc.opening, 0);
     let state: SettlementState;
     if (resolved.service) state = "service";
     else if (resolved.category === null) state = "unclassified";
-    else state = stateOf(salesNet, purchaseNet);
+    else state = stateOf(openSales, openPurchases);
 
     const flags: SettlementFlag[] = [];
     if (state !== "service" && state !== "unclassified") {
       const payments = paymentsByOwner.get(acc.idno) ?? [];
       const sales = salesByBuyer.get(acc.idno) ?? [];
-      if (salesNet > 0) {
+      if (openSales > 0) {
         flags.push(...duplicateSaleFlags(sales, payments));
       }
-      if (salesNet < 0) {
+      if (openSales < 0) {
         const orphan = payments.filter(
           (p) =>
             p.counterpartyIdno === acc.idno &&
@@ -402,13 +423,14 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
           });
         }
       }
+      const owedToThem = acc.purchases + Math.max(-acc.opening, 0);
       if (
-        acc.paid > acc.purchases &&
+        acc.paid > owedToThem &&
         (acc.purchaseInvoiceCount > 0 || resolved.category === "supplier")
       ) {
         flags.push({
           kind: "supplier_overpaid",
-          amount: mdl(acc.paid - acc.purchases),
+          amount: mdl(acc.paid - owedToThem),
           dates: [],
           documents: [],
         });
@@ -416,7 +438,7 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
       flags.push(...duplicatePaymentFlags(acc.paidOut, purchasesByIdno.get(acc.idno) ?? []));
     }
 
-    const balance = salesNet - purchaseNet;
+    const balance = openSales - openPurchases;
     if (state === "they_owe") {
       sumCents.theyOwe += balance;
       summary.theyOweCount += 1;
@@ -449,6 +471,7 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
       paidByReceipt: mdl(acc.paidReceipt),
       salesNet: mdl(salesNet),
       purchaseNet: mdl(purchaseNet),
+      openingBalance: mdl(acc.opening),
       balance: mdl(balance),
       state,
       flags,

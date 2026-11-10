@@ -50,6 +50,7 @@ function scenario(opts: {
   refunds?: Array<{ debitId: string; owner: string; amount: number }>;
   categories?: Record<string, CounterpartyCategoryCode>;
   operational?: string[];
+  opening?: Record<string, number>;
 }) {
   const invoices: SalesBalanceInvoice[] = (opts.invoices ?? []).map((i) => ({
     totalAmount: d(i.total),
@@ -158,6 +159,7 @@ function scenario(opts: {
     categories: new Map(
       Object.entries(opts.categories ?? {}).map(([idno, category]) => [idno, { category, name: null }]),
     ),
+    openingBalances: new Map(Object.entries(opts.opening ?? {})),
   };
   const result = computeSettlements(input);
   const row = (idno: string): SettlementRow | undefined => result.rows.find((r) => r.idno === idno);
@@ -484,5 +486,62 @@ describe("computeSettlements", () => {
       });
       expect(row(SUPPLIER)).toMatchObject({ paidToThem: 1600, paidByCard: 800, paidByReceipt: 800, balance: 0 });
     });
+  });
+});
+
+describe("computeSettlements: opening balance (1C)", () => {
+  it("adds a positive opening to the client's debt and the summary", () => {
+    const { row, result } = scenario({
+      invoices: [{ buyer: CLIENT, total: 1000, date: "2026-03-01", doc: "EAA1" }],
+      credits: [{ id: "c1", payer: CLIENT, amount: 1000, date: "2026-03-10" }],
+      opening: { [CLIENT]: 2500 },
+    });
+    expect(row(CLIENT)).toMatchObject({
+      openingBalance: 2500,
+      salesNet: 0,
+      balance: 2500,
+      state: "they_owe",
+    });
+    expect(result.summary.theyOwe).toBe(2500);
+    expect(result.summary.theyOweCount).toBe(1);
+  });
+
+  it("a negative opening means we owe the supplier; paying it is not an overpayment", () => {
+    const { row, result } = scenario({
+      purchases: [{ supplier: SUPPLIER, total: 1000, date: "2026-05-01", doc: "SUP1" }],
+      debits: [{ id: "d1", to: SUPPLIER, amount: 1600, date: "2026-05-05" }],
+      opening: { [SUPPLIER]: -600 },
+    });
+    const r = row(SUPPLIER)!;
+    expect(r).toMatchObject({ openingBalance: -600, purchaseNet: -600, balance: 0, state: "settled" });
+    expect(r.flags.find((f) => f.kind === "supplier_overpaid")).toBeUndefined();
+    expect(result.summary.weOverpaid).toBe(0);
+  });
+
+  it("a party with only an opening balance appears in the list", () => {
+    const { row, result } = scenario({
+      opening: { [SUPPLIER]: -700 },
+      categories: { [SUPPLIER]: "supplier" },
+    });
+    expect(row(SUPPLIER)).toMatchObject({ balance: -700, state: "we_owe", openingBalance: -700 });
+    expect(result.summary.weOwe).toBe(700);
+  });
+
+  it("an opening that offsets an advance closes the client", () => {
+    const { row } = scenario({
+      invoices: [{ buyer: CLIENT, total: 500, date: "2026-03-01", doc: "EAA1" }],
+      credits: [{ id: "c1", payer: CLIENT, amount: 800, date: "2026-03-10" }],
+      opening: { [CLIENT]: 300 },
+    });
+    const r = row(CLIENT)!;
+    expect(r).toMatchObject({ salesNet: -300, balance: 0, state: "settled" });
+    expect(r.flags.find((f) => f.kind === "payment_without_invoice")).toBeUndefined();
+  });
+
+  it("without opening balances rows carry 0", () => {
+    const { row } = scenario({
+      invoices: [{ buyer: CLIENT, total: 100, date: "2026-03-01", doc: "EAA1" }],
+    });
+    expect(row(CLIENT)!.openingBalance).toBe(0);
   });
 });

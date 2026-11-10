@@ -16,7 +16,7 @@ import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
 import type { ClientStatement } from "./report";
 
 let fontsRegistered = false;
-function ensureFontsRegistered(): void {
+export function ensureFontsRegistered(): void {
   if (fontsRegistered) return;
   const fontsDir = path.join(process.cwd(), "public", "fonts");
   Font.register({
@@ -104,7 +104,7 @@ const LABELS: Record<Locale, Record<string, string>> = {
   },
 };
 
-const styles = StyleSheet.create({
+export const actStyles = StyleSheet.create({
   page: {
     fontFamily: "Noto Sans",
     fontSize: 10,
@@ -215,7 +215,9 @@ const styles = StyleSheet.create({
   },
 });
 
-function fmtDate(iso: string): string {
+const styles = actStyles;
+
+export function fmtDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   const dd = String(d.getDate()).padStart(2, "0");
@@ -223,7 +225,7 @@ function fmtDate(iso: string): string {
   return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
-function fmtMoney(v: string, locale: Locale): string {
+export function fmtMoney(v: string, locale: Locale): string {
   const n = parseFloat(v);
   if (!Number.isFinite(n)) return v;
   const tag = locale === "ru" ? "ru-RU" : locale === "en" ? "en-US" : "ro-RO";

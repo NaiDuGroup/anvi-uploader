@@ -100,6 +100,63 @@ export interface SettlementLabels {
     hideAttributed: string;
     saveError: string;
   };
+  cardPage: CardPageLabels;
+}
+
+export type PeriodPreset = "all" | "this_year" | "last_year" | "custom";
+
+export interface CardPageLabels {
+  back: string;
+  open: string;
+  notFound: string;
+  balanceText: (n: number, money: (n: number) => string) => string;
+  balanceToday: string;
+  totSalesInvoiced: string;
+  totReceived: string;
+  totPurchasesInvoiced: string;
+  totPaid: string;
+  totalsHint: string;
+  presets: Record<PeriodPreset, string>;
+  from: string;
+  to: string;
+  colDebit: string;
+  colCredit: string;
+  debitHint: string;
+  creditHint: string;
+  colKind: string;
+  colDescription: string;
+  openingRow: string;
+  closingRow: string;
+  turnoverRow: string;
+  noMovements: string;
+  ob: {
+    title: string;
+    hint: string;
+    none: string;
+    add: string;
+    edit: string;
+    date: string;
+    amount: string;
+    side: string;
+    theyOwe: string;
+    weOwe: string;
+    note: string;
+    save: string;
+    remove: string;
+    removeConfirm: string;
+    cancel: string;
+    saved: string;
+    removed: string;
+    error: string;
+    invalid: string;
+    afterFirstDoc: (date: string) => string;
+    asOf: (date: string) => string;
+  };
+  act: {
+    download: string;
+    lang: string;
+    error: string;
+  };
 }
 
 const RU: SettlementLabels = {
@@ -166,6 +223,7 @@ const RU: SettlementLabels = {
   ledgerTitle: "Документы и платежи",
   ledgerEmpty: "Движений нет.",
   ledgerKinds: {
+    opening_balance: "Начальное сальдо (1С)",
     sale_invoice: "Наша фактура",
     payment_in: "Оплата нам",
     receipt: "Чек (B/f)",
@@ -232,6 +290,61 @@ const RU: SettlementLabels = {
     showAttributed: (n) => `Показать привязанные и «не поставщик» (${n})`,
     hideAttributed: "Скрыть привязанные",
     saveError: "Не удалось сохранить привязку.",
+  },
+  cardPage: {
+    back: "Все контрагенты",
+    open: "Открыть карточку",
+    notFound: "По этому IDNO нет ни документов, ни платежей.",
+    balanceText: (n, money) =>
+      n > 0 ? `Нам должны ${money(n)}` : n < 0 ? `Мы должны ${money(-n)}` : "Расчёты закрыты",
+    balanceToday: "Сальдо на сегодня",
+    totSalesInvoiced: "Выставлено нами",
+    totReceived: "Получено от них",
+    totPurchasesInvoiced: "Получено от них фактур",
+    totPaid: "Оплачено нами",
+    totalsHint: "Суммы за выбранный период, без начального сальдо.",
+    presets: { all: "Всё время", this_year: "Этот год", last_year: "Прошлый год", custom: "Период" },
+    from: "С",
+    to: "По",
+    colDebit: "Дебет",
+    colCredit: "Кредит",
+    debitHint: "увеличивает их долг нам",
+    creditHint: "уменьшает их долг нам",
+    colKind: "Вид",
+    colDescription: "Описание",
+    openingRow: "Сальдо на начало периода",
+    closingRow: "Сальдо на конец периода",
+    turnoverRow: "Обороты за период",
+    noMovements: "За этот период движений нет.",
+    ob: {
+      title: "Начальное сальдо (из 1С)",
+      hint: "Долг, который был до e-Factura и банковской выписки. Идёт первой строкой и входит в сальдо на списке.",
+      none: "Не задано",
+      add: "Задать",
+      edit: "Изменить",
+      date: "На дату",
+      amount: "Сумма, MDL",
+      side: "Кто должен",
+      theyOwe: "Нам должны",
+      weOwe: "Мы должны",
+      note: "Комментарий",
+      save: "Сохранить",
+      remove: "Удалить",
+      removeConfirm: "Удалить начальное сальдо?",
+      cancel: "Отмена",
+      saved: "Начальное сальдо сохранено",
+      removed: "Начальное сальдо удалено",
+      error: "Не удалось сохранить начальное сальдо.",
+      invalid: "Укажите дату и сумму больше нуля.",
+      afterFirstDoc: (date) =>
+        `Первый документ — ${date}. Сальдо обычно ставят на дату до него, иначе ранние документы посчитаются дважды.`,
+      asOf: (date) => `на ${date}`,
+    },
+    act: {
+      download: "Скачать акт",
+      lang: "Язык акта",
+      error: "Не удалось сформировать акт сверки.",
+    },
   },
 };
 
@@ -300,6 +413,7 @@ const RO: SettlementLabels = {
   ledgerTitle: "Documente și plăți",
   ledgerEmpty: "Nicio mișcare.",
   ledgerKinds: {
+    opening_balance: "Sold inițial (1C)",
     sale_invoice: "Factura noastră",
     payment_in: "Plată primită",
     receipt: "Bon (B/f)",
@@ -395,6 +509,7 @@ const EN: SettlementLabels = {
   ledgerTitle: "Documents and payments",
   ledgerEmpty: "No movements.",
   ledgerKinds: {
+    opening_balance: "Opening balance (1C)",
     sale_invoice: "Our invoice",
     payment_in: "Payment to us",
     receipt: "Receipt (B/f)",

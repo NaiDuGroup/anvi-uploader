@@ -1625,6 +1625,21 @@ model CounterpartyCategory {
   @@map("counterparty_categories")
 }
 
+/// «Взаиморасчёты»: balance carried over from before e-Factura / 1C, per IDNO.
+/// Signed: + the counterparty owes us, − we owe them. First ledger entry.
+model CounterpartyOpeningBalance {
+  id          String   @id @default(uuid())
+  idno        String   @unique
+  asOfDate    DateTime @map("as_of_date") @db.Date
+  amount      Decimal  @db.Decimal(14, 2)
+  note        String?
+  updatedById String?  @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("counterparty_opening_balances")
+}
+
 /// «Взаиморасчёты»: company-card merchant (normalized key from the bank
 /// purpose) → supplier IDNO. `idno = null` means «не поставщик» (stays a bank row).
 model CardMerchantAlias {

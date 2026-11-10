@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { loadSettlementLedger } from "@/lib/settlements/load";
+import { parseSettlementPeriod } from "@/lib/settlements/period";
 
 export const runtime = "nodejs";
 
-/** One counterparty's documents and payments on both sides, running balance. */
+/**
+ * One counterparty's documents and payments on both sides, running balance.
+ * `?from=&to=` (YYYY-MM-DD, Chișinău days) cut it to a period with opening / closing.
+ */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ idno: string }> },
 ) {
   const user = await getSessionUser();
@@ -21,8 +25,9 @@ export async function GET(
     return NextResponse.json({ error: "invalid_idno" }, { status: 400 });
   }
   try {
-    const ledger = await loadSettlementLedger(idno);
-    if (!ledger) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    const url = new URL(request.url);
+    const period = parseSettlementPeriod(url.searchParams.get("from"), url.searchParams.get("to"));
+    const ledger = await loadSettlementLedger(idno, period);
     return NextResponse.json(ledger);
   } catch (error) {
     console.error("GET /api/admin/settlements/[idno]:", error);

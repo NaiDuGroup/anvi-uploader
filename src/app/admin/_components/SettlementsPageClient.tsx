@@ -3,7 +3,8 @@
 import { Fragment, useMemo, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { AlertTriangle, ChevronDown, ChevronRight, Loader2, Search } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, ArrowRight, ChevronDown, ChevronRight, Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -53,7 +54,7 @@ function matchesFilter(row: SettlementRow, filter: SettlementFilter): boolean {
   }
 }
 
-function balanceClass(n: number): string {
+export function balanceClass(n: number): string {
   if (n > 0) return "text-amber-700";
   if (n < 0) return "text-rose-700";
   return "text-gray-400";
@@ -96,7 +97,7 @@ export default function SettlementsPageClient() {
 
   const visible = filtered.slice(0, limit);
 
-  async function saveCategory(row: SettlementRow, value: string) {
+  async function saveCategory(row: CategoryTarget, value: string) {
     const category: CounterpartyCategoryCode | null = value === "" ? null : (value as CounterpartyCategoryCode);
     setSavingIdno(row.idno);
     try {
@@ -364,7 +365,7 @@ function PaidParts({
   );
 }
 
-function ledgerNote(e: LedgerEntry, L: SettlementLabels): string | null {
+export function ledgerNote(e: LedgerEntry, L: SettlementLabels): string | null {
   if (e.payerName) return `${L.payerVia}: ${e.payerName}`;
   if (e.kind === "receipt_out") return L.receiptOutText(e.description, e.receiptMethod ?? null);
   if (e.kind === "card_payment_out" && e.cardSource) {
@@ -394,16 +395,18 @@ function StatePill({ row, L }: { row: SettlementRow; L: SettlementLabels }) {
   );
 }
 
-function CategorySelect({
+export type CategoryTarget = Pick<SettlementRow, "idno" | "category" | "categorySource">;
+
+export function CategorySelect({
   row,
   L,
   saving,
   onChange,
 }: {
-  row: SettlementRow;
+  row: CategoryTarget;
   L: SettlementLabels;
   saving: boolean;
-  onChange: (row: SettlementRow, value: string) => void;
+  onChange: (row: CategoryTarget, value: string) => void;
 }) {
   return (
     <div className="flex items-center gap-1.5">
@@ -461,15 +464,30 @@ function RowDetails({
         </ul>
       ) : null}
 
-      <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">{L.ledgerTitle}</div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">{L.ledgerTitle}</div>
+        <Link
+          href={`/admin/bookkeeping/settlements/${encodeURIComponent(row.idno)}`}
+          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-800 hover:border-gray-300"
+        >
+          {L.cardPage.open}
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
       {isLoading ? (
         <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
-      ) : error || !data || data.entries.length === 0 ? (
+      ) : error || !data || (data.entries.length === 0 && data.opening === 0) ? (
         <p className="text-sm text-gray-500">{L.ledgerEmpty}</p>
       ) : (
         <>
           {/* Phone: compact list */}
           <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white md:hidden">
+            {data.opening !== 0 ? (
+              <li className="flex justify-between gap-2 px-3 py-2 text-xs">
+                <span className="text-gray-500">{L.ledgerKinds.opening_balance}</span>
+                <span className="tabular-nums font-medium text-gray-700">{money(data.opening)}</span>
+              </li>
+            ) : null}
             {data.entries.map((e, i) => (
               <li key={i} className="px-3 py-2 text-xs">
                 <div className="flex justify-between gap-2">
@@ -498,6 +516,23 @@ function RowDetails({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
+                {data.opening !== 0 ? (
+                  <tr>
+                    <td className="whitespace-nowrap px-3 py-1.5 text-gray-500">
+                      {formatShortDate(data.openingBalance ? `${data.openingBalance.asOfDate}T12:00:00Z` : null)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-1.5 text-gray-500" colSpan={2}>
+                      {L.ledgerKinds.opening_balance}
+                      {data.openingBalance?.note ? ` · ${data.openingBalance.note}` : ""}
+                    </td>
+                    <td className={cn("whitespace-nowrap px-3 py-1.5 text-right tabular-nums", balanceClass(data.opening))}>
+                      {money(data.opening)}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums text-gray-700">
+                      {money(data.opening)}
+                    </td>
+                  </tr>
+                ) : null}
                 {data.entries.map((e, i) => (
                   <tr key={i}>
                     <td className="whitespace-nowrap px-3 py-1.5 text-gray-500">{formatShortDate(e.date)}</td>

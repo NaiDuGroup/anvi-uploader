@@ -6,6 +6,7 @@ import { excludeNonDeliveryWhere } from "@/lib/reconciliation/fiscalFlags";
 import { computeClientStatement, loadSalesBalanceData } from "@/lib/reconciliation/report";
 import { ISSUED_EFACTURA_STATUSES } from "@/lib/efactura/types";
 import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
+import { loadOperationalIdnos } from "@/lib/reconciliation/operational";
 import {
   computeSettlements,
   supplierPaymentCents,
@@ -13,7 +14,8 @@ import {
   type SettlementInput,
   type SettlementPurchase,
 } from "./balance";
-import { DEFAULT_COUNTERPARTY_CATEGORIES, SERVICE_CATEGORIES } from "./categories";
+import { DEFAULT_COUNTERPARTY_CATEGORIES, resolveCategory, SERVICE_CATEGORIES } from "./categories";
+import { sliceLedger, withRunningBalance } from "./period";
 import {
   attributeCardPurchases,
   receiptsNotCoveredByCard,
@@ -26,7 +28,9 @@ import {
   type CounterpartyCategoryCode,
   type LedgerEntry,
   type LedgerEntryKind,
+  type OpeningBalanceDto,
   type SettlementLedgerResponse,
+  type SettlementPeriod,
   type SettlementsResponse,
 } from "./types";
 
@@ -54,6 +58,30 @@ async function loadManualCategories(): Promise<SettlementInput["categories"]> {
     if (isCounterpartyCategory(r.category)) map.set(r.idno, { category: r.category, name: r.name });
   }
   return map;
+}
+
+/** Carried-over balances (1C) by IDNO; empty when the table is not migrated yet. */
+async function loadOpeningBalances(): Promise<Map<string, number>> {
+  try {
+    const rows = await prisma.counterpartyOpeningBalance.findMany({
+      select: { idno: true, amount: true },
+    });
+    return new Map(rows.map((r) => [r.idno, Number(r.amount)]));
+  } catch (error) {
+    console.error("settlements: opening balances not loaded:", error);
+    return new Map();
+  }
+}
+
+export async function loadOpeningBalance(idno: string): Promise<OpeningBalanceDto | null> {
+  const row = await prisma.counterpartyOpeningBalance.findUnique({ where: { idno } });
+  if (!row) return null;
+  return {
+    asOfDate: row.asOfDate.toISOString().slice(0, 10),
+    amount: Number(row.amount),
+    note: row.note,
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
 const PURCHASE_SELECT = {
@@ -269,8 +297,16 @@ export function summarizeCardPurchases(
 
 /** Bulk-loads both sides (a handful of queries, no per-party lookups). */
 export async function computeSettlementsReport(): Promise<SettlementsResponse> {
-  const [salesData, salesInvoices, credits, purchases, purchasesWithoutTotals, debits, categories] =
-    await Promise.all([
+  const [
+    salesData,
+    salesInvoices,
+    credits,
+    purchases,
+    purchasesWithoutTotals,
+    debits,
+    categories,
+    openingBalances,
+  ] = await Promise.all([
       loadSalesBalanceData(),
       prisma.fiscalInvoice.findMany({
         where: {
@@ -314,6 +350,7 @@ export async function computeSettlementsReport(): Promise<SettlementsResponse> {
         orderBy: { bookingDate: "desc" },
       }),
       loadManualCategories(),
+      loadOpeningBalances(),
     ]);
 
   const names = new Map(salesData.nameByIdno);
@@ -359,6 +396,7 @@ export async function computeSettlementsReport(): Promise<SettlementsResponse> {
     categories,
     names,
     purchasesWithoutTotals,
+    openingBalances,
   });
 
   const rowName = new Map(result.rows.map((r) => [r.idno, r.name]));
@@ -384,8 +422,11 @@ const STATEMENT_KIND: Record<string, LedgerEntryKind | null> = {
  * One party's movements on both sides in date order with a running balance
  * (+ they owe us). Sales entries come from the reconciliation act.
  */
-export async function loadSettlementLedger(idno: string): Promise<SettlementLedgerResponse | null> {
-  const [statement, allPurchases, categories, debits, refunds] = await Promise.all([
+export async function loadSettlementLedger(
+  idno: string,
+  period: SettlementPeriod = { from: null, to: null },
+): Promise<SettlementLedgerResponse> {
+  const [statement, allPurchases, categories, debits, refunds, openingBalance, operational] = await Promise.all([
     computeClientStatement(idno),
     // All live purchases: the card amount match looks across suppliers.
     loadLivePurchases(),
@@ -405,6 +446,8 @@ export async function loadSettlementLedger(idno: string): Promise<SettlementLedg
     }),
     // Only refunds on this party's own debits matter for the paid-to-them share.
     loadRefunds(prisma, idno),
+    loadOpeningBalance(idno).catch(() => null),
+    loadOperationalIdnos(),
   ]);
 
   const purchases = allPurchases.filter((p) => p.supplierIdno === idno);
@@ -505,24 +548,30 @@ export async function loadSettlementLedger(idno: string): Promise<SettlementLedg
     });
   }
 
-  if (raw.length === 0) return null;
+  const firstDocumentSort = raw.reduce((m, r) => Math.min(m, r.sort), Number.MAX_SAFE_INTEGER);
+  if (openingBalance) {
+    const date = new Date(`${openingBalance.asOfDate}T12:00:00.000Z`).toISOString();
+    raw.push({
+      kind: "opening_balance",
+      date,
+      document: "",
+      description: openingBalance.note,
+      amount: openingBalance.amount,
+      // Before any same-day document.
+      sort: sortOf(`${openingBalance.asOfDate}T00:00:00.000Z`) - 1,
+    });
+  }
+
   raw.sort((a, b) => a.sort - b.sort);
 
-  let running = 0;
-  const entries: LedgerEntry[] = raw.map((r) => {
-    running = Math.round((running + r.amount) * 100) / 100;
-    return {
-      kind: r.kind,
-      date: r.date,
-      document: r.document,
-      description: r.description,
-      amount: r.amount,
-      payerName: r.payerName,
-      receiptMethod: r.receiptMethod,
-      cardSource: r.cardSource,
-      balance: running,
-    };
-  });
+  const all: LedgerEntry[] = withRunningBalance(
+    raw.map(({ sort, ...r }) => {
+      void sort;
+      return r;
+    }),
+  );
+  const balance = all.length > 0 ? all[all.length - 1]!.balance : 0;
+  const slice = sliceLedger(all, period);
 
   const name =
     (statement && statement.buyer.name !== "—" ? statement.buyer.name : null) ||
@@ -530,5 +579,28 @@ export async function loadSettlementLedger(idno: string): Promise<SettlementLedg
     debits.find((d) => d.counterpartyName)?.counterpartyName ||
     "—";
 
-  return { idno, name, entries, balance: running };
+  const manual = categories.get(idno);
+  const resolved = resolveCategory({
+    idno,
+    manual: manual?.category,
+    hasPurchaseInvoices: purchases.length > 0,
+    hasSalesInvoices: (statement?.entries ?? []).some((e) => e.kind === "invoice"),
+    operational: operational.has(idno),
+  });
+
+  return {
+    idno,
+    name: manual?.name?.trim() || name,
+    category: resolved.category,
+    categorySource: resolved.source,
+    entries: slice.entries,
+    balance,
+    period,
+    opening: slice.opening,
+    closing: slice.closing,
+    totals: slice.totals,
+    openingBalance,
+    firstDocumentDate:
+      firstDocumentSort < Number.MAX_SAFE_INTEGER ? new Date(firstDocumentSort).toISOString() : null,
+  };
 }

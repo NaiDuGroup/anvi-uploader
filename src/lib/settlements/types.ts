@@ -82,7 +82,9 @@ export interface SettlementRow {
   salesNet: number;
   /** purchasesInvoiced − paidToThem; > 0 we owe, < 0 we overpaid. */
   purchaseNet: number;
-  /** salesNet − purchaseNet. */
+  /** Carried-over balance from before (1C), + they owe us; 0 when none. */
+  openingBalance: number;
+  /** openingBalance + salesNet − purchaseNet. */
   balance: number;
   state: SettlementState;
   flags: SettlementFlag[];
@@ -146,6 +148,8 @@ export interface SettlementsResponse {
 }
 
 export type LedgerEntryKind =
+  /** Balance carried over from before (1C), set by hand on the card. */
+  | "opening_balance"
   | "sale_invoice"
   | "payment_in"
   | "receipt"
@@ -175,9 +179,54 @@ export interface LedgerEntry {
   cardSource?: "alias" | "name" | "amount" | null;
 }
 
+export interface OpeningBalanceDto {
+  /** YYYY-MM-DD. */
+  asOfDate: string;
+  amount: number;
+  note: string | null;
+  updatedAt: string;
+}
+
+/** Inclusive calendar days (Chișinău), YYYY-MM-DD; null = open end. */
+export interface SettlementPeriod {
+  from: string | null;
+  to: string | null;
+}
+
+/** Turnover inside a period (opening balance row excluded). */
+export interface SettlementPeriodTotals {
+  /** Sum of entries that raise their debt to us. */
+  debit: number;
+  /** Sum of entries that lower it (as a positive number). */
+  credit: number;
+  /** Our invoices (e-Factura + paper), «выставлено нами». */
+  salesInvoiced: number;
+  /** Their payments to us, refunds deducted. */
+  received: number;
+  /** Their invoices to us. */
+  purchasesInvoiced: number;
+  /** Our payments to them: bank + card + B/f. */
+  paid: number;
+  paidByCard: number;
+  paidByReceipt: number;
+}
+
 export interface SettlementLedgerResponse {
   idno: string;
   name: string;
+  category: CounterpartyCategoryCode | null;
+  categorySource: CategorySource | null;
+  /** All entries (or the period's), chronological, running balance from `opening`. */
   entries: LedgerEntry[];
+  /** Balance today (all entries). */
   balance: number;
+  period: SettlementPeriod;
+  /** Balance before the period start (0 without `from`). */
+  opening: number;
+  /** Balance after the period end. */
+  closing: number;
+  totals: SettlementPeriodTotals;
+  openingBalance: OpeningBalanceDto | null;
+  /** First document date (ISO), to warn when the opening date is after it. */
+  firstDocumentDate: string | null;
 }
