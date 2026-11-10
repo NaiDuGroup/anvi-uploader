@@ -153,7 +153,9 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
             money={money}
             onSaved={async (openingBalance) => {
               // Show the saved value right away, then wait for the recomputed balances.
-              await mutate((d) => (d && openingBalance !== undefined ? { ...d, openingBalance } : d), { revalidate: true });
+              await mutate((d) => (d && openingBalance !== undefined ? { ...d, openingBalance } : d), { revalidate: false });
+              // mutate() without data resolves only after the re-fetch (with data it doesn't wait).
+              await mutate();
               setJournalKey((k) => k + 1);
             }}
           />
