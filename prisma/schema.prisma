@@ -1672,6 +1672,9 @@ model SupplierPaymentAllocation {
   createdById       String?   @map("created_by_id")
   confirmedById     String?   @map("confirmed_by_id")
   confirmedAt       DateTime? @map("confirmed_at")
+  /// Confirmed link that no longer holds: payment_moved (payment now attributed to another IDNO) |
+  /// invoice_gone (invoice cancelled / rejected). Counts nowhere until «Отвязать» or it holds again.
+  staleReason       String?   @map("stale_reason")
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 

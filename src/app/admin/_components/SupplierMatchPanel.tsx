@@ -23,6 +23,7 @@ const STATUS_PILL: Record<InvoicePaymentStatus, string> = {
   partial: "bg-amber-50 text-amber-800 ring-amber-200",
   unpaid: "bg-rose-50 text-rose-800 ring-rose-200",
   receipt: "bg-sky-50 text-sky-800 ring-sky-200",
+  credit: "bg-gray-100 text-gray-700 ring-gray-200",
 };
 
 const LIST_LIMIT = 25;
@@ -229,6 +230,39 @@ export default function SupplierMatchPanel({
         )}
       </div>
 
+      {data.stale.length > 0 ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-2.5">
+          <div className="text-xs font-semibold uppercase tracking-wider text-amber-800">
+            {M.staleTitle} · {data.stale.length}
+          </div>
+          <p className="mb-1.5 text-[11px] text-amber-800/80">{M.staleHint}</p>
+          <ul className="space-y-1">
+            {data.stale.map((l) => (
+              <li
+                key={l.allocationId}
+                className="flex items-center justify-between gap-2 rounded-md border border-amber-100 bg-white px-2.5 py-1.5 text-xs"
+              >
+                <span className="min-w-0 truncate text-gray-700">
+                  {l.paymentKind === "card" ? <CreditCard className="mr-1 inline h-3 w-3" /> : <Landmark className="mr-1 inline h-3 w-3" />}
+                  {l.paymentDate ? `${formatShortDate(l.paymentDate)} · ` : ""}
+                  {l.paymentDocument ?? "—"} → {l.invoiceDocument ?? "—"} · {money(l.amount)}{" "}
+                  {l.staleReason ? <span className="text-amber-700">({M.staleReason[l.staleReason]})</span> : null}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 shrink-0 px-2 text-[11px]"
+                  disabled={busy !== null}
+                  onClick={() => setUndoLink(l)}
+                >
+                  {M.undo}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         {/* Invoices */}
         <div>
@@ -255,6 +289,12 @@ export default function SupplierMatchPanel({
                     </div>
                     {inv.status === "receipt" && inv.receiptRef ? (
                       <div className="mt-0.5 text-gray-400">{inv.receiptRef}</div>
+                    ) : null}
+                    {inv.creditOffset > 0 ? (
+                      <div className="mt-0.5 text-gray-500">{M.creditOffset(money(inv.creditOffset))}</div>
+                    ) : null}
+                    {inv.overAllocated > 0 ? (
+                      <div className="mt-0.5 text-rose-700">{M.overAllocated(money(inv.overAllocated))}</div>
                     ) : null}
                     {confirmed.length > 0 ? (
                       <ul className="mt-1 space-y-0.5">
@@ -417,7 +457,8 @@ function LinkForm({
     () =>
       data.invoices
         .filter((i) => i.status === "unpaid" || i.status === "partial")
-        .map((i) => ({ ...i, open: Math.round((i.total - i.paid) * 100) / 100 }))
+        .map((i) => ({ ...i, open: Math.round((i.total - i.paid - i.creditOffset) * 100) / 100 }))
+        .filter((i) => i.open > 0)
         .sort((a, b) => (a.issueDate ?? "").localeCompare(b.issueDate ?? "")),
     [data],
   );

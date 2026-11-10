@@ -2,13 +2,22 @@
  * DB side of the supplier matching: loads payments / invoices / links per
  * supplier IDNO, runs the pure engine and stores suggestions, plus the
  * confirm / reject / manual / undo actions behind the API.
+ *
+ * Stale links: a link holds while its invoice is live and its payment is
+ * still attributed to the invoice's IDNO (bank transfer counterparty or card
+ * alias / name / amount attribution). Otherwise a suggested link is deleted
+ * and a confirmed one gets `stale_reason` (shown as «Связь устарела», counts
+ * nowhere). The pure context build recomputes staleness on every load; the DB
+ * column is synced by `syncStaleSupplierAllocations` at the start of every
+ * auto run, on the supplier card GET and before confirm / manual links.
  */
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { loadRefunds } from "@/lib/reconciliation/credits";
+import { loadOperationalIdnos } from "@/lib/reconciliation/operational";
 import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
 import { supplierPaymentCents } from "./balance";
-import { DEFAULT_COUNTERPARTY_CATEGORIES, SERVICE_CATEGORIES } from "./categories";
+import { resolveCategory } from "./categories";
 import { receiptsNotCoveredByCard, type CardPurchase } from "./cardPurchases";
 import {
   loadCardPurchases,
@@ -21,6 +30,7 @@ import {
 } from "./load";
 import {
   capAllocation,
+  creditNoteOffsets,
   invoicePaymentStatus,
   suggestSupplierMatches,
   type InvoicePaymentStatus,
@@ -41,6 +51,8 @@ export interface SupplierSources {
   refundedByTx: ReadonlyMap<string, number>;
   categories: SettlementsInternals["categories"];
   ownIdno: string | null;
+  /** «Сверка → Не клиенты»: service parties unless a manual category says otherwise (same rule as the balances). */
+  operationalIdnos?: ReadonlySet<string>;
 }
 
 export interface SupplierInvoiceRow extends SmInvoice {
@@ -63,7 +75,14 @@ export interface SupplierAllocationRow {
   confirmedById: string | null;
   confirmedAt: Date | null;
   createdAt: Date;
+  /** Why a link no longer holds (null = fine). Recomputed by `buildSupplierContexts`. */
+  staleReason?: StaleReason | null;
+  /** Invoice document / IDNO from the DB row (also for invoices that left the live set). */
+  invoiceDocument?: string | null;
+  invoiceIdno?: string | null;
 }
+
+export type StaleReason = "payment_moved" | "invoice_gone";
 
 export interface SupplierContext {
   idno: string;
@@ -79,8 +98,12 @@ function asStatus(s: string): SupplierAllocationStatus {
   return s === "confirmed" || s === "rejected" ? s : "suggested";
 }
 
+function asStale(s: string | null | undefined): StaleReason | null {
+  return s === "payment_moved" || s === "invoice_gone" ? s : null;
+}
+
 export async function loadSupplierSources(): Promise<SupplierSources> {
-  const [purchases, debits, categories, refunds, company] = await Promise.all([
+  const [purchases, debits, categories, refunds, company, operational] = await Promise.all([
     loadLivePurchases(),
     prisma.bankTransaction.findMany({
       where: { direction: "DEBIT", currency: "MDL", counterpartyIdno: { not: null } },
@@ -98,6 +121,7 @@ export async function loadSupplierSources(): Promise<SupplierSources> {
     loadManualCategories(),
     loadRefunds(prisma),
     getOrCreateCompanyProfile(),
+    loadOperationalIdnos(),
   ]);
   const { cards } = await loadCardPurchases(purchases.map(toSettlementPurchase), categories);
   return {
@@ -107,13 +131,17 @@ export async function loadSupplierSources(): Promise<SupplierSources> {
     refundedByTx: refundedByTx(refunds),
     categories,
     ownIdno: company.fiscalCode || null,
+    operationalIdnos: operational,
   };
 }
 
 export async function loadSupplierAllocations(
   where: Prisma.SupplierPaymentAllocationWhereInput = {},
 ): Promise<SupplierAllocationRow[]> {
-  const rows = await prisma.supplierPaymentAllocation.findMany({ where });
+  const rows = await prisma.supplierPaymentAllocation.findMany({
+    where,
+    include: { purchaseInvoice: { select: { seria: true, number: true, supplierIdno: true } } },
+  });
   return rows.map((r) => ({
     id: r.id,
     paymentId: r.bankTransactionId,
@@ -126,14 +154,60 @@ export async function loadSupplierAllocations(
     confirmedById: r.confirmedById,
     confirmedAt: r.confirmedAt,
     createdAt: r.createdAt,
+    staleReason: asStale(r.staleReason),
+    invoiceDocument: r.purchaseInvoice ? `${r.purchaseInvoice.seria}${r.purchaseInvoice.number}` : null,
+    invoiceIdno: r.purchaseInvoice?.supplierIdno ?? null,
   }));
 }
 
-function categoryOf(
-  idno: string,
-  categories: SupplierSources["categories"],
-): CounterpartyCategoryCode | null {
-  return categories.get(idno)?.category ?? DEFAULT_COUNTERPARTY_CATEGORIES[idno] ?? null;
+function resolved(idno: string, src: SupplierSources) {
+  return resolveCategory({
+    idno,
+    manual: src.categories.get(idno)?.category ?? null,
+    hasPurchaseInvoices: true,
+    hasSalesInvoices: false,
+    operational: src.operationalIdnos?.has(idno) ?? false,
+  });
+}
+
+function categoryOf(idno: string, src: SupplierSources): CounterpartyCategoryCode | null {
+  const r = resolved(idno, src);
+  return r.source === "manual" || r.source === "default" ? r.category : null;
+}
+
+/** Service party (tax, bank, own, staff, courier, operational IDNO) or our own IDNO: never matched. */
+export function isSupplierMatchSkipped(idno: string, src: SupplierSources): boolean {
+  if (src.ownIdno && idno === src.ownIdno) return true;
+  return resolved(idno, src).service;
+}
+
+export interface SupplierLinkIndex {
+  /** Live invoice → supplier IDNO. */
+  invoiceIdno: Map<string, string>;
+  /** Payment (bank debit / card purchase) → IDNO it is attributed to now (null = nobody). */
+  paymentIdno: Map<string, string | null>;
+}
+
+/** Where every invoice and payment belongs right now (before any skip). */
+export function buildLinkIndex(src: SupplierSources): SupplierLinkIndex {
+  const invoiceIdno = new Map<string, string>();
+  for (const p of src.purchases) if (p.supplierIdno) invoiceIdno.set(p.id, p.supplierIdno);
+  const paymentIdno = new Map<string, string | null>();
+  for (const d of src.debits) paymentIdno.set(d.id, d.counterpartyIdno?.trim() || null);
+  for (const c of src.cards) paymentIdno.set(c.debitId, c.ignored ? null : c.idno || null);
+  return { invoiceIdno, paymentIdno };
+}
+
+/** Why a suggested / confirmed link no longer holds; null when it does (rejected links never go stale). */
+export function staleReasonOf(
+  a: Pick<SupplierAllocationRow, "paymentId" | "invoiceId" | "status">,
+  index: SupplierLinkIndex,
+): StaleReason | null {
+  if (a.status === "rejected") return null;
+  const invIdno = index.invoiceIdno.get(a.invoiceId);
+  if (!invIdno) return "invoice_gone";
+  if ((index.paymentIdno.get(a.paymentId) ?? null) !== invIdno) return "payment_moved";
+  return null;
 }
 
 /** Groups payments, invoices and links by supplier IDNO (service parties and our own IDNO skipped). */
@@ -145,9 +219,7 @@ export function buildSupplierContexts(
   const ctxs = new Map<string, SupplierContext>();
   const skip = (idno: string): boolean => {
     if (only && !only.has(idno)) return true;
-    if (src.ownIdno && idno === src.ownIdno) return true;
-    const cat = categoryOf(idno, src.categories);
-    return cat != null && SERVICE_CATEGORIES.has(cat);
+    return isSupplierMatchSkipped(idno, src);
   };
   const get = (idno: string, name: string | null): SupplierContext => {
     let c = ctxs.get(idno);
@@ -155,7 +227,7 @@ export function buildSupplierContexts(
       c = {
         idno,
         name: src.categories.get(idno)?.name?.trim() || null,
-        category: categoryOf(idno, src.categories),
+        category: categoryOf(idno, src),
         payments: [],
         invoices: [],
         allocations: [],
@@ -188,11 +260,9 @@ export function buildSupplierContexts(
     ).map((r) => r.document),
   );
 
-  const invoiceIdno = new Map<string, string>();
   for (const p of src.purchases) {
     if (!p.supplierIdno || skip(p.supplierIdno)) continue;
     const ctx = get(p.supplierIdno, p.supplierName);
-    invoiceIdno.set(p.id, p.supplierIdno);
     ctx.invoices.push({
       id: p.id,
       seria: p.seria,
@@ -233,12 +303,85 @@ export function buildSupplierContexts(
     });
   }
 
+  // A link belongs to its invoice's supplier and to its payment's current
+  // supplier: a payment linked to a cancelled invoice or re-attributed to
+  // another IDNO must still be seen as used (or as stale) on both sides.
+  const index = buildLinkIndex(src);
   for (const a of allocations) {
-    const idno = invoiceIdno.get(a.invoiceId);
-    const ctx = idno ? ctxs.get(idno) : undefined;
-    if (ctx) ctx.allocations.push(a);
+    const row: SupplierAllocationRow = { ...a, staleReason: staleReasonOf(a, index) };
+    const invIdno = index.invoiceIdno.get(a.invoiceId) ?? a.invoiceIdno ?? null;
+    const payIdno = index.paymentIdno.get(a.paymentId) ?? null;
+    const a1 = invIdno ? ctxs.get(invIdno) : undefined;
+    const a2 = payIdno && payIdno !== invIdno ? ctxs.get(payIdno) : undefined;
+    if (a1) a1.allocations.push(row);
+    if (a2) a2.allocations.push(row);
   }
   return ctxs;
+}
+
+/** Links of a context as the engine sees them (stale confirmed links count nowhere). */
+export function engineAllocations(ctx: SupplierContext) {
+  return ctx.allocations
+    .filter((a) => a.status !== "suggested")
+    .map((a) => ({ paymentId: a.paymentId, invoiceId: a.invoiceId, amount: a.amount, status: a.status, stale: Boolean(a.staleReason) }));
+}
+
+/** Confirmed, non-stale amount per invoice (MDL). */
+function confirmedByInvoice(ctx: SupplierContext): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const a of ctx.allocations) {
+    if (a.status !== "confirmed" || a.staleReason) continue;
+    out.set(a.invoiceId, (cents(out.get(a.invoiceId) ?? 0) + cents(a.amount)) / 100);
+  }
+  return out;
+}
+
+/**
+ * Brings `stale_reason` in the DB in line with the current attribution:
+ * deletes stale suggestions, marks / clears confirmed links. Returns the
+ * allocation list as it is after the sync. Safe to call often (no-op when
+ * nothing changed). Call after a card alias / category change too.
+ */
+export async function syncStaleSupplierAllocations(
+  src?: SupplierSources,
+  rows?: SupplierAllocationRow[],
+): Promise<{ allocations: SupplierAllocationRow[]; deleted: number; marked: number; cleared: number }> {
+  const sources = src ?? (await loadSupplierSources());
+  const allocations = rows ?? (await loadSupplierAllocations());
+  const index = buildLinkIndex(sources);
+  const drop: string[] = [];
+  const mark = new Map<StaleReason, string[]>();
+  const clear: string[] = [];
+  const out: SupplierAllocationRow[] = [];
+  for (const a of allocations) {
+    const reason = staleReasonOf(a, index);
+    if (a.status === "suggested" && reason) {
+      drop.push(a.id);
+      continue;
+    }
+    if (a.status === "confirmed") {
+      if (reason && reason !== (a.staleReason ?? null)) mark.set(reason, [...(mark.get(reason) ?? []), a.id]);
+      else if (!reason && a.staleReason) clear.push(a.id);
+    }
+    out.push({ ...a, staleReason: a.status === "confirmed" ? reason : null });
+  }
+  const ops: Prisma.PrismaPromise<unknown>[] = [];
+  if (drop.length > 0) {
+    ops.push(prisma.supplierPaymentAllocation.deleteMany({ where: { id: { in: drop }, status: "suggested" } }));
+  }
+  for (const [reason, ids] of mark) {
+    ops.push(prisma.supplierPaymentAllocation.updateMany({ where: { id: { in: ids } }, data: { staleReason: reason } }));
+  }
+  if (clear.length > 0) {
+    ops.push(prisma.supplierPaymentAllocation.updateMany({ where: { id: { in: clear } }, data: { staleReason: null } }));
+  }
+  if (ops.length > 0) await prisma.$transaction(ops);
+  return {
+    allocations: out,
+    deleted: drop.length,
+    marked: [...mark.values()].reduce((n, l) => n + l.length, 0),
+    cleared: clear.length,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -255,45 +398,84 @@ export interface SupplierAutoMatchResult {
   confirmed: number;
 }
 
-/** Replaces one supplier's suggestions with fresh ones; returns counts. */
+/**
+ * Replaces one supplier's suggestions with fresh ones; returns counts.
+ * Auto-confirmed links are capped again with the DB totals inside the
+ * transaction (as confirm / manual allocate do): if another link appeared
+ * meanwhile, the rest stays a suggestion.
+ */
 async function matchOne(
   ctx: SupplierContext,
 ): Promise<{ suggested: number; confirmed: Array<{ invoiceId: string; paymentId: string; amount: number; reason: string; confidence: number }> }> {
-  const fixed = ctx.allocations.filter((a) => a.status !== "suggested");
   const suggestions = suggestSupplierMatches({
     payments: ctx.payments,
     invoices: ctx.invoices,
-    allocations: fixed,
+    allocations: engineAllocations(ctx),
   });
   const now = new Date();
   const invIds = ctx.invoices.map((i) => i.id);
   const payIds = ctx.payments.map((p) => p.id);
-  await prisma.$transaction([
-    prisma.supplierPaymentAllocation.deleteMany({
+  const payById = new Map(ctx.payments.map((p) => [p.id, p]));
+  const invById = new Map(ctx.invoices.map((i) => [i.id, i]));
+  const confirmed: Array<{ invoiceId: string; paymentId: string; amount: number; reason: string; confidence: number }> = [];
+  let suggested = 0;
+  await prisma.$transaction(async (db) => {
+    await db.supplierPaymentAllocation.deleteMany({
       where: {
         status: "suggested",
         OR: [{ purchaseInvoiceId: { in: invIds } }, { bankTransactionId: { in: payIds } }],
       },
-    }),
-    prisma.supplierPaymentAllocation.createMany({
-      data: suggestions.map((s) => ({
+    });
+    const rows: Prisma.SupplierPaymentAllocationCreateManyInput[] = [];
+    for (const s of suggestions) {
+      let amount = s.amount;
+      let auto = s.autoConfirm;
+      if (auto) {
+        const capped = capAllocation({
+          requested: s.amount,
+          paymentAmount: payById.get(s.paymentId)?.amount ?? 0,
+          paymentAllocatedElsewhere: await confirmedElsewhere(db, { bankTransactionId: s.paymentId }, null),
+          invoiceTotal: invById.get(s.invoiceId)?.total ?? 0,
+          invoiceAllocatedElsewhere: await confirmedElsewhere(db, { purchaseInvoiceId: s.invoiceId }, null),
+        });
+        if (capped <= 0) continue;
+        if (cents(capped) < cents(s.amount)) {
+          auto = false;
+          amount = capped;
+        } else {
+          // Visible to the next cap in this loop.
+          await db.supplierPaymentAllocation.createMany({
+            data: [
+              {
+                bankTransactionId: s.paymentId,
+                purchaseInvoiceId: s.invoiceId,
+                amount: new Prisma.Decimal(amount.toFixed(2)),
+                status: "confirmed",
+                confidence: s.confidence,
+                reason: s.reason,
+                confirmedAt: now,
+              },
+            ],
+            skipDuplicates: true,
+          });
+          confirmed.push({ invoiceId: s.invoiceId, paymentId: s.paymentId, amount, reason: s.reason, confidence: s.confidence });
+          continue;
+        }
+      }
+      suggested += 1;
+      rows.push({
         bankTransactionId: s.paymentId,
         purchaseInvoiceId: s.invoiceId,
-        amount: new Prisma.Decimal(s.amount.toFixed(2)),
-        status: s.autoConfirm ? "confirmed" : "suggested",
+        amount: new Prisma.Decimal(amount.toFixed(2)),
+        status: "suggested",
         confidence: s.confidence,
         reason: s.reason,
-        confirmedAt: s.autoConfirm ? now : null,
-      })),
-      skipDuplicates: true,
-    }),
-  ]);
-  return {
-    suggested: suggestions.filter((s) => !s.autoConfirm).length,
-    confirmed: suggestions
-      .filter((s) => s.autoConfirm)
-      .map((s) => ({ invoiceId: s.invoiceId, paymentId: s.paymentId, amount: s.amount, reason: s.reason, confidence: s.confidence })),
-  };
+        confirmedAt: null,
+      });
+    }
+    if (rows.length > 0) await db.supplierPaymentAllocation.createMany({ data: rows, skipDuplicates: true });
+  }, TX_OPTIONS);
+  return { suggested, confirmed };
 }
 
 /**
@@ -310,10 +492,17 @@ export async function runSupplierAutoMatch(options: {
   const started = Date.now();
   const budget = options.budgetMs ?? 40_000;
   const only = options.idno ? new Set([options.idno]) : undefined;
-  const [sources, allocations] = await Promise.all([loadSupplierSources(), loadSupplierAllocations()]);
+  const [sources, loaded] = await Promise.all([loadSupplierSources(), loadSupplierAllocations()]);
+  // Stale links first (all suppliers): re-attributed payments / cancelled invoices.
+  const { allocations } = await syncStaleSupplierAllocations(sources, loaded);
   const ctxs = buildSupplierContexts(sources, allocations, only);
+  // Suppliers with leftover suggestions are processed too, so they get cleared
+  // even when no payment (or no invoice) is left.
   const idnos = [...ctxs.values()]
-    .filter((c) => c.invoices.length > 0 && c.payments.length > 0)
+    .filter(
+      (c) =>
+        (c.invoices.length > 0 && c.payments.length > 0) || c.allocations.some((a) => a.status === "suggested"),
+    )
     .map((c) => c.idno)
     .sort();
   let index = options.cursor ? idnos.findIndex((x) => x > options.cursor!) : 0;
@@ -324,6 +513,8 @@ export async function runSupplierAutoMatch(options: {
   let confirmedCount = 0;
   const log: AuditEntry[] = [];
   let last: string | null = null;
+  // Auto actions are logged as «Автоматически» (userId null) with who started the run.
+  const startedBy = options.actor ? { startedBy: options.actor.name, startedById: options.actor.id } : {};
   while (index < idnos.length) {
     if (processed > 0 && Date.now() - started > budget) break;
     const ctx = ctxs.get(idnos[index]!)!;
@@ -338,7 +529,13 @@ export async function runSupplierAutoMatch(options: {
         entityId: c.invoiceId,
         counterpartyIdno: ctx.idno,
         amount: c.amount,
-        details: { document: docOf.get(c.invoiceId), bankTransactionId: c.paymentId, reason: c.reason, confidence: c.confidence },
+        details: {
+          document: docOf.get(c.invoiceId),
+          bankTransactionId: c.paymentId,
+          reason: c.reason,
+          confidence: c.confidence,
+          ...startedBy,
+        },
       });
     }
     last = ctx.idno;
@@ -350,9 +547,9 @@ export async function runSupplierAutoMatch(options: {
     action: "supplier_auto_match",
     entityType: "run",
     counterpartyIdno: options.idno ?? null,
-    details: { processed, suggested, confirmed: confirmedCount, remaining, total: idnos.length },
+    details: { processed, suggested, confirmed: confirmedCount, remaining, total: idnos.length, ...startedBy },
   });
-  await writeAudit(options.actor ?? null, log);
+  await writeAudit(null, log);
   return {
     processed,
     total: idnos.length,
@@ -383,6 +580,8 @@ export interface SupplierLinkDto {
   invoiceDocument: string | null;
   invoiceDate: string | null;
   invoiceTotal: number | null;
+  /** Set when the link no longer holds («Связь устарела»). */
+  staleReason: StaleReason | null;
 }
 
 export interface SupplierInvoiceDto {
@@ -390,7 +589,12 @@ export interface SupplierInvoiceDto {
   document: string;
   issueDate: string | null;
   total: number;
+  /** Confirmed links, capped at the total. */
   paid: number;
+  /** Netted by credit notes of this supplier. */
+  creditOffset: number;
+  /** Confirmed links above the total (excluded from `paid`). */
+  overAllocated: number;
   status: InvoicePaymentStatus;
   receiptRef: string | null;
   receiptMethod: string | null;
@@ -414,12 +618,14 @@ export interface SupplierMatchCardResponse {
   invoices: SupplierInvoiceDto[];
   payments: SupplierPaymentDto[];
   suggestions: SupplierLinkDto[];
+  /** Confirmed links that no longer hold: shown with «Отвязать». */
+  stale: SupplierLinkDto[];
   counts: Record<InvoicePaymentStatus, number>;
 }
 
 export function toSupplierCard(ctx: SupplierContext | undefined, idno: string): SupplierMatchCardResponse {
-  const counts: Record<InvoicePaymentStatus, number> = { paid: 0, partial: 0, unpaid: 0, receipt: 0 };
-  if (!ctx) return { idno, invoices: [], payments: [], suggestions: [], counts };
+  const counts: Record<InvoicePaymentStatus, number> = { paid: 0, partial: 0, unpaid: 0, receipt: 0, credit: 0 };
+  if (!ctx) return { idno, invoices: [], payments: [], suggestions: [], stale: [], counts };
   const payById = new Map(ctx.payments.map((p) => [p.id, p]));
   const invById = new Map(ctx.invoices.map((i) => [i.id, i]));
   const link = (a: SupplierAllocationRow): SupplierLinkDto => {
@@ -438,18 +644,23 @@ export function toSupplierCard(ctx: SupplierContext | undefined, idno: string): 
       paymentAmount: p ? p.amount : null,
       paymentKind: p?.kind ?? null,
       paymentDocument: p?.document ?? null,
-      invoiceDocument: i?.document ?? null,
+      invoiceDocument: i?.document ?? a.invoiceDocument ?? null,
       invoiceDate: i?.issueDate?.toISOString() ?? null,
       invoiceTotal: i?.total ?? null,
+      staleReason: a.staleReason ?? null,
     };
   };
-  const live = ctx.allocations.filter((a) => a.status !== "rejected");
+  const live = ctx.allocations.filter((a) => a.status !== "rejected" && !a.staleReason);
+  const offsets = creditNoteOffsets(ctx.invoices, confirmedByInvoice(ctx));
   const invoices: SupplierInvoiceDto[] = [...ctx.invoices]
     .sort((a, b) => (b.issueDate?.getTime() ?? 0) - (a.issueDate?.getTime() ?? 0))
     .map((i) => {
       const links = live.filter((a) => a.invoiceId === i.id).map(link);
-      const paid = links.filter((l) => l.status === "confirmed").reduce((s, l) => s + cents(l.amount), 0) / 100;
-      const status = invoicePaymentStatus(i.total, paid, i.paidOnSpot);
+      const linked = links.filter((l) => l.status === "confirmed").reduce((s, l) => s + cents(l.amount), 0);
+      const cap = Math.max(cents(i.total), 0);
+      const paid = Math.min(linked, cap) / 100;
+      const creditOffset = offsets.get(i.id) ?? 0;
+      const status = invoicePaymentStatus(i.total, paid, i.paidOnSpot, creditOffset);
       counts[status] += 1;
       return {
         id: i.id,
@@ -457,6 +668,8 @@ export function toSupplierCard(ctx: SupplierContext | undefined, idno: string): 
         issueDate: i.issueDate?.toISOString() ?? null,
         total: i.total,
         paid,
+        creditOffset,
+        overAllocated: Math.max(linked - cap, 0) / 100,
         status,
         receiptRef: i.receiptRef,
         receiptMethod: i.receiptMethod,
@@ -482,11 +695,16 @@ export function toSupplierCard(ctx: SupplierContext | undefined, idno: string): 
     .filter((a) => a.status === "suggested")
     .map(link)
     .sort((a, b) => b.confidence - a.confidence || (a.paymentDate ?? "").localeCompare(b.paymentDate ?? ""));
-  return { idno, invoices, payments, suggestions, counts };
+  const seenStale = new Set<string>();
+  const stale = ctx.allocations
+    .filter((a) => a.status === "confirmed" && a.staleReason && !seenStale.has(a.id) && seenStale.add(a.id))
+    .map(link);
+  return { idno, invoices, payments, suggestions, stale, counts };
 }
 
 export async function loadSupplierCard(idno: string): Promise<SupplierMatchCardResponse> {
-  const [sources, allocations] = await Promise.all([loadSupplierSources(), loadSupplierAllocations()]);
+  const [sources, loaded] = await Promise.all([loadSupplierSources(), loadSupplierAllocations()]);
+  const { allocations } = await syncStaleSupplierAllocations(sources, loaded);
   const ctxs = buildSupplierContexts(sources, allocations, new Set([idno]));
   return toSupplierCard(ctxs.get(idno), idno);
 }
@@ -503,7 +721,7 @@ async function confirmedElsewhere(
   excludeId: string | null,
 ): Promise<number> {
   const agg = await db.supplierPaymentAllocation.aggregate({
-    where: { ...where, status: "confirmed", ...(excludeId ? { id: { not: excludeId } } : {}) },
+    where: { ...where, status: "confirmed", staleReason: null, ...(excludeId ? { id: { not: excludeId } } : {}) },
     _sum: { amount: true },
   });
   return num(agg._sum.amount);
@@ -530,13 +748,24 @@ const TX_OPTIONS = { timeout: 30_000, maxWait: 10_000 };
 export interface ActionResult {
   done: number;
   skipped: number;
+  /** Why ids were skipped (id → reason), when known. */
+  skippedReasons?: Record<string, string>;
+}
+
+/** Current attribution, with stale links synced first (so DB caps see them). */
+async function freshIndex(): Promise<{ sources: SupplierSources; index: SupplierLinkIndex }> {
+  const sources = await loadSupplierSources();
+  await syncStaleSupplierAllocations(sources);
+  return { sources, index: buildLinkIndex(sources) };
 }
 
 export async function confirmSupplierAllocations(ids: string[], actor: AuditActor | null): Promise<ActionResult> {
   const log: AuditEntry[] = [];
   let done = 0;
   let skipped = 0;
+  const skippedReasons: Record<string, string> = {};
   const refunds: RefundCache = new Map();
+  const { index } = await freshIndex();
   await prisma.$transaction(async (db) => {
     const rows = await db.supplierPaymentAllocation.findMany({
       where: { id: { in: ids }, status: "suggested" },
@@ -548,6 +777,13 @@ export async function confirmSupplierAllocations(ids: string[], actor: AuditActo
     });
     skipped += ids.length - rows.length;
     for (const r of rows) {
+      // The payment must still belong to the invoice's supplier and the invoice be live.
+      const stale = staleReasonOf({ paymentId: r.bankTransactionId, invoiceId: r.purchaseInvoiceId, status: "suggested" }, index);
+      if (stale) {
+        skipped += 1;
+        skippedReasons[r.id] = stale;
+        continue;
+      }
       const amount = capAllocation({
         requested: num(r.amount),
         paymentAmount: await paymentAmount(r.bankTransaction, refunds),
@@ -557,6 +793,7 @@ export async function confirmSupplierAllocations(ids: string[], actor: AuditActo
       });
       if (amount <= 0) {
         skipped += 1;
+        skippedReasons[r.id] = "fully_allocated";
         continue;
       }
       await db.supplierPaymentAllocation.update({
@@ -585,13 +822,21 @@ export async function confirmSupplierAllocations(ids: string[], actor: AuditActo
     }
   }, TX_OPTIONS);
   await writeAudit(actor, log);
-  return { done, skipped };
+  return { done, skipped, skippedReasons };
 }
 
 export async function rejectSupplierAllocations(ids: string[], actor: AuditActor | null): Promise<ActionResult> {
-  const rows = await prisma.supplierPaymentAllocation.findMany({
+  const { index } = await freshIndex();
+  const found = await prisma.supplierPaymentAllocation.findMany({
     where: { id: { in: ids }, status: "suggested" },
     include: { purchaseInvoice: { select: { supplierIdno: true, seria: true, number: true } } },
+  });
+  // Stale suggestions were just deleted by the sync; never remember a rejection for them.
+  const skippedReasons: Record<string, string> = {};
+  const rows = found.filter((r) => {
+    const stale = staleReasonOf({ paymentId: r.bankTransactionId, invoiceId: r.purchaseInvoiceId, status: "suggested" }, index);
+    if (stale) skippedReasons[r.id] = stale;
+    return !stale;
   });
   if (rows.length > 0) {
     await prisma.supplierPaymentAllocation.updateMany({
@@ -615,7 +860,7 @@ export async function rejectSupplierAllocations(ids: string[], actor: AuditActor
       },
     })),
   );
-  return { done: rows.length, skipped: ids.length - rows.length };
+  return { done: rows.length, skipped: ids.length - rows.length, skippedReasons };
 }
 
 export class SupplierMatchError extends Error {
@@ -624,6 +869,12 @@ export class SupplierMatchError extends Error {
   }
 }
 
+/**
+ * Manual link of one payment to invoices. The payment must be a supplier
+ * payment (bank transfer or attributed card purchase, not a fee) of a
+ * matched supplier; each invoice must be a live invoice of that same IDNO,
+ * not paid on the spot (B/f), with a positive total. Others are skipped.
+ */
 export async function manualSupplierAllocate(
   input: { bankTransactionId: string; allocations: Array<{ purchaseInvoiceId: string; amount: number }> },
   actor: AuditActor | null,
@@ -631,6 +882,11 @@ export async function manualSupplierAllocate(
   const log: AuditEntry[] = [];
   let done = 0;
   let skipped = 0;
+  const skippedReasons: Record<string, string> = {};
+  const { sources, index } = await freshIndex();
+  const idno = index.paymentIdno.get(input.bankTransactionId) ?? null;
+  const ctx = idno ? buildSupplierContexts(sources, [], new Set([idno])).get(idno) : undefined;
+  const payment = ctx?.payments.find((p) => p.id === input.bankTransactionId);
   await prisma.$transaction(async (db) => {
     const tx = await db.bankTransaction.findUnique({
       where: { id: input.bankTransactionId },
@@ -638,7 +894,9 @@ export async function manualSupplierAllocate(
     });
     if (!tx) throw new SupplierMatchError("payment_not_found");
     if (tx.direction !== "DEBIT") throw new SupplierMatchError("not_a_payment");
-    const total = await paymentAmount(tx, new Map());
+    if (!ctx || !payment) throw new SupplierMatchError("not_a_supplier_payment");
+    const total = payment.amount;
+    const invById = new Map(ctx.invoices.map((i) => [i.id, i]));
     const invoices = await db.purchaseInvoice.findMany({
       where: { id: { in: input.allocations.map((a) => a.purchaseInvoiceId) } },
       select: { id: true, totalAmount: true, supplierIdno: true, seria: true, number: true },
@@ -646,8 +904,19 @@ export async function manualSupplierAllocate(
     const byId = new Map(invoices.map((i) => [i.id, i]));
     for (const a of input.allocations) {
       const inv = byId.get(a.purchaseInvoiceId);
-      if (!inv) {
+      const live = invById.get(a.purchaseInvoiceId);
+      const why = !inv
+        ? "invoice_not_found"
+        : !live || inv.supplierIdno !== ctx.idno
+          ? "other_supplier_or_not_live"
+          : live.paidOnSpot
+            ? "paid_on_spot"
+            : num(inv.totalAmount) <= 0
+              ? "not_positive"
+              : null;
+      if (why || !inv) {
         skipped += 1;
+        skippedReasons[a.purchaseInvoiceId] = why ?? "invoice_not_found";
         continue;
       }
       const existing = await db.supplierPaymentAllocation.findUnique({
@@ -665,6 +934,7 @@ export async function manualSupplierAllocate(
       });
       if (amount <= 0) {
         skipped += 1;
+        skippedReasons[a.purchaseInvoiceId] = "fully_allocated";
         continue;
       }
       const data = {
@@ -672,6 +942,7 @@ export async function manualSupplierAllocate(
         status: "confirmed",
         confidence: 100,
         reason: "Связано вручную",
+        staleReason: null,
         createdById: actor?.id ?? null,
         confirmedById: actor?.id ?? null,
         confirmedAt: new Date(),
@@ -707,7 +978,7 @@ export async function manualSupplierAllocate(
     }
   }, TX_OPTIONS);
   await writeAudit(actor, log);
-  return { done, skipped };
+  return { done, skipped, skippedReasons };
 }
 
 /** Removes a confirmed link (or forgets a rejection) so the auto-match may suggest again. */

@@ -41,6 +41,11 @@ export interface SettlementExtraLabels {
     title: string;
     hint: string;
     status: Record<InvoicePaymentStatus, string>;
+    staleTitle: string;
+    staleHint: string;
+    staleReason: Record<"payment_moved" | "invoice_gone", string>;
+    creditOffset: (money: string) => string;
+    overAllocated: (money: string) => string;
     invoices: string;
     payments: string;
     suggestions: string;
@@ -135,6 +140,8 @@ const RU: SettlementExtraLabels = {
       low_confidence_sales: "Слабое автосопоставление",
       vat_anomaly: "НДС",
       receipt_and_bank: "B/f + перевод",
+      over_allocated: "Привязано больше суммы фактуры",
+      stale_link: "Устаревшая привязка",
     },
     text: (s, money, date) => {
       const docs = s.documents.filter((d) => d && d !== "—");
@@ -160,6 +167,10 @@ const RU: SettlementExtraLabels = {
           return `${s.side === "sales" ? "Наша фактура" : "Фактура поставщика"} ${docList}: ${s.vatReason ? VAT_TEXT[s.vatReason] : "странный НДС"} (НДС ${money(s.amount)}).`;
         case "receipt_and_bank":
           return `Фактура ${s.documents[0] ?? ""} оплачена на месте (B/f), и ещё есть перевод той же суммы ${money(s.amount)} (п/п ${s.documents[1] ?? "—"}) — возможна двойная оплата.`;
+        case "over_allocated":
+          return `К фактуре ${docList} привязано платежей на ${money(s.amount)} больше её суммы (сумма фактуры уменьшилась?). Лишнее не учитывается — отвяжите или перепривяжите платёж.`;
+        case "stale_link":
+          return `${s.count ?? 1} подтверждённ(ых) связ(ей) на ${money(s.amount)} больше не действуют: платёж теперь отнесён к другому поставщику или фактура отменена.${docList ? ` Фактуры: ${docList}` : ""} Они не учитываются — отвяжите их.`;
       }
     },
     action: {
@@ -173,6 +184,8 @@ const RU: SettlementExtraLabels = {
       low_confidence_sales: "Открыть в «Сверке»",
       vat_anomaly: "Открыть карточку",
       receipt_and_bank: "Открыть карточку",
+      over_allocated: "Сопоставить оплаты",
+      stale_link: "Сопоставить оплаты",
     },
     open: "Открыть",
     dismiss: "Проверено",
@@ -199,7 +212,18 @@ const RU: SettlementExtraLabels = {
   match: {
     title: "Оплаты поставщику по фактурам",
     hint: "Какой наш платёж закрыл какую фактуру. Сальдо считается по IDNO в целом — эти связи только объясняют его по документам.",
-    status: { paid: "Оплачена", partial: "Частично", unpaid: "Не оплачена", receipt: "Оплачена на месте (B/f)" },
+    status: {
+      paid: "Оплачена",
+      partial: "Частично",
+      unpaid: "Не оплачена",
+      receipt: "Оплачена на месте (B/f)",
+      credit: "Сторно",
+    },
+    staleTitle: "Связь устарела",
+    staleHint: "Платёж теперь отнесён к другому поставщику или фактура отменена — эти связи не учитываются.",
+    staleReason: { payment_moved: "платёж у другого поставщика", invoice_gone: "фактура отменена / не действует" },
+    creditOffset: (m) => `сторно −${m}`,
+    overAllocated: (m) => `привязано больше на ${m}`,
     invoices: "Фактуры поставщика",
     payments: "Наши платежи",
     suggestions: "Подсказки",
@@ -287,6 +311,8 @@ const RU: SettlementExtraLabels = {
       if (reason) parts.push(reason);
       const note = str(d.note);
       if (note) parts.push(`«${note}»`);
+      const startedBy = str(d.startedBy);
+      if (startedBy) parts.push(`запустил ${startedBy}`);
       if (d.processed != null && (action === "supplier_auto_match" || action === "auto_match")) {
         if (action === "supplier_auto_match") {
           parts.push(`поставщиков ${d.processed}, подтверждено ${d.confirmed ?? 0}, подсказок ${d.suggested ?? 0}${Number(d.remaining) > 0 ? `, осталось ${d.remaining}` : ""}`);

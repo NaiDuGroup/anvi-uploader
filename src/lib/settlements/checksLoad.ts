@@ -5,7 +5,8 @@
  */
 import { prisma } from "@/lib/prisma";
 import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
-import { computeChecks, type LowConfidenceSale } from "./checks";
+import { loadOperationalIdnos } from "@/lib/reconciliation/operational";
+import { computeChecks, LOW_CONFIDENCE, LOW_CONFIDENCE_MONTHS, type LowConfidenceSale } from "./checks";
 import { computeSettlementsReportFull } from "./load";
 import { buildSupplierContexts, loadSupplierAllocations } from "./supplierMatchLoad";
 import type { CheckSignal, SettlementChecks, SettlementsResponse } from "./types";
@@ -16,11 +17,19 @@ async function buildChecks(
   report: SettlementsResponse,
   internals: Awaited<ReturnType<typeof computeSettlementsReportFull>>["internals"],
 ): Promise<SettlementChecks> {
-  const [allocations, dismissals, lowConf, lineVat, company] = await Promise.all([
+  const lowSince = new Date();
+  lowSince.setUTCMonth(lowSince.getUTCMonth() - LOW_CONFIDENCE_MONTHS);
+  const [allocations, dismissals, lowConf, lineVat, company, operational] = await Promise.all([
     loadSupplierAllocations(),
     prisma.settlementCheckDismissal.findMany(),
     prisma.paymentAllocation.findMany({
-      where: { matchedBy: "AUTO", confidence: { lt: 60 }, fiscalInvoiceId: { not: null } },
+      // Still an unreviewed auto-match (a review re-links it as MANUAL), recent only.
+      where: {
+        matchedBy: "AUTO",
+        confidence: { lt: LOW_CONFIDENCE },
+        fiscalInvoiceId: { not: null },
+        bankTransaction: { bookingDate: { gte: lowSince } },
+      },
       select: {
         id: true,
         amount: true,
@@ -35,6 +44,7 @@ async function buildChecks(
       _count: { _all: true, vatAmount: true },
     }),
     getOrCreateCompanyProfile(),
+    loadOperationalIdnos(),
   ]);
 
   const ctxs = buildSupplierContexts(
@@ -45,6 +55,7 @@ async function buildChecks(
       refundedByTx: internals.refundedByTx,
       categories: internals.categories,
       ownIdno: company.fiscalCode || null,
+      operationalIdnos: operational,
     },
     allocations,
   );
@@ -76,9 +87,13 @@ async function buildChecks(
     rows: report.rows,
     suppliers: ctxs,
     matchingRan: allocations.length > 0,
-    cards: report.cardPayments,
+    cards: {
+      ...report.cardPayments,
+      merchantKeys: internals.cards.filter((c) => !c.idno && !c.ignored).map((c) => c.merchantKey),
+    },
     lowConfidenceSales,
     vatSales: internals.salesInvoices.map((i) => ({
+      id: i.id,
       document: `${i.seria}${i.number}`,
       idno: i.buyerIdno,
       total: Number(i.totalAmount ?? 0),
@@ -86,6 +101,7 @@ async function buildChecks(
       date: i.issueDate,
     })),
     vatPurchases: internals.purchases.map((p) => ({
+      id: p.id,
       document: `${p.seria}${p.number}`,
       idno: p.supplierIdno,
       total: Number(p.totalAmount ?? 0),

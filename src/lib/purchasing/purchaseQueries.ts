@@ -14,7 +14,8 @@ import {
   type SupplierMappingsResponse,
 } from "./dto";
 import { isPriceDriftSuspicious } from "./invoiceStatus";
-import { invoicePaymentStatus } from "@/lib/settlements/supplierMatch";
+import { creditNoteOffsets, invoicePaymentStatus } from "@/lib/settlements/supplierMatch";
+import { ISSUED_EFACTURA_STATUSES } from "@/lib/efactura/types";
 import { purchaseCostsIncludeVat } from "./purchaseCostBasis";
 import { supplierKey } from "./postPurchaseLine";
 import { findUnlinkedReceipts } from "./receiptLinking";
@@ -137,15 +138,55 @@ export async function listPurchaseInvoices(
     prisma.purchaseInvoice.aggregate({ _max: { lastSyncedAt: true } }),
   ]);
 
-  // Payment pill: confirmed supplier links + B/f receipts (best-effort).
+  // Payment pill: confirmed supplier links (not stale) + B/f receipts + credit
+  // notes netted per supplier, as on the settlements card (best-effort).
   const paidById = new Map<string, number>();
+  const offsetById = new Map<string, number>();
   try {
+    const idnos = [...new Set(invoices.map((i) => i.supplierIdno).filter((x): x is string => Boolean(x)))];
+    const credited = idnos.length
+      ? await prisma.purchaseInvoice.findMany({
+          where: {
+            supplierIdno: { in: idnos },
+            eFacturaStatus: { in: [...ISSUED_EFACTURA_STATUSES] },
+            totalAmount: { lt: 0 },
+          },
+          select: { supplierIdno: true },
+          distinct: ["supplierIdno"],
+        })
+      : [];
+    const withCredit = credited.map((c) => c.supplierIdno!).filter(Boolean);
+    const siblings = withCredit.length
+      ? await prisma.purchaseInvoice.findMany({
+          where: {
+            supplierIdno: { in: withCredit },
+            eFacturaStatus: { in: [...ISSUED_EFACTURA_STATUSES] },
+            totalAmount: { not: null },
+          },
+          select: { id: true, supplierIdno: true, totalAmount: true, issueDate: true, receiptSettledAt: true },
+        })
+      : [];
+    const ids = [...new Set([...invoices.map((i) => i.id), ...siblings.map((i) => i.id)])];
     const sums = await prisma.supplierPaymentAllocation.groupBy({
       by: ["purchaseInvoiceId"],
-      where: { purchaseInvoiceId: { in: invoices.map((i) => i.id) }, status: "confirmed" },
+      where: { purchaseInvoiceId: { in: ids }, status: "confirmed", staleReason: null },
       _sum: { amount: true },
     });
     for (const s of sums) paidById.set(s.purchaseInvoiceId, Number(s._sum.amount ?? 0));
+    const bySupplier = new Map<string, typeof siblings>();
+    for (const inv of siblings) bySupplier.set(inv.supplierIdno!, [...(bySupplier.get(inv.supplierIdno!) ?? []), inv]);
+    for (const list of bySupplier.values()) {
+      const offsets = creditNoteOffsets(
+        list.map((i) => ({
+          id: i.id,
+          total: Number(i.totalAmount),
+          issueDate: i.issueDate,
+          paidOnSpot: Boolean(i.receiptSettledAt),
+        })),
+        paidById,
+      );
+      for (const [id, off] of offsets) offsetById.set(id, off);
+    }
   } catch (error) {
     console.error("purchase list: payment statuses not loaded:", error);
   }
@@ -156,7 +197,12 @@ export async function listPurchaseInvoices(
       paymentStatus:
         inv.totalAmount == null
           ? null
-          : invoicePaymentStatus(Number(inv.totalAmount), paidById.get(inv.id) ?? 0, Boolean(inv.receiptSettledAt)),
+          : invoicePaymentStatus(
+              Number(inv.totalAmount),
+              paidById.get(inv.id) ?? 0,
+              Boolean(inv.receiptSettledAt),
+              offsetById.get(inv.id) ?? 0,
+            ),
     })),
     openInvoiceCount,
     openLineCount,

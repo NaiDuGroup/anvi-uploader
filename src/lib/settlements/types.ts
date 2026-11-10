@@ -151,6 +151,8 @@ export const CHECK_TYPES = [
   "low_confidence_sales",
   "vat_anomaly",
   "receipt_and_bank",
+  "over_allocated",
+  "stale_link",
 ] as const;
 
 /** «Проверить»: kinds of automatic signals. */

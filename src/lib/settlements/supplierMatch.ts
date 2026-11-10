@@ -14,6 +14,13 @@
  *  3. a sum of 2–5 open invoices equal to the payment (oldest first, bounded);
  *  4. FIFO remainder onto the oldest open invoices (weak fallback).
  *
+ * Credit notes (negative purchase invoices, «Сторно») never get links: before
+ * matching they are netted against the oldest open invoices of the supplier
+ * (see `creditNoteOffsets`), so invoice 1000 − storno 200 needs a payment of 800.
+ *
+ * Confirmed links marked stale (payment moved to another IDNO, invoice no
+ * longer live) do not count towards any total.
+ *
  * Amounts are integer cents inside; never more than the payment or the
  * invoice's open amount is allocated.
  */
@@ -59,6 +66,8 @@ export interface SmAllocation {
   invoiceId: string;
   amount: number;
   status: SupplierAllocationStatus;
+  /** Confirmed link that no longer holds (payment re-attributed / invoice not live): counts nowhere. */
+  stale?: boolean;
 }
 
 export interface SmSuggestion {
@@ -93,16 +102,32 @@ export interface CitedRefs {
   compact: string;
   /** Digit runs (leading zeros stripped), ≥ 5 digits — cited without a keyword. */
   longNumbers: Set<string>;
-  /** Numbers right after a keyword (factura, f-ra, cont, inv, nr…), any length ≥ 2. */
+  /** Numbers right after a keyword (factura, f-ra, cont, inv, №…), any length ≥ 2. */
   keywordNumbers: Set<string>;
 }
 
+/**
+ * Keyword + number. Keywords need a non-letter before them (no FF inside
+ * OFFICE / TARIFF); CONT is not CONTRACT; a bare «NR» is not a keyword (it
+ * only counts right after one, «cont nr. 15»), so «contract nr. 15» cites
+ * nothing.
+ */
 const KEYWORD_RE =
-  /(?:E-?FACTURA|FACTURII|FACTURA|FACTURILE|FACTURI|FACT|F-RA|F\/RA|FRA|FF|CONTUL|CONT|INVOICE|INV|NR|N°|№)\.?\s*(?:NR\.?\s*|N\s*)?[:#]?\s*([A-Z]{0,5})\s*(\d[\d\s]*\d|\d)/g;
+  /(?<![A-Z])(?:E-?FACTURA|FACTURII|FACTURILE|FACTURA|FACTURI|FACT|F-RA|F\/RA|FRA|FF|CONTUL|CONT(?!RACT|R\.)|INVOICE|INV(?!EST)|N°|№)\.?\s*(?:NR\.?\s*|N\s*)?[:#]?\s*([A-Z]{0,5})\s*(\d[\d\s]*\d|\d)(?!\d)/g;
+
+/** IBANs (MD24AG000…): their check digits / account digits are not invoice numbers. */
+const IBAN_RE = /(?<![A-Z0-9])[A-Z]{2}\d{2}[A-Z0-9]{11,30}(?![A-Z0-9])/g;
+/** Dates (10.11.2026, 2026-11-10, 02.10): masked so their digits never glue to a number. */
+const DATE_RE = /(?<!\d)(?:\d{1,2}[./-]\d{1,2}(?:[./-]\d{2,4})?|\d{4}-\d{2}-\d{2})(?![\d])/g;
+
+/** Uppercased, accents folded, IBANs dropped, dates masked. */
+function purposeText(purpose: string | null | undefined): string {
+  return fold(purpose ?? "").replace(IBAN_RE, " ").replace(DATE_RE, " ~ ");
+}
 
 /** Invoice references in a payment purpose, normalized for comparison. */
 export function extractCitedRefs(purpose: string | null | undefined): CitedRefs {
-  const text = fold(purpose ?? "");
+  const text = purposeText(purpose);
   const compact = text.replace(/\s+/g, "");
   const longNumbers = new Set<string>();
   const keywordNumbers = new Set<string>();
@@ -122,13 +147,15 @@ export function extractCitedRefs(purpose: string | null | undefined): CitedRefs 
   return { compact, longNumbers, keywordNumbers };
 }
 
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /** True when the purpose cites this invoice (series + number, long number, or keyword + number). */
 export function isInvoiceCited(inv: Pick<SmInvoice, "seria" | "number">, refs: CitedRefs): boolean {
   const seria = fold(inv.seria).replace(/[^A-Z0-9]/g, "");
   const number = inv.number.replace(/\s+/g, "");
   const stripped = stripZeros(number);
-  if (seria && refs.compact.includes(`${seria}${number}`)) return true;
-  if (seria && stripped.length >= 3 && new RegExp(`${seria}0*${stripped}(?!\\d)`).test(refs.compact)) {
+  if (seria && number && new RegExp(`${escapeRe(seria)}${escapeRe(number)}(?!\\d)`).test(refs.compact)) return true;
+  if (seria && stripped.length >= 3 && new RegExp(`${escapeRe(seria)}0*${escapeRe(stripped)}(?!\\d)`).test(refs.compact)) {
     return true;
   }
   if (stripped.length >= 5 && refs.longNumbers.has(stripped)) return true;
@@ -140,6 +167,38 @@ function inWindow(inv: SmInvoice, pay: SmPayment, afterDays: number): boolean {
   const t = inv.issueDate.getTime();
   const p = pay.date.getTime();
   return p >= t - WINDOW_BEFORE_DAYS * DAY_MS && p <= t + afterDays * DAY_MS;
+}
+
+/**
+ * Credit notes (negative totals, not B/f) netted against the oldest open
+ * invoices of the same supplier: open = total − confirmed links. Returns the
+ * offset per positive invoice in MDL. Same rule for the engine, the card,
+ * the Закупки pill and the «Не оплачено» check.
+ */
+export function creditNoteOffsets(
+  invoices: ReadonlyArray<Pick<SmInvoice, "id" | "total" | "issueDate" | "paidOnSpot">>,
+  paidByInvoice: ReadonlyMap<string, number>,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  let credit = 0;
+  for (const inv of invoices) if (!inv.paidOnSpot && cents(inv.total) < 0) credit -= cents(inv.total);
+  if (credit <= 0) return out;
+  const open = invoices
+    .filter((inv) => !inv.paidOnSpot && cents(inv.total) > 0)
+    .sort(
+      (a, b) =>
+        (a.issueDate?.getTime() ?? Number.MAX_SAFE_INTEGER) - (b.issueDate?.getTime() ?? Number.MAX_SAFE_INTEGER) ||
+        a.id.localeCompare(b.id),
+    );
+  for (const inv of open) {
+    if (credit <= 0) break;
+    const left = cents(inv.total) - cents(paidByInvoice.get(inv.id) ?? 0);
+    if (left <= 0) continue;
+    const take = Math.min(left, credit);
+    credit -= take;
+    out.set(inv.id, mdl(take));
+  }
+  return out;
 }
 
 const byDate = (a: SmInvoice, b: SmInvoice): number =>
@@ -200,13 +259,18 @@ export function suggestSupplierMatches(input: {
     payFull.set(p.id, c);
   }
   for (const inv of input.invoices) invLeft.set(inv.id, inv.paidOnSpot ? 0 : Math.max(0, cents(inv.total)));
+  const paidByInvoice = new Map<string, number>();
   for (const a of input.allocations) {
-    if (a.status === "suggested") continue;
+    if (a.status === "suggested" || a.stale) continue;
     taken.add(pair(a.paymentId, a.invoiceId));
     if (a.status !== "confirmed") continue;
     const c = cents(a.amount);
+    paidByInvoice.set(a.invoiceId, mdl(cents(paidByInvoice.get(a.invoiceId) ?? 0) + c));
     if (payLeft.has(a.paymentId)) payLeft.set(a.paymentId, Math.max(0, payLeft.get(a.paymentId)! - c));
     if (invLeft.has(a.invoiceId)) invLeft.set(a.invoiceId, Math.max(0, invLeft.get(a.invoiceId)! - c));
+  }
+  for (const [id, off] of creditNoteOffsets(input.invoices, paidByInvoice)) {
+    invLeft.set(id, Math.max(0, (invLeft.get(id) ?? 0) - cents(off)));
   }
 
   const payments = [...input.payments].sort(
@@ -342,18 +406,23 @@ export function suggestSupplierMatches(input: {
   return out;
 }
 
-export type InvoicePaymentStatus = "paid" | "partial" | "unpaid" | "receipt";
+export type InvoicePaymentStatus = "paid" | "partial" | "unpaid" | "receipt" | "credit";
 
-/** Per-invoice status from confirmed links (B/f on the spot wins). */
+/**
+ * Per-invoice status from confirmed links + credit-note offset (B/f on the
+ * spot wins). A negative invoice is a credit note: neutral «Сторно».
+ */
 export function invoicePaymentStatus(
   total: number,
   confirmedPaid: number,
   paidOnSpot: boolean,
+  creditOffset = 0,
 ): InvoicePaymentStatus {
-  if (paidOnSpot) return "receipt";
   const t = cents(total);
-  const p = cents(confirmedPaid);
-  if (t <= 0 || p >= t) return "paid";
+  if (t < 0) return "credit";
+  if (paidOnSpot) return "receipt";
+  const p = cents(confirmedPaid) + cents(creditOffset);
+  if (t === 0 || p >= t) return "paid";
   if (p > 0) return "partial";
   return "unpaid";
 }

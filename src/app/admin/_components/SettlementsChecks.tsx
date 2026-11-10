@@ -22,6 +22,8 @@ const TYPE_TONE: Record<CheckType, string> = {
   low_confidence_sales: "bg-gray-100 text-gray-700 ring-gray-200",
   vat_anomaly: "bg-rose-50 text-rose-800 ring-rose-200",
   receipt_and_bank: "bg-rose-50 text-rose-800 ring-rose-200",
+  over_allocated: "bg-rose-50 text-rose-800 ring-rose-200",
+  stale_link: "bg-amber-50 text-amber-800 ring-amber-200",
 };
 
 function actionHref(s: CheckSignal): string | null {
@@ -29,7 +31,11 @@ function actionHref(s: CheckSignal): string | null {
   if (s.type === "low_confidence_sales") return "/admin/bookkeeping/reconciliation";
   if (!s.idno) return null;
   const base = `/admin/bookkeeping/settlements/${encodeURIComponent(s.idno)}`;
-  return s.type === "supplier_unpaid" || s.type === "payment_unmatched" || s.type === "receipt_and_bank"
+  return s.type === "supplier_unpaid" ||
+    s.type === "payment_unmatched" ||
+    s.type === "receipt_and_bank" ||
+    s.type === "over_allocated" ||
+    s.type === "stale_link"
     ? `${base}#supplier-match`
     : base;
 }

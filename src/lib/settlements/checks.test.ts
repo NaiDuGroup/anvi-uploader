@@ -152,7 +152,7 @@ describe("computeChecks", () => {
   it("card, low-confidence sales and VAT signals", () => {
     const s = computeChecks(
       input({
-        cards: { unattributedCount: 3, unattributedSum: 120.5 },
+        cards: { unattributedCount: 3, unattributedSum: 120.5, merchantKeys: ["LINELLA", "NR1", "LINELLA"] },
         lowConfidenceSales: [
           { allocationId: "a1", idno: "7", name: "C", amount: 10, date: day("2026-10-01"), confidence: 40, document: "EBJ1" },
           { allocationId: "a2", idno: "7", name: "C", amount: 20, date: day("2026-10-02"), confidence: 50, document: "EBJ2" },
@@ -162,7 +162,7 @@ describe("computeChecks", () => {
         vatPurchases: [{ document: "EBF5", idno: "8", total: 120, vat: 20, totalExVat: 90, linesVat: null, date: null }],
       }),
     );
-    expect(s.find((x) => x.type === "card_unattributed")?.key).toBe("card_unattributed:3:120.50");
+    expect(s.find((x) => x.type === "card_unattributed")?.key).toBe(`card_unattributed:${stableHash(["LINELLA", "NR1"])}`);
     expect(s.find((x) => x.type === "low_confidence_sales")).toMatchObject({ amount: 30, count: 2, confidence: 40 });
     expect(s.filter((x) => x.type === "vat_anomaly").map((x) => x.vatReason)).toEqual(["vat_over_rate", "sum_mismatch"]);
   });

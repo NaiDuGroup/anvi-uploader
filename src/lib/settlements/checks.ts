@@ -1,9 +1,21 @@
 /**
  * «Взаиморасчёты → Проверить»: automatic signals. Pure — every input is
- * plain data. Each signal has a stable key (type + counterparty + the
- * documents behind it) so a «Проверено» mark survives reloads and comes back
- * only when the underlying documents change.
+ * plain data. Each signal has a stable key so a «Проверено» mark survives
+ * reloads.
+ *
+ * Key rule: `type:idno:anchor`, where the anchor is what makes the problem
+ * «the same one» for a person, not the whole document list:
+ *  - one document / pair (duplicate_sale, duplicate_payment, receipt_and_bank,
+ *    over_allocated, vat_anomaly → IDNO + invoice id): that document;
+ *  - growing groups (supplier_unpaid, payment_unmatched → the oldest
+ *    document id; low_confidence_sales → the oldest allocation id), so a new
+ *    monthly payment does not bring a dismissed group back — it comes back
+ *    only when its oldest document is resolved and another one becomes oldest;
+ *  - card_unattributed: the set of merchant keys (a new purchase at a known
+ *    merchant keeps the mark, a new merchant brings it back);
+ *  - stale_link: the set of stale link ids.
  */
+import { creditNoteOffsets } from "./supplierMatch";
 import type { CheckSignal, SettlementRow, VatAnomalyReason } from "./types";
 
 const DAY_MS = 86_400_000;
@@ -17,6 +29,8 @@ export const STALE_DAYS = 30;
 export const DUPLICATE_PAYMENT_DAYS = 7;
 /** Sales auto-matches below this confidence are worth a look. */
 export const LOW_CONFIDENCE = 60;
+/** …and only those from the last N months (older FIFO history is not worth a look). */
+export const LOW_CONFIDENCE_MONTHS = 18;
 const MAX_DOCS = 6;
 
 /** Short stable hash (FNV-1a 32-bit, base36) for long id lists in keys. */
@@ -48,6 +62,10 @@ export interface CheckInvoice {
 }
 
 export interface CheckAllocation {
+  id?: string;
+  /** Confirmed link that no longer holds (payment re-attributed / invoice not live). */
+  staleReason?: string | null;
+  invoiceDocument?: string | null;
   paymentId: string;
   invoiceId: string;
   amount: number;
@@ -72,6 +90,8 @@ export interface LowConfidenceSale {
 }
 
 export interface VatSalesInvoice {
+  /** Invoice id (key); falls back to the document. */
+  id?: string;
   document: string;
   idno: string | null;
   total: number;
@@ -91,7 +111,7 @@ export interface ChecksInput {
   suppliers: ReadonlyMap<string, CheckSupplier>;
   /** Supplier matching has run at least once (else 5–6 would flag everything). */
   matchingRan: boolean;
-  cards: { unattributedCount: number; unattributedSum: number };
+  cards: { unattributedCount: number; unattributedSum: number; merchantKeys?: readonly string[] };
   lowConfidenceSales: readonly LowConfidenceSale[];
   vatSales: readonly VatSalesInvoice[];
   vatPurchases: readonly VatPurchaseInvoice[];
@@ -105,6 +125,8 @@ export function salesVatAnomaly(inv: VatSalesInvoice): VatAnomalyReason | null {
   if (inv.vat == null) return null;
   const vat = cents(inv.vat);
   const total = cents(inv.total);
+  // Credit note (storno): negative total and VAT of the same sign is normal.
+  if (total < 0 && vat <= 0) return salesVatAnomaly({ ...inv, total: -inv.total, vat: -inv.vat });
   if (vat < 0) return "vat_negative";
   if (vat > total) return "vat_over_total";
   if (total > 0 && vat > Math.round(total / 6) + 5) return "vat_over_rate";
@@ -113,6 +135,16 @@ export function salesVatAnomaly(inv: VatSalesInvoice): VatAnomalyReason | null {
 
 /** Purchase VAT: as sales, plus ex-VAT + VAT ≠ total and line VAT ≠ invoice VAT (±1 MDL). */
 export function purchaseVatAnomaly(inv: VatPurchaseInvoice): VatAnomalyReason | null {
+  // Credit note: negative total with negative VAT is normal — check the mirrored invoice.
+  if (inv.vat != null && cents(inv.total) < 0 && cents(inv.vat) <= 0) {
+    return purchaseVatAnomaly({
+      ...inv,
+      total: -inv.total,
+      vat: -inv.vat,
+      totalExVat: inv.totalExVat == null ? null : -inv.totalExVat,
+      linesVat: inv.linesVat == null ? null : -inv.linesVat,
+    });
+  }
   const base = salesVatAnomaly(inv);
   if (base) return base;
   if (inv.vat == null) return null;
@@ -138,6 +170,24 @@ export function computeChecks(input: ChecksInput): CheckSignal[] {
   const out: CheckSignal[] = [];
   const rows = new Map(input.rows.map((r) => [r.idno, r]));
   const nowMs = input.now.getTime();
+  /** Stale links already reported (a link sits in both its invoice's and its payment's supplier). */
+  const staleSeen = new Set<string>();
+  const staleKey = (a: CheckAllocation) => a.id ?? `${a.paymentId}|${a.invoiceId}`;
+  const pushStale = (idno: string, name: string | null, list: readonly CheckAllocation[]) => {
+    if (list.length === 0) return;
+    for (const a of list) staleSeen.add(staleKey(a));
+    out.push({
+      key: `stale_link:${idno}:${stableHash(list.map(staleKey))}`,
+      type: "stale_link",
+      idno,
+      name,
+      amount: mdl(list.reduce((t, a) => t + cents(a.amount), 0)),
+      date: null,
+      documents: docsOf([...new Set(list.map((a) => a.invoiceDocument ?? "—"))]),
+      count: list.length,
+      side: "purchase",
+    });
+  };
 
   // 1–3: flags already computed with the balances.
   for (const r of input.rows) {
@@ -191,7 +241,7 @@ export function computeChecks(input: ChecksInput): CheckSignal[] {
     /** Invoices each payment is confirmed against. */
     const linkedElsewhere = new Map<string, string[]>();
     for (const a of s.allocations) {
-      if (a.status === "rejected") continue;
+      if (a.status === "rejected" || a.staleReason) continue;
       linked.set(a.paymentId, (linked.get(a.paymentId) ?? 0) + cents(a.amount));
       if (a.status === "confirmed") {
         linkedElsewhere.set(a.paymentId, [...(linkedElsewhere.get(a.paymentId) ?? []), a.invoiceId]);
@@ -239,9 +289,16 @@ export function computeChecks(input: ChecksInput): CheckSignal[] {
     // 5. Invoices unpaid > 30 days after matching, while we owe them overall.
     if (input.matchingRan && row && row.state === "we_owe") {
       const owed = cents(row.purchaseNet) + Math.max(-cents(row.openingBalance), 0);
+      const offsets = creditNoteOffsets(
+        s.invoices,
+        new Map([...paidByInvoice].map(([id, c]) => [id, mdl(c)])),
+      );
       const open = s.invoices
         .filter((inv) => !inv.paidOnSpot && inv.issueDate && nowMs - inv.issueDate.getTime() > STALE_DAYS * DAY_MS)
-        .map((inv) => ({ inv, left: cents(inv.total) - (paidByInvoice.get(inv.id) ?? 0) }))
+        .map((inv) => ({
+          inv,
+          left: cents(inv.total) - (paidByInvoice.get(inv.id) ?? 0) - cents(offsets.get(inv.id) ?? 0),
+        }))
         .filter((x) => x.left > 0)
         .sort((a, b) => a.inv.issueDate!.getTime() - b.inv.issueDate!.getTime());
       const sum = open.reduce((t, x) => t + x.left, 0);
@@ -249,7 +306,7 @@ export function computeChecks(input: ChecksInput): CheckSignal[] {
       if (open.length > 0 && amount > 0) {
         const oldest = open[0]!.inv.issueDate!;
         out.push({
-          key: `supplier_unpaid:${s.idno}:${stableHash(open.map((x) => x.inv.id))}`,
+          key: `supplier_unpaid:${s.idno}:${open[0]!.inv.id}`,
           type: "supplier_unpaid",
           idno: s.idno,
           name,
@@ -270,7 +327,7 @@ export function computeChecks(input: ChecksInput): CheckSignal[] {
         .sort((a, b) => a.date.getTime() - b.date.getTime());
       if (lonely.length > 0) {
         out.push({
-          key: `payment_unmatched:${s.idno}:${stableHash(lonely.map((p) => p.id))}`,
+          key: `payment_unmatched:${s.idno}:${lonely[0]!.id}`,
           type: "payment_unmatched",
           idno: s.idno,
           name,
@@ -283,6 +340,30 @@ export function computeChecks(input: ChecksInput): CheckSignal[] {
         });
       }
     }
+
+    // 11. Confirmed links above the invoice total (e.g. total lowered on refetch).
+    for (const inv of s.invoices) {
+      const total = cents(inv.total);
+      const linkedSum = paidByInvoice.get(inv.id) ?? 0;
+      if (total <= 0 || linkedSum <= total || inv.paidOnSpot) continue;
+      out.push({
+        key: `over_allocated:${s.idno}:${inv.id}`,
+        type: "over_allocated",
+        idno: s.idno,
+        name,
+        amount: mdl(linkedSum - total),
+        date: iso(inv.issueDate),
+        documents: [inv.document],
+        side: "purchase",
+      });
+    }
+
+    // 12. Stale confirmed links on this supplier's invoices.
+    const invIds = new Set(s.invoices.map((i) => i.id));
+    const stale = s.allocations.filter(
+      (a) => a.status === "confirmed" && a.staleReason && invIds.has(a.invoiceId) && !staleSeen.has(staleKey(a)),
+    );
+    pushStale(s.idno, name, stale);
 
     // 10. Invoice paid on the spot (B/f) and by a bank transfer of the same amount.
     const seen = new Set<string>();
@@ -321,10 +402,16 @@ export function computeChecks(input: ChecksInput): CheckSignal[] {
     }
   }
 
+  // 12b. Stale links whose invoice is gone: reported on the payment's supplier.
+  for (const s of input.suppliers.values()) {
+    const stale = s.allocations.filter((a) => a.status === "confirmed" && a.staleReason && !staleSeen.has(staleKey(a)));
+    pushStale(s.idno, nameOf(input, rows, s.idno), stale);
+  }
+
   // 7. Card purchases not attributed to anyone.
   if (input.cards.unattributedCount > 0) {
     out.push({
-      key: `card_unattributed:${input.cards.unattributedCount}:${input.cards.unattributedSum.toFixed(2)}`,
+      key: `card_unattributed:${stableHash([...new Set(input.cards.merchantKeys ?? [])])}`,
       type: "card_unattributed",
       idno: null,
       name: null,
@@ -338,16 +425,21 @@ export function computeChecks(input: ChecksInput): CheckSignal[] {
 
   // 8. Low-confidence sales auto-matches, grouped per buyer.
   const lowByIdno = new Map<string, LowConfidenceSale[]>();
+  const lowSince = new Date(input.now);
+  lowSince.setUTCMonth(lowSince.getUTCMonth() - LOW_CONFIDENCE_MONTHS);
   for (const l of input.lowConfidenceSales) {
-    if (l.confidence >= LOW_CONFIDENCE) continue;
+    if (l.confidence >= LOW_CONFIDENCE || l.date.getTime() < lowSince.getTime()) continue;
     const list = lowByIdno.get(l.idno) ?? [];
     list.push(l);
     lowByIdno.set(l.idno, list);
   }
   for (const [idno, list] of lowByIdno) {
     const sorted = [...list].sort((a, b) => b.date.getTime() - a.date.getTime());
+    const oldest = [...list].sort(
+      (a, b) => a.date.getTime() - b.date.getTime() || a.allocationId.localeCompare(b.allocationId),
+    )[0]!;
     out.push({
-      key: `low_confidence_sales:${idno}:${stableHash(list.map((l) => l.allocationId))}`,
+      key: `low_confidence_sales:${idno}:${oldest.allocationId}`,
       type: "low_confidence_sales",
       idno,
       name: rows.get(idno)?.name ?? list[0]!.name ?? input.names?.get(idno) ?? null,
@@ -365,7 +457,7 @@ export function computeChecks(input: ChecksInput): CheckSignal[] {
     const reason = salesVatAnomaly(inv);
     if (!reason) continue;
     out.push({
-      key: `vat_anomaly:sales:${inv.document}`,
+      key: `vat_anomaly:sales:${inv.idno ?? "-"}:${inv.id ?? inv.document}`,
       type: "vat_anomaly",
       idno: inv.idno,
       name: inv.idno ? nameOf(input, rows, inv.idno) : null,
@@ -380,7 +472,7 @@ export function computeChecks(input: ChecksInput): CheckSignal[] {
     const reason = purchaseVatAnomaly(inv);
     if (!reason) continue;
     out.push({
-      key: `vat_anomaly:purchase:${inv.document}`,
+      key: `vat_anomaly:purchase:${inv.idno ?? "-"}:${inv.id ?? inv.document}`,
       type: "vat_anomaly",
       idno: inv.idno,
       name: inv.idno ? nameOf(input, rows, inv.idno) : null,
@@ -396,6 +488,8 @@ export function computeChecks(input: ChecksInput): CheckSignal[] {
     [
       "duplicate_payment",
       "receipt_and_bank",
+      "over_allocated",
+      "stale_link",
       "duplicate_sale",
       "supplier_overpaid",
       "vat_anomaly",
