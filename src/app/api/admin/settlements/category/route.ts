@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { isCounterpartyCategory } from "@/lib/settlements/types";
 import { actorOf, writeAudit } from "@/lib/settlements/audit";
 import { parseIdno } from "@/lib/settlements/guard";
+import { syncStaleSupplierAllocations } from "@/lib/settlements/supplierMatchLoad";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,8 @@ export async function PUT(request: NextRequest) {
         counterpartyIdno: idno,
         details: { category: null },
       });
+      // Links whose card / category basis changed become stale.
+      await syncStaleSupplierAllocations().catch(() => {});
       return NextResponse.json({ ok: true, idno, category: null });
     }
     if (!isCounterpartyCategory(body.category)) {
@@ -54,6 +57,8 @@ export async function PUT(request: NextRequest) {
       counterpartyIdno: idno,
       details: { category, name },
     });
+    // Links whose card / category basis changed become stale.
+    await syncStaleSupplierAllocations().catch(() => {});
     return NextResponse.json({ ok: true, idno, category });
   } catch (error) {
     console.error("PUT /api/admin/settlements/category:", error);

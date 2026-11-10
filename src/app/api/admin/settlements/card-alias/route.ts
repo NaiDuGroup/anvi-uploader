@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { actorOf, writeAudit } from "@/lib/settlements/audit";
 import { DEFAULT_COUNTERPARTY_CATEGORIES } from "@/lib/settlements/categories";
 import { parseIdno } from "@/lib/settlements/guard";
+import { syncStaleSupplierAllocations } from "@/lib/settlements/supplierMatchLoad";
 import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
 
 export const runtime = "nodejs";
@@ -39,6 +40,8 @@ export async function PUT(request: NextRequest) {
         entityId: merchantKey,
         details: { merchantKey, reset: true },
       });
+      // Links whose card / category basis changed become stale.
+      await syncStaleSupplierAllocations().catch(() => {});
       return NextResponse.json({ ok: true, merchantKey, reset: true });
     }
     let idno: string | null;
@@ -68,6 +71,8 @@ export async function PUT(request: NextRequest) {
       counterpartyIdno: idno,
       details: { merchantKey, idno, name },
     });
+    // Links whose card / category basis changed become stale.
+    await syncStaleSupplierAllocations().catch(() => {});
     return NextResponse.json({ ok: true, merchantKey, idno });
   } catch (error) {
     console.error("PUT /api/admin/settlements/card-alias:", error);
