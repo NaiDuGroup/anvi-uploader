@@ -64,6 +64,32 @@ export function purchaseHeaderFromXml(
     totalExVat: decimalOrNull(total != null ? total - (vat ?? 0) : null),
     rawXml: xml,
     detailsFetchedAt: new Date(),
+    ...purchaseReceiptFromXml(parsed, toDate(parsed.issueDate)),
+  };
+}
+
+/**
+ * Fiscal receipt (B/f) on a supplier invoice: we paid at the counter, so no
+ * bank transfer will ever match it. Cleared when the XML carries none.
+ */
+export function purchaseReceiptFromXml(
+  parsed: Pick<ParsedInvoiceXml, "settledByReceipt" | "receiptRef" | "receiptMethod" | "receiptDate">,
+  issueDate: Date | null,
+): {
+  receiptRef: string | null;
+  receiptMethod: string | null;
+  receiptSettledAt: Date | null;
+  receiptCheckedAt: Date;
+} {
+  if (!parsed.settledByReceipt) {
+    return { receiptRef: null, receiptMethod: null, receiptSettledAt: null, receiptCheckedAt: new Date() };
+  }
+  const settledAt = parsed.receiptDate ? new Date(parsed.receiptDate) : issueDate ?? new Date();
+  return {
+    receiptRef: parsed.receiptRef?.slice(0, 500) ?? null,
+    receiptMethod: parsed.receiptMethod,
+    receiptSettledAt: settledAt,
+    receiptCheckedAt: new Date(),
   };
 }
 

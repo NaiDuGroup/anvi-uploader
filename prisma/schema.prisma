@@ -1625,6 +1625,20 @@ model CounterpartyCategory {
   @@map("counterparty_categories")
 }
 
+/// «Взаиморасчёты»: company-card merchant (normalized key from the bank
+/// purpose) → supplier IDNO. `idno = null` means «не поставщик» (stays a bank row).
+model CardMerchantAlias {
+  id          String   @id @default(uuid())
+  merchantKey String   @unique @map("merchant_key")
+  idno        String?
+  name        String?
+  updatedById String?  @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("card_merchant_aliases")
+}
+
 /// Incoming fiscal invoice from e-Factura where ANVI is the buyer (supplier purchases).
 /// Kept apart from `FiscalInvoice` (our receivables) so reconciliation is unaffected.
 model PurchaseInvoice {
@@ -1646,6 +1660,15 @@ model PurchaseInvoice {
   historical       Boolean   @default(false)
   rawXml           String?   @map("raw_xml") @db.Text
   detailsFetchedAt DateTime? @map("details_fetched_at")
+  /// Fiscal receipt reference from the XML ("B/f 0013 din 09.07.2026 (card)"):
+  /// we paid at the counter, so no bank transfer exists.
+  receiptRef       String?   @map("receipt_ref")
+  /// "card" | "cash" | null (receipt without a method marker).
+  receiptMethod    String?   @map("receipt_method")
+  /// Set when the invoice was settled by a fiscal receipt (B/f).
+  receiptSettledAt DateTime? @map("receipt_settled_at")
+  /// When the stored XML was last checked for a receipt reference.
+  receiptCheckedAt DateTime? @map("receipt_checked_at")
   lastSyncedAt     DateTime  @default(now()) @map("last_synced_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")

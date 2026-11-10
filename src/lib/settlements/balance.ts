@@ -11,6 +11,7 @@
 import type { Prisma } from "@prisma/client";
 import type { SalesBalance } from "@/lib/reconciliation/report";
 import { resolveCategory } from "./categories";
+import { receiptsNotCoveredByCard } from "./cardPurchases";
 import type {
   CounterpartyCategoryCode,
   SettlementFlag,
@@ -46,6 +47,19 @@ export interface SettlementPurchase {
   totalAmount: number;
   issueDate: Date | null;
   document: string;
+  /** Paid on the spot by fiscal receipt (B/f) — counts as paid in full. */
+  receipt?: { ref: string | null; method: string | null; date: Date | null } | null;
+}
+
+/** Company-card purchase attributed to a supplier (see cardPurchases.ts). */
+export interface SettlementCardPayment {
+  /** Bank transaction id — removed from the bank bucket. */
+  debitId: string;
+  idno: string;
+  amount: number;
+  /** Card date from the purpose. */
+  date: Date;
+  merchant: string;
 }
 
 export interface SettlementDebit {
@@ -69,6 +83,8 @@ export interface SettlementInput {
   purchases: readonly SettlementPurchase[];
   /** Outgoing bank transactions (any type; filtered here). */
   debits: readonly SettlementDebit[];
+  /** Card purchases attributed to suppliers (their debits are skipped above). */
+  cardPayments?: readonly SettlementCardPayment[];
   /** Refund share per outgoing transaction id (from credits.ts). */
   refundedByTx: ReadonlyMap<string, number>;
   /** Manual categories by IDNO. */
@@ -97,6 +113,8 @@ interface Acc {
   received: number;
   purchases: number;
   paid: number;
+  paidCard: number;
+  paidReceipt: number;
   salesInvoiceCount: number;
   purchaseInvoiceCount: number;
   last: number;
@@ -218,6 +236,8 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
         received: 0,
         purchases: 0,
         paid: 0,
+        paidCard: 0,
+        paidReceipt: 0,
         salesInvoiceCount: 0,
         purchaseInvoiceCount: 0,
         last: 0,
@@ -248,14 +268,51 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
     purchasesByIdno.set(p.supplierIdno, list);
   }
 
+  const cardPayments = input.cardPayments ?? [];
+  const cardDebitIds = new Set(cardPayments.map((c) => c.debitId));
   for (const d of input.debits) {
-    if (!d.counterpartyIdno) continue;
+    if (!d.counterpartyIdno || cardDebitIds.has(d.id)) continue;
     const amount = supplierPaymentCents(d, input.refundedByTx);
     if (amount === 0) continue;
     const acc = get(d.counterpartyIdno, d.counterpartyName);
     acc.paid += amount;
     acc.paidOut.push({ amount, date: d.bookingDate, document: d.documentNumber?.trim() || "—" });
     touch(acc, d.bookingDate);
+  }
+
+  for (const c of cardPayments) {
+    const amount = cents(c.amount);
+    if (amount <= 0) continue;
+    const acc = get(c.idno, null);
+    acc.paid += amount;
+    acc.paidCard += amount;
+    acc.paidOut.push({ amount, date: c.date, document: c.merchant });
+    touch(acc, c.date);
+  }
+
+  // B/f-settled supplier invoices count as paid unless a card payment covers them.
+  const receipts = receiptsNotCoveredByCard(
+    input.purchases.flatMap((p) =>
+      p.receipt
+        ? [
+            {
+              document: p.document,
+              supplierIdno: p.supplierIdno,
+              amount: p.totalAmount,
+              date: p.receipt.date ?? p.issueDate ?? new Date(0),
+            },
+          ]
+        : [],
+    ),
+    cardPayments.map((c) => ({ debitId: c.debitId, idno: c.idno, amount: c.amount, date: c.date })),
+  );
+  for (const r of receipts) {
+    const amount = cents(r.amount);
+    if (amount <= 0) continue;
+    const acc = get(r.supplierIdno, null);
+    acc.paid += amount;
+    acc.paidReceipt += amount;
+    acc.paidOut.push({ amount, date: r.date, document: r.document });
   }
 
   // Payments per owner (for flags a/b) and sales invoices per buyer.
@@ -388,6 +445,8 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
       receivedFromThem: mdl(acc.received),
       purchasesInvoiced: mdl(acc.purchases),
       paidToThem: mdl(acc.paid),
+      paidByCard: mdl(acc.paidCard),
+      paidByReceipt: mdl(acc.paidReceipt),
       salesNet: mdl(salesNet),
       purchaseNet: mdl(purchaseNet),
       balance: mdl(balance),

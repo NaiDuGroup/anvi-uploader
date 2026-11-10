@@ -72,8 +72,12 @@ export interface SettlementRow {
   receivedFromThem: number;
   /** Their (supplier) invoices to us. */
   purchasesInvoiced: number;
-  /** Our transfers to them (TD=1), refunds excluded. */
+  /** Our transfers to them (TD=1, refunds excluded) + card purchases + B/f receipts. */
   paidToThem: number;
+  /** Part of paidToThem paid by company card (attributed card purchases). */
+  paidByCard: number;
+  /** Part of paidToThem: their invoices paid on the spot by fiscal receipt (B/f). */
+  paidByReceipt: number;
   /** salesInvoiced − receivedFromThem; > 0 they owe, < 0 they overpaid. */
   salesNet: number;
   /** purchasesInvoiced − paidToThem; > 0 we owe, < 0 we overpaid. */
@@ -103,9 +107,41 @@ export interface SettlementSummary {
   purchasesWithoutTotals: number;
 }
 
+export type CardMerchantSource = "alias" | "ignored" | "name" | "amount" | "mixed" | null;
+
+/** Card purchases of one merchant (grouped by the normalized merchant key). */
+export interface CardMerchantGroup {
+  merchantKey: string;
+  /** Latest merchant spelling from the bank. */
+  merchantRaw: string;
+  count: number;
+  sum: number;
+  lastDate: string;
+  /** Purchases of this merchant attributed to a supplier. */
+  attributedCount: number;
+  attributedSum: number;
+  /** Supplier when all attributed purchases go to one IDNO (alias / name). */
+  idno: string | null;
+  idnoName: string | null;
+  source: CardMerchantSource;
+}
+
+export interface CardPaymentsSummary {
+  attributedCount: number;
+  attributedSum: number;
+  unattributedCount: number;
+  unattributedSum: number;
+  /** Marked «Не поставщик» (stay bank rows). */
+  ignoredCount: number;
+  ignoredSum: number;
+  byAmountCount: number;
+  merchants: CardMerchantGroup[];
+}
+
 export interface SettlementsResponse {
   rows: SettlementRow[];
   summary: SettlementSummary;
+  cardPayments: CardPaymentsSummary;
   generatedAt: string;
 }
 
@@ -116,7 +152,11 @@ export type LedgerEntryKind =
   | "historical_invoice"
   | "refund"
   | "purchase_invoice"
-  | "payment_out";
+  | "payment_out"
+  /** Company-card purchase attributed to this supplier. */
+  | "card_payment_out"
+  /** Their invoice paid on the spot by fiscal receipt (B/f). */
+  | "receipt_out";
 
 export interface LedgerEntry {
   kind: LedgerEntryKind;
@@ -129,6 +169,10 @@ export interface LedgerEntry {
   balance: number;
   /** Third-party payer for an incoming payment. */
   payerName?: string | null;
+  /** receipt_out: "card" | "cash" | null. */
+  receiptMethod?: string | null;
+  /** card_payment_out: how it was attributed. */
+  cardSource?: "alias" | "name" | "amount" | null;
 }
 
 export interface SettlementLedgerResponse {

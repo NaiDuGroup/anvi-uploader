@@ -1,5 +1,6 @@
 import type { Locale } from "@/lib/i18n/types";
 import type {
+  CardMerchantSource,
   CategorySource,
   CounterpartyCategoryCode,
   LedgerEntryKind,
@@ -67,6 +68,38 @@ export interface SettlementLabels {
   payerVia: string;
   flagText: (f: SettlementFlag, money: (n: number) => string, date: (iso: string) => string) => string;
   checkPill: string;
+  paidByCard: (money: string) => string;
+  paidByReceipt: (money: string) => string;
+  receiptOutText: (ref: string | null, method: string | null) => string;
+  cardSourceShort: Record<"alias" | "name" | "amount", string>;
+  card: {
+    title: string;
+    hint: string;
+    attributed: string;
+    unattributed: string;
+    ignored: string;
+    byAmount: (n: number) => string;
+    countSum: (n: number, money: string) => string;
+    colMerchant: string;
+    colCount: string;
+    colSum: string;
+    colLast: string;
+    colSupplier: string;
+    sources: Record<Exclude<CardMerchantSource, null>, string>;
+    partly: (attributed: number, total: number) => string;
+    pick: string;
+    change: string;
+    notSupplier: string;
+    reset: string;
+    search: string;
+    noMatches: string;
+    bindIdno: (idno: string) => string;
+    cancel: string;
+    allDone: string;
+    showAttributed: (n: number) => string;
+    hideAttributed: string;
+    saveError: string;
+  };
 }
 
 const RU: SettlementLabels = {
@@ -140,6 +173,8 @@ const RU: SettlementLabels = {
     refund: "Возврат клиенту",
     purchase_invoice: "Фактура поставщика",
     payment_out: "Наш платёж",
+    card_payment_out: "Оплата картой",
+    receipt_out: "Оплачено на месте",
   },
   colDate: "Дата",
   colDocument: "Документ",
@@ -159,6 +194,45 @@ const RU: SettlementLabels = {
     return `Одинаковая сумма ${money(f.amount)} оплачена дважды (${f.dates.map(date).join(" и ")}), а фактура на неё одна.`;
   },
   checkPill: "Проверить",
+  paidByCard: (m) => `в т.ч. картой ${m}`,
+  paidByReceipt: (m) => `в т.ч. на месте (B/f) ${m}`,
+  receiptOutText: (ref, method) =>
+    `оплачено на месте: ${ref?.trim() || "B/f"}${method === "card" ? " (карта)" : method === "cash" ? " (наличные)" : ""}`,
+  cardSourceShort: { alias: "вручную", name: "по названию", amount: "по сумме" },
+  card: {
+    title: "Оплаты картой",
+    hint: "Покупки по корпоративной карте банк проводит как платёж в MAIB. Привязанные к поставщику считаются нашей оплатой ему; остальные остаются банковскими операциями.",
+    attributed: "Привязано к поставщикам",
+    unattributed: "Не привязано",
+    ignored: "Не поставщик",
+    byAmount: (n) => `из них ${n} по совпадению суммы с фактурой`,
+    countSum: (n, m) => `${n} шт. · ${m}`,
+    colMerchant: "Продавец (из банка)",
+    colCount: "Покупок",
+    colSum: "Сумма",
+    colLast: "Последняя",
+    colSupplier: "Поставщик",
+    sources: {
+      alias: "вручную",
+      ignored: "не поставщик",
+      name: "по названию",
+      amount: "по сумме",
+      mixed: "частично по сумме",
+    },
+    partly: (a, t) => `привязано ${a} из ${t}`,
+    pick: "Выбрать поставщика",
+    change: "Изменить",
+    notSupplier: "Не поставщик",
+    reset: "Сбросить (авто)",
+    search: "Название или IDNO поставщика",
+    noMatches: "Никого не найдено.",
+    bindIdno: (idno) => `Привязать к IDNO ${idno}`,
+    cancel: "Отмена",
+    allDone: "Все покупки картой разобраны.",
+    showAttributed: (n) => `Показать привязанные и «не поставщик» (${n})`,
+    hideAttributed: "Скрыть привязанные",
+    saveError: "Не удалось сохранить привязку.",
+  },
 };
 
 const RO: SettlementLabels = {
@@ -233,6 +307,8 @@ const RO: SettlementLabels = {
     refund: "Restituire client",
     purchase_invoice: "Factura furnizorului",
     payment_out: "Plata noastră",
+    card_payment_out: "Plată cu cardul",
+    receipt_out: "Achitat pe loc",
   },
   colDate: "Data",
   colDocument: "Document",
@@ -326,6 +402,8 @@ const EN: SettlementLabels = {
     refund: "Refund to client",
     purchase_invoice: "Supplier invoice",
     payment_out: "Our payment",
+    card_payment_out: "Card payment",
+    receipt_out: "Paid on the spot",
   },
   colDate: "Date",
   colDocument: "Document",

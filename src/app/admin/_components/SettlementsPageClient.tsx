@@ -19,12 +19,14 @@ import {
 import {
   COUNTERPARTY_CATEGORIES,
   type CounterpartyCategoryCode,
+  type LedgerEntry,
   type SettlementLedgerResponse,
   type SettlementRow,
   type SettlementsResponse,
   type SettlementState,
 } from "@/lib/settlements/types";
 import { cn } from "@/lib/utils";
+import SettlementsCardPayments from "./SettlementsCardPayments";
 
 const PAGE = 100;
 const TH = "px-3 py-3 text-left";
@@ -164,6 +166,16 @@ export default function SettlementsPageClient() {
             </div>
           ) : null}
 
+          {data?.cardPayments ? (
+            <SettlementsCardPayments
+              data={data.cardPayments}
+              parties={data.rows}
+              L={L}
+              money={money}
+              onSaved={() => mutate()}
+            />
+          ) : null}
+
           <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div className="-mx-1 flex flex-wrap gap-1">
               {SETTLEMENT_FILTERS.map((f) => (
@@ -233,7 +245,10 @@ export default function SettlementsPageClient() {
                       <dt className="text-gray-500">{L.colPurchasesInvoiced}</dt>
                       <dd className="text-right tabular-nums">{money(row.purchasesInvoiced)}</dd>
                       <dt className="text-gray-500">{L.colPaid}</dt>
-                      <dd className="text-right tabular-nums">{money(row.paidToThem)}</dd>
+                      <dd className="text-right tabular-nums">
+                        {money(row.paidToThem)}
+                        <PaidParts row={row} L={L} money={money} />
+                      </dd>
                     </dl>
                     <div className="mt-2">
                       <CategorySelect row={row} L={L} saving={savingIdno === row.idno} onChange={saveCategory} />
@@ -288,7 +303,10 @@ export default function SettlementsPageClient() {
                             <td className={cn(TD, "text-right tabular-nums")}>{money(row.salesInvoiced)}</td>
                             <td className={cn(TD, "text-right tabular-nums")}>{money(row.receivedFromThem)}</td>
                             <td className={cn(TD, "text-right tabular-nums")}>{money(row.purchasesInvoiced)}</td>
-                            <td className={cn(TD, "text-right tabular-nums")}>{money(row.paidToThem)}</td>
+                            <td className={cn(TD, "text-right tabular-nums")}>
+                              {money(row.paidToThem)}
+                              <PaidParts row={row} L={L} money={money} />
+                            </td>
                             <td className={cn(TD, "text-right font-semibold tabular-nums", balanceClass(row.balance))}>
                               {money(row.balance)}
                             </td>
@@ -326,6 +344,33 @@ export default function SettlementsPageClient() {
       ) : null}
     </div>
   );
+}
+
+function PaidParts({
+  row,
+  L,
+  money,
+}: {
+  row: SettlementRow;
+  L: SettlementLabels;
+  money: (n: number) => string;
+}) {
+  if (!row.paidByCard && !row.paidByReceipt) return null;
+  return (
+    <span className="block text-[11px] font-normal text-gray-400">
+      {row.paidByCard ? <span className="block">{L.paidByCard(money(row.paidByCard))}</span> : null}
+      {row.paidByReceipt ? <span className="block">{L.paidByReceipt(money(row.paidByReceipt))}</span> : null}
+    </span>
+  );
+}
+
+function ledgerNote(e: LedgerEntry, L: SettlementLabels): string | null {
+  if (e.payerName) return `${L.payerVia}: ${e.payerName}`;
+  if (e.kind === "receipt_out") return L.receiptOutText(e.description, e.receiptMethod ?? null);
+  if (e.kind === "card_payment_out" && e.cardSource) {
+    return `${L.cardSourceShort[e.cardSource]} · ${e.description ?? ""}`;
+  }
+  return e.description;
 }
 
 function StatePill({ row, L }: { row: SettlementRow; L: SettlementLabels }) {
@@ -461,7 +506,7 @@ function RowDetails({
                       <span className="font-medium text-gray-900">{e.document}</span>
                     </td>
                     <td className="max-w-[28rem] truncate px-3 py-1.5 text-gray-500" title={e.description ?? undefined}>
-                      {e.payerName ? `${L.payerVia}: ${e.payerName}` : e.description}
+                      {ledgerNote(e, L)}
                     </td>
                     <td className={cn("whitespace-nowrap px-3 py-1.5 text-right tabular-nums", balanceClass(e.amount))}>
                       {money(e.amount)}

@@ -37,8 +37,15 @@ type Debit = { id: string; to: string; amount: number; date: string; td?: string
 function scenario(opts: {
   invoices?: Inv[];
   credits?: Credit[];
-  purchases?: Array<{ supplier: string; total: number; date: string; doc: string }>;
+  purchases?: Array<{
+    supplier: string;
+    total: number;
+    date: string;
+    doc: string;
+    receipt?: { date: string; method?: string };
+  }>;
   debits?: Debit[];
+  cards?: Array<{ debitId: string; idno: string; amount: number; date: string; merchant?: string }>;
   /** Refunds: debit id → owner buyer + amount. */
   refunds?: Array<{ debitId: string; owner: string; amount: number }>;
   categories?: Record<string, CounterpartyCategoryCode>;
@@ -124,8 +131,18 @@ function scenario(opts: {
         totalAmount: p.total,
         issueDate: day(p.date),
         document: p.doc,
+        receipt: p.receipt
+          ? { ref: `B/f din ${p.receipt.date}`, method: p.receipt.method ?? null, date: day(p.receipt.date) }
+          : null,
       }),
     ),
+    cardPayments: (opts.cards ?? []).map((c) => ({
+      debitId: c.debitId,
+      idno: c.idno,
+      amount: c.amount,
+      date: day(c.date),
+      merchant: c.merchant ?? "SHOP",
+    })),
     debits: debits.map(
       (x): SettlementDebit => ({
         id: x.id,
@@ -387,5 +404,85 @@ describe("computeSettlements", () => {
     // The payer kept 100 after lending 500 to SUPPLIER's invoice: exactly its own 100.
     expect(salesNetByIdno.get(PAYER)).toBe(0);
     expect(report.operational.map((r) => r.buyerIdno)).toEqual(["1002600003778"]);
+  });
+
+  describe("card payments and B/f receipts", () => {
+    const BANK = "1002600003778";
+
+    it("an attributed card purchase is paid to the supplier, not the bank", () => {
+      const { row } = scenario({
+        purchases: [{ supplier: SUPPLIER, total: 493, date: "2026-08-19", doc: "SUP1" }],
+        debits: [{ id: "k1", to: BANK, amount: 493, date: "2026-08-20", td: "1" }],
+        cards: [{ debitId: "k1", idno: SUPPLIER, amount: 493, date: "2026-08-19" }],
+      });
+      expect(row(SUPPLIER)).toMatchObject({
+        paidToThem: 493,
+        paidByCard: 493,
+        paidByReceipt: 0,
+        balance: 0,
+        state: "settled",
+      });
+      expect(row(BANK)).toBeUndefined();
+    });
+
+    it("a B/f-settled purchase invoice counts as paid in full", () => {
+      const { row, result } = scenario({
+        purchases: [
+          { supplier: SUPPLIER, total: 1200, date: "2026-07-09", doc: "SUP1", receipt: { date: "2026-07-09", method: "cash" } },
+          { supplier: SUPPLIER, total: 300, date: "2026-07-20", doc: "SUP2" },
+        ],
+      });
+      expect(row(SUPPLIER)).toMatchObject({
+        purchasesInvoiced: 1500,
+        paidToThem: 1200,
+        paidByReceipt: 1200,
+        balance: -300,
+        state: "we_owe",
+      });
+      expect(result.summary.weOwe).toBe(300);
+    });
+
+    it("B/f paid by the same card purchase is counted once", () => {
+      const { row } = scenario({
+        purchases: [
+          { supplier: SUPPLIER, total: 800, date: "2026-07-09", doc: "SUP1", receipt: { date: "2026-07-09", method: "card" } },
+        ],
+        debits: [{ id: "k1", to: BANK, amount: 800, date: "2026-07-10" }],
+        cards: [{ debitId: "k1", idno: SUPPLIER, amount: 800, date: "2026-07-09" }],
+      });
+      expect(row(SUPPLIER)).toMatchObject({
+        paidToThem: 800,
+        paidByCard: 800,
+        paidByReceipt: 0,
+        balance: 0,
+        state: "settled",
+      });
+      expect(row(SUPPLIER)!.flags).toEqual([]);
+    });
+
+    it("overpaid / duplicate flags see card and B/f payments", () => {
+      const { row } = scenario({
+        purchases: [
+          { supplier: SUPPLIER, total: 500, date: "2026-07-01", doc: "SUP1", receipt: { date: "2026-07-01" } },
+        ],
+        // A transfer of the same amount on top of the B/f receipt.
+        debits: [{ id: "d1", to: SUPPLIER, amount: 500, date: "2026-07-10" }],
+      });
+      const kinds = row(SUPPLIER)!.flags.map((f) => f.kind).sort();
+      expect(kinds).toEqual(["duplicate_payment", "supplier_overpaid"]);
+      expect(row(SUPPLIER)!.balance).toBe(500);
+    });
+
+    it("a card purchase far from the B/f date does not cancel it", () => {
+      const { row } = scenario({
+        purchases: [
+          { supplier: SUPPLIER, total: 800, date: "2026-07-09", doc: "SUP1", receipt: { date: "2026-07-09" } },
+          { supplier: SUPPLIER, total: 800, date: "2026-09-01", doc: "SUP2" },
+        ],
+        debits: [{ id: "k1", to: BANK, amount: 800, date: "2026-09-01" }],
+        cards: [{ debitId: "k1", idno: SUPPLIER, amount: 800, date: "2026-09-01" }],
+      });
+      expect(row(SUPPLIER)).toMatchObject({ paidToThem: 1600, paidByCard: 800, paidByReceipt: 800, balance: 0 });
+    });
   });
 });
