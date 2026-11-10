@@ -5,7 +5,12 @@ import {
   RECEIVABLE_EFACTURA_STATUSES,
   STATEMENT_EFACTURA_STATUSES,
 } from "./autoMatch";
-import { clampReceiptCredit, loadCreditAttribution, loadRefunds } from "./credits";
+import {
+  clampReceiptCredit,
+  loadCreditAttribution,
+  loadRefunds,
+  type CreditAttribution,
+} from "./credits";
 import {
   excludeNonDeliveryWhere,
   isNonDeliveryFiscal,
@@ -198,59 +203,42 @@ async function loadDbExclusions(): Promise<Array<{ idno: string; name: string | 
   }
 }
 
+/** One sales invoice as the balance needs it. */
+export interface SalesBalanceInvoice {
+  totalAmount: Prisma.Decimal | null;
+  issueDate: Date | null;
+  buyerIdno: string | null;
+  buyerName: string | null;
+  clientId: string | null;
+  receiptSettledAt: Date | null;
+  redirections: string | null;
+}
+
+/** Sales-side position of one buyer — the figure the act settles on. */
+export interface SalesBalance {
+  buyerIdno: string;
+  clientId: string | null;
+  clientName: string;
+  invoiceCount: number;
+  invoiceDates: Array<{ date: Date; amount: Prisma.Decimal }>;
+  /** Fiscal invoices + HISTORICAL synthetic debits. */
+  debits: Prisma.Decimal;
+  /** Bank money attributed to the buyer (net of refunds) + capped B/f receipts. */
+  paid: Prisma.Decimal;
+  /** debits − paid; positive = owes us. */
+  balance: Prisma.Decimal;
+}
+
 /**
- * Per-client net balance over the full billing history — the same figure the
- * reconciliation act settles on. Invoices are debits; incoming bank payments
- * (by fiscal code) and B/f POS receipts are credits. Clients split by sign:
- * positive balances owe us (debtors, with overdue aging), negative balances
- * mean they paid more than was invoiced (likely a fiscal invoice the accountant
- * never issued).
+ * Pure core of {@link computeBalanceReport}: per-buyer debits, payments and
+ * net balance. Shared with «Взаиморасчёты» so both screens agree.
  */
-export async function computeBalanceReport(): Promise<BalanceReport> {
-  const company = await getOrCreateCompanyProfile();
-  const ownIdno = company.fiscalCode;
-
-  const [invoices, attribution, creditNames, dbExclusions] = await Promise.all([
-    prisma.fiscalInvoice.findMany({
-      where: {
-        eFacturaStatus: { in: STATEMENT_EFACTURA_STATUSES },
-        totalAmount: { not: null },
-        AND: [excludeNonDeliveryWhere()],
-      },
-      select: {
-        totalAmount: true,
-        issueDate: true,
-        buyerIdno: true,
-        buyerName: true,
-        clientId: true,
-        receiptSettledAt: true,
-        redirections: true,
-      },
-    }),
-    loadCreditAttribution(),
-    prisma.bankTransaction.findMany({
-      where: { direction: "CREDIT", counterpartyIdno: { not: null } },
-      distinct: ["counterpartyIdno"],
-      orderBy: { bookingDate: "desc" },
-      select: { counterpartyIdno: true, counterpartyName: true },
-    }),
-    loadDbExclusions(),
-  ]);
-
+export function computeSalesBalances(
+  invoices: readonly SalesBalanceInvoice[],
+  attribution: Pick<CreditAttribution, "paidByIdno" | "historicalByIdno">,
+  nameByIdno: ReadonlyMap<string, string>,
+): Map<string, SalesBalance> {
   const { paidByIdno, historicalByIdno } = attribution;
-
-  const dbIdnos = new Set(dbExclusions.map((e) => e.idno));
-  const operationalSet = new Set<string>([
-    ...DEFAULT_OPERATIONAL_IDNOS,
-    ...dbIdnos,
-  ]);
-
-  const nameByIdno = new Map<string, string>();
-  for (const n of creditNames) {
-    if (n.counterpartyIdno && n.counterpartyName?.trim()) {
-      nameByIdno.set(n.counterpartyIdno, n.counterpartyName.trim());
-    }
-  }
 
   type Acc = {
     buyerIdno: string;
@@ -304,7 +292,113 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
     });
   }
 
-  const now = Date.now();
+  const out = new Map<string, SalesBalance>();
+  for (const [key, acc] of byIdno) {
+    const bankPaid = paidByIdno.get(acc.buyerIdno) ?? ZERO;
+    const historicalInvoiced = historicalByIdno.get(acc.buyerIdno) ?? ZERO;
+    const debits = acc.invoiced.plus(historicalInvoiced);
+    const paid = bankPaid.plus(
+      clampReceiptCredit(acc.receiptEligible, debits, bankPaid),
+    );
+    out.set(key, {
+      buyerIdno: acc.buyerIdno,
+      clientId: acc.clientId,
+      clientName: acc.clientName,
+      invoiceCount: acc.invoiceCount,
+      invoiceDates: acc.invoiceDates,
+      debits,
+      paid,
+      balance: debits.minus(paid),
+    });
+  }
+  return out;
+}
+
+export interface SalesBalanceData {
+  balances: Map<string, SalesBalance>;
+  attribution: CreditAttribution;
+  ownIdno: string | null;
+  /** Built-in operational IDNOs + admin-added exclusions. */
+  operationalSet: Set<string>;
+  dbExclusions: Array<{ idno: string; name: string | null }>;
+  /** Latest payer name per fiscal code (incoming transfers). */
+  nameByIdno: Map<string, string>;
+}
+
+/** Loads everything the sales balance needs (no N+1: four bulk queries). */
+export async function loadSalesBalanceData(): Promise<SalesBalanceData> {
+  const company = await getOrCreateCompanyProfile();
+  const ownIdno = company.fiscalCode;
+
+  const [invoices, attribution, creditNames, dbExclusions] = await Promise.all([
+    prisma.fiscalInvoice.findMany({
+      where: {
+        eFacturaStatus: { in: STATEMENT_EFACTURA_STATUSES },
+        totalAmount: { not: null },
+        AND: [excludeNonDeliveryWhere()],
+      },
+      select: {
+        totalAmount: true,
+        issueDate: true,
+        buyerIdno: true,
+        buyerName: true,
+        clientId: true,
+        receiptSettledAt: true,
+        redirections: true,
+      },
+    }),
+    loadCreditAttribution(),
+    prisma.bankTransaction.findMany({
+      where: { direction: "CREDIT", counterpartyIdno: { not: null } },
+      distinct: ["counterpartyIdno"],
+      orderBy: { bookingDate: "desc" },
+      select: { counterpartyIdno: true, counterpartyName: true },
+    }),
+    loadDbExclusions(),
+  ]);
+
+  const operationalSet = new Set<string>([
+    ...DEFAULT_OPERATIONAL_IDNOS,
+    ...dbExclusions.map((e) => e.idno),
+  ]);
+
+  const nameByIdno = new Map<string, string>();
+  for (const n of creditNames) {
+    if (n.counterpartyIdno && n.counterpartyName?.trim()) {
+      nameByIdno.set(n.counterpartyIdno, n.counterpartyName.trim());
+    }
+  }
+
+  return {
+    balances: computeSalesBalances(invoices, attribution, nameByIdno),
+    attribution,
+    ownIdno,
+    operationalSet,
+    dbExclusions,
+    nameByIdno,
+  };
+}
+
+/**
+ * Per-client net balance over the full billing history — the same figure the
+ * reconciliation act settles on. Invoices are debits; incoming bank payments
+ * (by fiscal code) and B/f POS receipts are credits. Clients split by sign:
+ * positive balances owe us (debtors, with overdue aging), negative balances
+ * mean they paid more than was invoiced (likely a fiscal invoice the accountant
+ * never issued).
+ */
+export async function computeBalanceReport(): Promise<BalanceReport> {
+  return buildBalanceReport(await loadSalesBalanceData());
+}
+
+/** Pure part of {@link computeBalanceReport}: debtors / creditors / operational. */
+export function buildBalanceReport(
+  data: Pick<SalesBalanceData, "balances" | "ownIdno" | "operationalSet" | "dbExclusions">,
+  now: number = Date.now(),
+): BalanceReport {
+  const { ownIdno, operationalSet, dbExclusions } = data;
+  const dbIdnos = new Set(dbExclusions.map((e) => e.idno));
+
   const debtors: BalanceRow[] = [];
   const creditors: BalanceRow[] = [];
   const operational: BalanceRow[] = [];
@@ -314,16 +408,10 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
   let overdueCount = 0;
   const aging = { current: ZERO, d1_15: ZERO, d16_30: ZERO, d30plus: ZERO };
 
-  for (const acc of byIdno.values()) {
+  for (const acc of data.balances.values()) {
     if (acc.buyerIdno === ownIdno) continue;
 
-    const bankPaid = paidByIdno.get(acc.buyerIdno) ?? ZERO;
-    const historicalInvoiced = historicalByIdno.get(acc.buyerIdno) ?? ZERO;
-    const debits = acc.invoiced.plus(historicalInvoiced);
-    const paid = bankPaid.plus(
-      clampReceiptCredit(acc.receiptEligible, debits, bankPaid),
-    );
-    const balance = debits.minus(paid);
+    const { paid, balance } = acc;
 
     if (operationalSet.has(acc.buyerIdno)) {
       if (paid.greaterThan(BALANCE_TOLERANCE)) {

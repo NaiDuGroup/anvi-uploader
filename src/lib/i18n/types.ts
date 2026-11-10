@@ -1256,6 +1256,7 @@ export interface TranslationDictionary {
     bookkeepingTabSales: string;
     /** Bookkeeping segment: outgoing payments / purchases (buyer). */
     bookkeepingTabPurchases: string;
+    bookkeepingTabSettlements: string;
     /** @deprecated Prefer bookkeepingTabSales */
     bookkeepingTabFiscal: string;
     /** Legacy label (kept for i18n reuse). */

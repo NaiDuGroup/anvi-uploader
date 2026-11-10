@@ -1135,6 +1135,7 @@ export const ro: TranslationDictionary = {
     bookkeepingTabReconciliation: "Reconciliere",
     bookkeepingTabSales: "Vânzări",
     bookkeepingTabPurchases: "Achiziții",
+    bookkeepingTabSettlements: "Decontări",
     bookkeepingTabFiscal: "Vânzări",
     navReconciliation: "Reconciliere",
     navFiscalInvoices: "Facturi fiscale",

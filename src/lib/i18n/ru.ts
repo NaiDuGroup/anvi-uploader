@@ -1141,6 +1141,7 @@ export const ru: TranslationDictionary = {
     bookkeepingTabReconciliation: "Сверка",
     bookkeepingTabSales: "Продажи",
     bookkeepingTabPurchases: "Закупки",
+    bookkeepingTabSettlements: "Взаиморасчёты",
     bookkeepingTabFiscal: "Продажи",
     navReconciliation: "Сверка",
     navFiscalInvoices: "Фактуры",

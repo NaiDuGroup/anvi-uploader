@@ -29,6 +29,8 @@ export interface CreditAttribution {
    * balanced by the debit of the invoice it was matched to.
    */
   historicalByIdno: Map<string, Prisma.Decimal>;
+  /** Outgoing transfers counted as refunds (so supplier payments skip them). */
+  refunds: RefundEntry[];
 }
 
 function add(
@@ -154,6 +156,20 @@ export async function loadRefunds(
   return refunds;
 }
 
+export interface CreditInput {
+  id: string;
+  amount: Prisma.Decimal;
+  counterpartyIdno: string | null;
+  matchStatus: string;
+}
+
+export interface AllocationInput {
+  bankTransactionId: string;
+  amount: Prisma.Decimal;
+  bankTransaction: { direction: string };
+  fiscalInvoice: { buyerIdno: string | null } | null;
+}
+
 /** Loads credit attribution across every incoming transaction. */
 export async function loadCreditAttribution(
   db: Db = prisma,
@@ -179,7 +195,15 @@ export async function loadCreditAttribution(
     }),
     loadRefunds(db),
   ]);
+  return attributeCredits(credits, allocations, refunds);
+}
 
+/** Pure part of {@link loadCreditAttribution}: who each credit belongs to. */
+export function attributeCredits(
+  credits: readonly CreditInput[],
+  allocations: readonly AllocationInput[],
+  refunds: readonly RefundEntry[],
+): CreditAttribution {
   const paidByIdno = new Map<string, Prisma.Decimal>();
   const refundedByIdno = new Map<string, Prisma.Decimal>();
   const historicalByIdno = new Map<string, Prisma.Decimal>();
@@ -208,5 +232,5 @@ export async function loadCreditAttribution(
     add(paidByIdno, r.ownerIdno, r.amount.negated());
   }
 
-  return { paidByIdno, refundedByIdno, historicalByIdno };
+  return { paidByIdno, refundedByIdno, historicalByIdno, refunds: [...refunds] };
 }

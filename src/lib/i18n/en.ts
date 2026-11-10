@@ -1134,6 +1134,7 @@ export const en: TranslationDictionary = {
     bookkeepingTabReconciliation: "Reconciliation",
     bookkeepingTabSales: "Sales",
     bookkeepingTabPurchases: "Purchases",
+    bookkeepingTabSettlements: "Settlements",
     bookkeepingTabFiscal: "Sales",
     navReconciliation: "Reconciliation",
     navFiscalInvoices: "Fiscal invoices",

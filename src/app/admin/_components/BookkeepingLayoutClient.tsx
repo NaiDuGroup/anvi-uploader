@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowDownLeft, ArrowUpRight, Scale } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Scale } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +34,14 @@ const TABS = [
       p === "/admin/bookkeeping/purchases" ||
       p.startsWith("/admin/bookkeeping/purchases/"),
   },
+  {
+    href: "/admin/bookkeeping/settlements",
+    labelKey: "bookkeepingTabSettlements" as const,
+    Icon: ArrowLeftRight,
+    match: (p: string) =>
+      p === "/admin/bookkeeping/settlements" ||
+      p.startsWith("/admin/bookkeeping/settlements/"),
+  },
 ];
 
 export default function BookkeepingLayoutClient({
@@ -61,7 +69,7 @@ export default function BookkeepingLayoutClient({
           </div>
 
           <nav
-            className="inline-flex w-full rounded-xl border border-gray-200 bg-gray-50 p-1 sm:w-auto"
+            className="inline-flex w-full overflow-x-auto rounded-xl border border-gray-200 bg-gray-50 p-1 sm:w-auto"
             aria-label={t.admin.navBookkeeping}
           >
             {TABS.map((tab) => {
@@ -72,7 +80,7 @@ export default function BookkeepingLayoutClient({
                   key={tab.href}
                   href={tab.href}
                   className={cn(
-                    "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all sm:flex-none sm:px-4",
+                    "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all sm:flex-none sm:px-4 sm:text-sm",
                     active
                       ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/80"
                       : "text-gray-500 hover:text-gray-800",
@@ -81,7 +89,7 @@ export default function BookkeepingLayoutClient({
                 >
                   <Icon
                     className={cn(
-                      "h-4 w-4 shrink-0",
+                      "hidden h-4 w-4 shrink-0 sm:block",
                       active ? "text-amber-700" : "text-gray-400",
                     )}
                     aria-hidden
