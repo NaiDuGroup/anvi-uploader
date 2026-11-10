@@ -151,8 +151,9 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
             firstDocumentDate={data.firstDocumentDate}
             L={L}
             money={money}
-            onSaved={() => {
-              void mutate();
+            onSaved={async (openingBalance) => {
+              // Show the saved value right away, then wait for the recomputed balances.
+              await mutate((d) => (d && openingBalance !== undefined ? { ...d, openingBalance } : d), { revalidate: true });
               setJournalKey((k) => k + 1);
             }}
           />
@@ -460,7 +461,8 @@ function OpeningBalancePanel({
   firstDocumentDate: string | null;
   L: SettlementLabels;
   money: (n: number) => string;
-  onSaved: () => void;
+  /** Resolves once the card shows the saved state (editor stays busy until then). */
+  onSaved: (openingBalance: OpeningBalanceDto | null | undefined) => Promise<void>;
 }) {
   const O = L.cardPage.ob;
   const [editing, setEditing] = useState(false);
@@ -494,9 +496,10 @@ function OpeningBalancePanel({
         body: JSON.stringify({ asOfDate: date, amount: side === "we" ? -n : n, note }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      toast.success(O.saved);
+      const body = (await res.json().catch(() => null)) as { openingBalance?: OpeningBalanceDto | null } | null;
+      await onSaved(body && "openingBalance" in body ? (body.openingBalance ?? null) : undefined);
       setEditing(false);
-      onSaved();
+      toast.success(O.saved);
     } catch {
       toast.error(O.error);
     } finally {
@@ -509,10 +512,10 @@ function OpeningBalancePanel({
     try {
       const res = await fetch(url, { method: "DELETE" });
       if (!res.ok) throw new Error(String(res.status));
-      toast.success(O.removed);
+      await onSaved(null);
       setConfirmOpen(false);
       setEditing(false);
-      onSaved();
+      toast.success(O.removed);
     } catch {
       toast.error(O.error);
     } finally {

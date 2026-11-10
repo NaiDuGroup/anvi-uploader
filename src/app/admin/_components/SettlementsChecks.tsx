@@ -81,9 +81,10 @@ export default function SettlementsChecks({
         body: JSON.stringify({ key: s.key, note: withNote, idno: s.idno, amount: s.amount }),
       });
       if (!res.ok) throw new Error(String(res.status));
+      // Keep the row busy until the list shows the new state (else it looks unsaved for seconds).
+      await onChanged();
       setEditing(null);
       setNote("");
-      await onChanged();
     } catch {
       toast.error(C.error);
     } finally {
@@ -117,8 +118,8 @@ export default function SettlementsChecks({
         if (!r.nextCursor || r.remaining <= 0) break;
         cursor = r.nextCursor;
       }
-      toast.success(C.runDone(suggested, confirmed));
       await onChanged();
+      toast.success(C.runDone(suggested, confirmed));
     } catch {
       toast.error(C.error);
     } finally {

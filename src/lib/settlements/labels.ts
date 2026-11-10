@@ -91,6 +91,10 @@ export interface SettlementLabels {
     change: string;
     notSupplier: string;
     reset: string;
+    /** New state after «Сбросить» (back to automatic attribution). */
+    resetDone: string;
+    /** Restores the state before this session's change. */
+    undo: string;
     search: string;
     noMatches: string;
     bindIdno: (idno: string) => string;
@@ -283,6 +287,8 @@ const RU: SettlementLabels = {
     change: "Изменить",
     notSupplier: "Не поставщик",
     reset: "Сбросить (авто)",
+    resetDone: "автоматически",
+    undo: "Отменить",
     search: "Название или IDNO поставщика",
     noMatches: "Никого не найдено.",
     bindIdno: (idno) => `Привязать к IDNO ${idno}`,

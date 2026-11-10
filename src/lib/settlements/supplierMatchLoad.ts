@@ -18,8 +18,15 @@ import { loadOperationalIdnos } from "@/lib/reconciliation/operational";
 import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
 import { supplierPaymentCents } from "./balance";
 import { resolveCategory } from "./categories";
-import { receiptsNotCoveredByCard, type CardPurchase } from "./cardPurchases";
 import {
+  attributeCardPurchases,
+  parseCardPurchase,
+  receiptsNotCoveredByCard,
+  type CardPurchase,
+} from "./cardPurchases";
+import {
+  cardBankIdnos,
+  loadCardNameBasis,
   loadCardPurchases,
   loadLivePurchases,
   loadManualCategories,
@@ -102,24 +109,32 @@ function asStale(s: string | null | undefined): StaleReason | null {
   return s === "payment_moved" || s === "invoice_gone" ? s : null;
 }
 
-export async function loadSupplierSources(): Promise<SupplierSources> {
+const DEBIT_SELECT = {
+  id: true,
+  amount: true,
+  bookingDate: true,
+  counterpartyIdno: true,
+  counterpartyName: true,
+  txTypeCode: true,
+  documentNumber: true,
+  purpose: true,
+} satisfies Prisma.BankTransactionSelect;
+
+/**
+ * Everything the matching needs, for every supplier. `refundsFor` limits the
+ * refund lookup to one IDNO's transfers (enough for a context built with
+ * `only = {that IDNO}`: refunds only change the counted amount of bank
+ * transfers to it, and the per-transfer sum is the same either way).
+ */
+export async function loadSupplierSources(options: { refundsFor?: string } = {}): Promise<SupplierSources> {
   const [purchases, debits, categories, refunds, company, operational] = await Promise.all([
     loadLivePurchases(),
     prisma.bankTransaction.findMany({
       where: { direction: "DEBIT", currency: "MDL", counterpartyIdno: { not: null } },
-      select: {
-        id: true,
-        amount: true,
-        bookingDate: true,
-        counterpartyIdno: true,
-        counterpartyName: true,
-        txTypeCode: true,
-        documentNumber: true,
-        purpose: true,
-      },
+      select: DEBIT_SELECT,
     }),
     loadManualCategories(),
-    loadRefunds(prisma),
+    options.refundsFor ? loadRefunds(prisma, options.refundsFor) : loadRefunds(prisma),
     getOrCreateCompanyProfile(),
     loadOperationalIdnos(),
   ]);
@@ -129,6 +144,87 @@ export async function loadSupplierSources(): Promise<SupplierSources> {
     debits: debits.map((d) => ({ ...d, amount: num(d.amount) })),
     cards,
     refundedByTx: refundedByTx(refunds),
+    categories,
+    ownIdno: company.fiscalCode || null,
+    operationalIdnos: operational,
+  };
+}
+
+export interface SupplierScope {
+  paymentIds: readonly string[];
+  invoiceIds: readonly string[];
+  /** Load refunds of the in-scope bank transfers (needed for counted payment amounts). */
+  refunds?: boolean;
+}
+
+/**
+ * `SupplierSources` cut down to the given payments and invoices: correct for
+ * `buildLinkIndex` / `staleReasonOf` on those ids and for their own payment
+ * amounts — a few indexed queries instead of every invoice, debit, card
+ * purchase and refund. Card attribution: alias and name match only need the
+ * card itself; an amount match depends on every other card purchase and
+ * invoice, so when an in-scope card purchase has neither, null is returned
+ * and the caller must use `loadSupplierSources()`. B/f «paid on the spot»
+ * needs every card of the supplier too — callers check receipts themselves.
+ */
+export async function loadScopedSupplierSources(scope: SupplierScope): Promise<SupplierSources | null> {
+  const paymentIds = [...new Set(scope.paymentIds)];
+  const invoiceIds = [...new Set(scope.invoiceIds)];
+  const [purchases, txs, categories, company, operational] = await Promise.all([
+    invoiceIds.length > 0 ? loadLivePurchases({ id: { in: invoiceIds } }) : Promise.resolve([]),
+    paymentIds.length > 0
+      ? prisma.bankTransaction.findMany({
+          where: { id: { in: paymentIds }, direction: "DEBIT", currency: "MDL" },
+          select: DEBIT_SELECT,
+        })
+      : Promise.resolve([]),
+    loadManualCategories(),
+    getOrCreateCompanyProfile(),
+    loadOperationalIdnos(),
+  ]);
+
+  // Same split as the full load: debits with a fiscal code are bank rows,
+  // those without one / to a bank are card purchases when the purpose parses.
+  const bankIdnos = cardBankIdnos(categories);
+  const cardTxs = txs.flatMap((t) => {
+    if (t.purpose == null || (t.counterpartyIdno != null && !bankIdnos.has(t.counterpartyIdno))) return [];
+    const parsed = parseCardPurchase(t.purpose);
+    return parsed ? [{ tx: t, merchantKey: parsed.merchantKey }] : [];
+  });
+  let cards: CardPurchase[] = [];
+  if (cardTxs.length > 0) {
+    const aliases = await prisma.cardMerchantAlias.findMany({
+      where: { merchantKey: { in: [...new Set(cardTxs.map((c) => c.merchantKey))] } },
+      select: { merchantKey: true, idno: true },
+    });
+    const aliased = new Set(aliases.map((a) => a.merchantKey));
+    const basis = cardTxs.some((c) => !aliased.has(c.merchantKey))
+      ? await loadCardNameBasis(categories)
+      : { excluded: new Set<string>(), candidates: [] };
+    cards = attributeCardPurchases({
+      debits: cardTxs.map(({ tx }) => ({ id: tx.id, amount: num(tx.amount), bookingDate: tx.bookingDate, purpose: tx.purpose })),
+      aliases,
+      names: basis.candidates,
+      invoices: [],
+      excludedIdnos: basis.excluded,
+    });
+    // Not aliased, no unique name: the amount match decides → needs the full load.
+    if (cards.some((c) => !c.ignored && c.source === null)) return null;
+  }
+
+  const debits = txs.filter((t) => t.counterpartyIdno != null);
+  const refunded = new Map<string, number>();
+  if (scope.refunds) {
+    const owners = [...new Set(debits.map((d) => d.counterpartyIdno!))];
+    const lists = await Promise.all(owners.map((o) => loadRefunds(prisma, o)));
+    // Each list holds the whole per-transfer refund sum: overwrite, never add.
+    for (const l of lists) for (const [id, v] of refundedByTx(l)) refunded.set(id, v);
+  }
+  return {
+    purchases,
+    debits: debits.map((d) => ({ ...d, amount: num(d.amount) })),
+    cards,
+    refundedByTx: refunded,
     categories,
     ownIdno: company.fiscalCode || null,
     operationalIdnos: operational,
@@ -720,7 +816,7 @@ export function toSupplierCard(ctx: SupplierContext | undefined, idno: string): 
 }
 
 export async function loadSupplierCard(idno: string): Promise<SupplierMatchCardResponse> {
-  const [sources, loaded] = await Promise.all([loadSupplierSources(), loadSupplierAllocations()]);
+  const [sources, loaded] = await Promise.all([loadSupplierSources({ refundsFor: idno }), loadSupplierAllocations()]);
   const { allocations } = await syncStaleSupplierAllocations(sources, loaded);
   const ctxs = buildSupplierContexts(sources, allocations, new Set([idno]));
   return toSupplierCard(ctxs.get(idno), idno);
@@ -769,11 +865,74 @@ export interface ActionResult {
   skippedReasons?: Record<string, string>;
 }
 
-/** Current attribution, with stale links synced first (so DB caps see them). */
+/** Current attribution for everything, with all stale links synced first (so DB caps see them). */
 async function freshIndex(): Promise<{ sources: SupplierSources; index: SupplierLinkIndex }> {
   const sources = await loadSupplierSources();
   await syncStaleSupplierAllocations(sources);
   return { sources, index: buildLinkIndex(sources) };
+}
+
+/**
+ * `freshIndex` limited to the given payments / invoices: every link on them
+ * is loaded, their other side (other invoices of the payment, other payments
+ * of the invoice) joins the scope, and only those links are synced — that is
+ * exactly the set the DB caps (`confirmedSums`) sum over. Falls back to
+ * the full load when a card purchase in scope is attributed by amount, or
+ * when `needsFull` says so for the scoped sources.
+ */
+export async function freshScopedIndex(
+  seed: SupplierScope,
+  needsFull?: (sources: SupplierSources) => boolean,
+): Promise<{ sources: SupplierSources; index: SupplierLinkIndex; scoped: boolean }> {
+  const or: Prisma.SupplierPaymentAllocationWhereInput[] = [];
+  if (seed.paymentIds.length > 0) or.push({ bankTransactionId: { in: [...seed.paymentIds] } });
+  if (seed.invoiceIds.length > 0) or.push({ purchaseInvoiceId: { in: [...seed.invoiceIds] } });
+  const related = or.length > 0 ? await loadSupplierAllocations({ OR: or }) : [];
+  const sources = await loadScopedSupplierSources({
+    paymentIds: [...seed.paymentIds, ...related.map((a) => a.paymentId)],
+    invoiceIds: [...seed.invoiceIds, ...related.map((a) => a.invoiceId)],
+    refunds: seed.refunds,
+  });
+  if (!sources || needsFull?.(sources)) return { ...(await freshIndex()), scoped: false };
+  await syncStaleSupplierAllocations(sources, related);
+  return { sources, index: buildLinkIndex(sources), scoped: true };
+}
+
+/** Confirmed, non-stale sums (cents) per payment and per invoice: two queries instead of two per row. */
+async function confirmedSums(
+  db: Tx,
+  paymentIds: readonly string[],
+  invoiceIds: readonly string[],
+): Promise<{ byPayment: Map<string, number>; byInvoice: Map<string, number> }> {
+  const where = { status: "confirmed", staleReason: null } as const;
+  const byPayment = new Map<string, number>();
+  const byInvoice = new Map<string, number>();
+  if (paymentIds.length > 0) {
+    const rows = await db.supplierPaymentAllocation.groupBy({
+      by: ["bankTransactionId"],
+      where: { ...where, bankTransactionId: { in: [...new Set(paymentIds)] } },
+      _sum: { amount: true },
+    });
+    for (const r of rows) byPayment.set(r.bankTransactionId, cents(num(r._sum.amount)));
+  }
+  if (invoiceIds.length > 0) {
+    const rows = await db.supplierPaymentAllocation.groupBy({
+      by: ["purchaseInvoiceId"],
+      where: { ...where, purchaseInvoiceId: { in: [...new Set(invoiceIds)] } },
+      _sum: { amount: true },
+    });
+    for (const r of rows) byInvoice.set(r.purchaseInvoiceId, cents(num(r._sum.amount)));
+  }
+  return { byPayment, byInvoice };
+}
+
+const addCents = (m: Map<string, number>, key: string, c: number) => m.set(key, (m.get(key) ?? 0) + c);
+
+/** Fills the refund cache for these counterparties up front (in parallel, outside the transaction). */
+async function warmRefunds(cache: RefundCache, idnos: ReadonlyArray<string | null>): Promise<void> {
+  const todo = [...new Set(idnos.filter((i): i is string => Boolean(i) && !cache.has(i!)))];
+  const lists = await Promise.all(todo.map((i) => loadRefunds(prisma, i).catch(() => [])));
+  todo.forEach((i, k) => cache.set(i, refundedByTx(lists[k]!)));
 }
 
 export async function confirmSupplierAllocations(ids: string[], actor: AuditActor | null): Promise<ActionResult> {
@@ -782,7 +941,17 @@ export async function confirmSupplierAllocations(ids: string[], actor: AuditActo
   let skipped = 0;
   const skippedReasons: Record<string, string> = {};
   const refunds: RefundCache = new Map();
-  const { index } = await freshIndex();
+  const seed = await prisma.supplierPaymentAllocation.findMany({
+    where: { id: { in: ids } },
+    select: { bankTransactionId: true, purchaseInvoiceId: true, bankTransaction: { select: { counterpartyIdno: true } } },
+  });
+  const [{ index }] = await Promise.all([
+    freshScopedIndex({ paymentIds: seed.map((r) => r.bankTransactionId), invoiceIds: seed.map((r) => r.purchaseInvoiceId) }),
+    warmRefunds(
+      refunds,
+      seed.map((r) => r.bankTransaction.counterpartyIdno),
+    ),
+  ]);
   await prisma.$transaction(async (db) => {
     const rows = await db.supplierPaymentAllocation.findMany({
       where: { id: { in: ids }, status: "suggested" },
@@ -793,6 +962,12 @@ export async function confirmSupplierAllocations(ids: string[], actor: AuditActo
       orderBy: { createdAt: "asc" },
     });
     skipped += ids.length - rows.length;
+    // Rows are suggestions, so they are not in these sums; each confirm below adds to them.
+    const sums = await confirmedSums(
+      db,
+      rows.map((r) => r.bankTransactionId),
+      rows.map((r) => r.purchaseInvoiceId),
+    );
     for (const r of rows) {
       // The payment must still belong to the invoice's supplier and the invoice be live.
       const stale = staleReasonOf({ paymentId: r.bankTransactionId, invoiceId: r.purchaseInvoiceId, status: "suggested" }, index);
@@ -804,9 +979,9 @@ export async function confirmSupplierAllocations(ids: string[], actor: AuditActo
       const amount = capAllocation({
         requested: num(r.amount),
         paymentAmount: await paymentAmount(r.bankTransaction, refunds),
-        paymentAllocatedElsewhere: await confirmedElsewhere(db, { bankTransactionId: r.bankTransactionId }, r.id),
+        paymentAllocatedElsewhere: (sums.byPayment.get(r.bankTransactionId) ?? 0) / 100,
         invoiceTotal: num(r.purchaseInvoice.totalAmount),
-        invoiceAllocatedElsewhere: await confirmedElsewhere(db, { purchaseInvoiceId: r.purchaseInvoiceId }, r.id),
+        invoiceAllocatedElsewhere: (sums.byInvoice.get(r.purchaseInvoiceId) ?? 0) / 100,
       });
       if (amount <= 0) {
         skipped += 1;
@@ -822,6 +997,8 @@ export async function confirmSupplierAllocations(ids: string[], actor: AuditActo
           confirmedAt: new Date(),
         },
       });
+      addCents(sums.byPayment, r.bankTransactionId, cents(amount));
+      addCents(sums.byInvoice, r.purchaseInvoiceId, cents(amount));
       done += 1;
       log.push({
         action: "confirm",
@@ -843,7 +1020,14 @@ export async function confirmSupplierAllocations(ids: string[], actor: AuditActo
 }
 
 export async function rejectSupplierAllocations(ids: string[], actor: AuditActor | null): Promise<ActionResult> {
-  const { index } = await freshIndex();
+  const seed = await prisma.supplierPaymentAllocation.findMany({
+    where: { id: { in: ids } },
+    select: { bankTransactionId: true, purchaseInvoiceId: true },
+  });
+  const { index } = await freshScopedIndex({
+    paymentIds: seed.map((r) => r.bankTransactionId),
+    invoiceIds: seed.map((r) => r.purchaseInvoiceId),
+  });
   const found = await prisma.supplierPaymentAllocation.findMany({
     where: { id: { in: ids }, status: "suggested" },
     include: { purchaseInvoice: { select: { supplierIdno: true, seria: true, number: true } } },
@@ -900,7 +1084,12 @@ export async function manualSupplierAllocate(
   let done = 0;
   let skipped = 0;
   const skippedReasons: Record<string, string> = {};
-  const { sources, index } = await freshIndex();
+  const invoiceIds = input.allocations.map((a) => a.purchaseInvoiceId);
+  // «Paid on the spot» (B/f) depends on every card of the supplier: such an invoice needs the full load.
+  const { sources, index } = await freshScopedIndex(
+    { paymentIds: [input.bankTransactionId], invoiceIds, refunds: true },
+    (src) => src.purchases.some((p) => p.receiptSettledAt && invoiceIds.includes(p.id)),
+  );
   const idno = index.paymentIdno.get(input.bankTransactionId) ?? null;
   const ctx = idno ? buildSupplierContexts(sources, [], new Set([idno])).get(idno) : undefined;
   const payment = ctx?.payments.find((p) => p.id === input.bankTransactionId);
@@ -919,6 +1108,16 @@ export async function manualSupplierAllocate(
       select: { id: true, totalAmount: true, supplierIdno: true, seria: true, number: true },
     });
     const byId = new Map(invoices.map((i) => [i.id, i]));
+    // Existing links of this payment to these invoices + confirmed sums: 3 queries for all rows.
+    const existingRows = await db.supplierPaymentAllocation.findMany({
+      where: { bankTransactionId: tx.id, purchaseInvoiceId: { in: invoiceIds } },
+      select: { purchaseInvoiceId: true, amount: true, status: true, staleReason: true },
+    });
+    /** What the existing link on an invoice adds to the confirmed sums (cents; 0 = none / not counted). */
+    const counted = new Map(
+      existingRows.map((r) => [r.purchaseInvoiceId, r.status === "confirmed" && !r.staleReason ? cents(num(r.amount)) : 0]),
+    );
+    const sums = await confirmedSums(db, [tx.id], invoiceIds);
     for (const a of input.allocations) {
       const inv = byId.get(a.purchaseInvoiceId);
       const live = invById.get(a.purchaseInvoiceId);
@@ -936,18 +1135,14 @@ export async function manualSupplierAllocate(
         skippedReasons[a.purchaseInvoiceId] = why ?? "invoice_not_found";
         continue;
       }
-      const existing = await db.supplierPaymentAllocation.findUnique({
-        where: {
-          bankTransactionId_purchaseInvoiceId: { bankTransactionId: tx.id, purchaseInvoiceId: inv.id },
-        },
-        select: { id: true },
-      });
+      // The existing link (if any) is replaced, so it is left out of «elsewhere».
+      const own = counted.get(inv.id) ?? 0;
       const amount = capAllocation({
         requested: a.amount,
         paymentAmount: total,
-        paymentAllocatedElsewhere: await confirmedElsewhere(db, { bankTransactionId: tx.id }, existing?.id ?? null),
+        paymentAllocatedElsewhere: ((sums.byPayment.get(tx.id) ?? 0) - own) / 100,
         invoiceTotal: num(inv.totalAmount),
-        invoiceAllocatedElsewhere: await confirmedElsewhere(db, { purchaseInvoiceId: inv.id }, existing?.id ?? null),
+        invoiceAllocatedElsewhere: ((sums.byInvoice.get(inv.id) ?? 0) - own) / 100,
       });
       if (amount <= 0) {
         skipped += 1;
@@ -971,6 +1166,10 @@ export async function manualSupplierAllocate(
         create: { bankTransactionId: tx.id, purchaseInvoiceId: inv.id, ...data },
         update: data,
       });
+      const delta = cents(amount) - own;
+      addCents(sums.byPayment, tx.id, delta);
+      addCents(sums.byInvoice, inv.id, delta);
+      counted.set(inv.id, cents(amount));
       done += 1;
       log.push({
         action: "manual_allocate",
@@ -988,7 +1187,7 @@ export async function manualSupplierAllocate(
           status: "suggested",
           OR: [
             { bankTransactionId: tx.id },
-            { purchaseInvoiceId: { in: input.allocations.map((a) => a.purchaseInvoiceId) } },
+            { purchaseInvoiceId: { in: invoiceIds } },
           ],
         },
       });

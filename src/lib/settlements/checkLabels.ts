@@ -62,6 +62,10 @@ export interface SettlementExtraLabels {
     linkSave: string;
     linkAmount: string;
     linkOpen: (money: string) => string;
+    /** Sum of the rows is above the payment's unallocated rest. */
+    linkOverPayment: string;
+    /** A row is above that invoice's unpaid rest. */
+    linkOverInvoice: string;
     undo: string;
     undoConfirm: string;
     rejectedTitle: string;
@@ -245,6 +249,8 @@ const RU: SettlementExtraLabels = {
     linkSave: "Связать",
     linkAmount: "Сумма",
     linkOpen: (m) => `не оплачено ${m}`,
+    linkOverPayment: "Больше остатка платежа",
+    linkOverInvoice: "Больше остатка фактуры",
     undo: "Отвязать",
     undoConfirm: "Отвязать платёж от фактуры?",
     rejectedTitle: "Отклонённые",

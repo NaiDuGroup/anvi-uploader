@@ -27,6 +27,8 @@ const STATUS_PILL: Record<InvoicePaymentStatus, string> = {
 };
 
 const LIST_LIMIT = 25;
+/** Rounding allowed when checking link amounts against the rests (MDL). */
+const LINK_EPS = 0.005;
 
 export function PaymentStatusPill({
   status,
@@ -87,15 +89,22 @@ export default function SupplierMatchPanel({
   const [showAllPayments, setShowAllPayments] = useState(false);
   const [showRejected, setShowRejected] = useState(false);
 
-  async function run(key: string, fn: () => Promise<{ done?: number; skipped?: number; suggested?: number; confirmed?: number }>) {
+  async function run(
+    key: string,
+    fn: () => Promise<{ done?: number; skipped?: number; suggested?: number; confirmed?: number }>,
+    /** Runs after the reload (close a form / dialog). */
+    after?: () => void,
+  ) {
     setBusy(key);
     try {
       const r = await fn();
+      // Success only once the card shows the new state; the button spins until then.
+      await mutate();
+      after?.();
+      onChanged?.();
       if (r.suggested != null && r.confirmed != null) toast.success(M.autoDone(r.suggested, r.confirmed));
       else if (r.skipped) toast.message(M.skipped(r.skipped));
       else toast.success(M.saved);
-      await mutate();
-      onChanged?.();
     } catch {
       toast.error(M.error);
     } finally {
@@ -453,14 +462,15 @@ export default function SupplierMatchPanel({
                         cancelLabel={X.checks.cancel}
                         onCancel={() => setLinking(null)}
                         onSave={(allocations) =>
-                          run(`link${p.id}`, async () => {
-                            const r = await post("/api/admin/settlements/supplier-match/allocate", {
-                              bankTransactionId: p.id,
-                              allocations,
-                            });
-                            setLinking(null);
-                            return r;
-                          })
+                          run(
+                            `link${p.id}`,
+                            () =>
+                              post("/api/admin/settlements/supplier-match/allocate", {
+                                bankTransactionId: p.id,
+                                allocations,
+                              }),
+                            () => setLinking(null),
+                          )
                         }
                       />
                     ) : null}
@@ -487,11 +497,11 @@ export default function SupplierMatchPanel({
         onConfirm={() => {
           const l = undoLink;
           if (!l) return;
-          void run("undo", async () => {
-            const r = await post(`/api/admin/settlements/supplier-match/${encodeURIComponent(l.allocationId)}`, null, "DELETE");
-            setUndoLink(null);
-            return r;
-          });
+          void run(
+            "undo",
+            () => post(`/api/admin/settlements/supplier-match/${encodeURIComponent(l.allocationId)}`, null, "DELETE"),
+            () => setUndoLink(null),
+          );
         }}
         onClose={() => setUndoLink(null)}
       />
@@ -529,7 +539,17 @@ function LinkForm({
     [data],
   );
   const [picked, setPicked] = useState<Record<string, string>>({});
-  const total = Object.values(picked).reduce((s, v) => s + (Number(v.replace(",", ".")) || 0), 0);
+  const amountOf = (v: string) => Number(v.replace(/\s/g, "").replace(",", "."));
+  const total = Object.values(picked).reduce((s, v) => s + (amountOf(v) || 0), 0);
+  // Over the rest (tiny rounding allowed): the server would cap it silently, so block it here.
+  const overPayment = total - left > LINK_EPS;
+  const openById = new Map(open.map((i) => [i.id, i.open]));
+  const overInvoice = new Set(
+    Object.entries(picked)
+      .filter(([id, v]) => (amountOf(v) || 0) - (openById.get(id) ?? 0) > LINK_EPS)
+      .map(([id]) => id),
+  );
+  const over = overPayment || overInvoice.size > 0;
 
   function toggle(id: string, amount: number) {
     setPicked((cur) => {
@@ -560,13 +580,20 @@ function LinkForm({
                 <span className="text-gray-500">{M.linkOpen(money(i.open))}</span>
               </label>
               {i.id in picked ? (
-                <Input
-                  inputMode="decimal"
-                  value={picked[i.id]}
-                  onChange={(e) => setPicked((cur) => ({ ...cur, [i.id]: e.target.value }))}
-                  className="h-7 w-28 text-xs tabular-nums"
-                  aria-label={M.linkAmount}
-                />
+                <span className="flex items-center gap-1.5">
+                  <Input
+                    inputMode="decimal"
+                    value={picked[i.id]}
+                    onChange={(e) => setPicked((cur) => ({ ...cur, [i.id]: e.target.value }))}
+                    className={cn(
+                      "h-7 w-28 text-xs tabular-nums",
+                      overInvoice.has(i.id) && "border-rose-400 text-rose-700 focus-visible:ring-rose-300",
+                    )}
+                    aria-label={M.linkAmount}
+                    aria-invalid={overInvoice.has(i.id) || undefined}
+                  />
+                  {overInvoice.has(i.id) ? <span className="text-[11px] text-rose-700">{M.linkOverInvoice}</span> : null}
+                </span>
               ) : null}
             </li>
           ))}
@@ -576,11 +603,11 @@ function LinkForm({
         <Button
           size="sm"
           className="h-7 text-xs"
-          disabled={busy || Object.keys(picked).length === 0}
+          disabled={busy || over || Object.keys(picked).length === 0}
           onClick={() =>
             onSave(
               Object.entries(picked)
-                .map(([purchaseInvoiceId, v]) => ({ purchaseInvoiceId, amount: Number(v.replace(",", ".")) }))
+                .map(([purchaseInvoiceId, v]) => ({ purchaseInvoiceId, amount: amountOf(v) }))
                 .filter((a) => Number.isFinite(a.amount) && a.amount > 0),
             )
           }
@@ -591,8 +618,9 @@ function LinkForm({
         <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCancel} disabled={busy}>
           {cancelLabel}
         </Button>
-        <span className="text-[11px] tabular-nums text-gray-500">
+        <span className={cn("text-[11px] tabular-nums", overPayment ? "font-medium text-rose-700" : "text-gray-500")}>
           {money(total)} / {money(left)}
+          {overPayment ? <span className="ml-1.5">· {M.linkOverPayment}</span> : null}
         </span>
       </div>
     </div>

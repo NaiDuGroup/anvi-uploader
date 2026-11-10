@@ -126,41 +126,31 @@ export function loadLivePurchases(where: Prisma.PurchaseInvoiceWhereInput = {}):
   });
 }
 
-/**
- * Card purchases (bank debits to the bank itself / without a fiscal code)
- * attributed to suppliers: alias > name > amount. `purchases` = the live
- * purchase invoices used for the amount match.
- */
-export async function loadCardPurchases(
-  purchases: readonly SettlementPurchase[],
-  categories: SettlementInput["categories"],
-): Promise<{ cards: CardPurchase[]; names: Map<string, string> }> {
+/** IDNOs of banks: a debit to one of them (or without a fiscal code) may be a card purchase. */
+export function cardBankIdnos(categories: SettlementInput["categories"]): Set<string> {
   const bankIdnos = new Set<string>();
-  // Never auto-chosen: own, service categories and operational IDNOs
-  // (Сверка «не клиент» list). A manual non-service category lifts it.
-  const excluded = new Set<string>(await loadOperationalIdnos());
   for (const [idno, cat] of Object.entries(DEFAULT_COUNTERPARTY_CATEGORIES)) {
     if (cat === "bank") bankIdnos.add(idno);
-    if (SERVICE_CATEGORIES.has(cat)) excluded.add(idno);
   }
   for (const [idno, c] of categories) {
     if (c.category === "bank") bankIdnos.add(idno);
-    if (SERVICE_CATEGORIES.has(c.category)) excluded.add(idno);
-    else excluded.delete(idno);
   }
+  return bankIdnos;
+}
 
-  const [company, debits, aliases, supplierNames, payeeNames] = await Promise.all([
+/**
+ * Name-match basis of the card attribution: IDNOs never auto-chosen (own,
+ * service categories and operational IDNOs — Сверка «не клиент» list; a
+ * manual non-service category lifts it) and the known supplier / payee names.
+ */
+export async function loadCardNameBasis(categories: SettlementInput["categories"]): Promise<{
+  excluded: Set<string>;
+  candidates: Array<{ idno: string; name: string }>;
+  names: Map<string, string>;
+}> {
+  const [operational, company, supplierNames, payeeNames] = await Promise.all([
+    loadOperationalIdnos(),
     getOrCreateCompanyProfile(),
-    prisma.bankTransaction.findMany({
-      where: {
-        direction: "DEBIT",
-        currency: "MDL",
-        purpose: { not: null },
-        OR: [{ counterpartyIdno: null }, { counterpartyIdno: { in: [...bankIdnos] } }],
-      },
-      select: { id: true, amount: true, bookingDate: true, purpose: true },
-    }),
-    prisma.cardMerchantAlias.findMany({ select: { merchantKey: true, idno: true } }),
     prisma.purchaseInvoice.findMany({
       where: { supplierIdno: { not: null }, supplierName: { not: null } },
       distinct: ["supplierIdno", "supplierName"],
@@ -172,8 +162,15 @@ export async function loadCardPurchases(
       select: { counterpartyIdno: true, counterpartyName: true },
     }),
   ]);
+  const excluded = new Set<string>(operational);
+  for (const [idno, cat] of Object.entries(DEFAULT_COUNTERPARTY_CATEGORIES)) {
+    if (SERVICE_CATEGORIES.has(cat)) excluded.add(idno);
+  }
+  for (const [idno, c] of categories) {
+    if (SERVICE_CATEGORIES.has(c.category)) excluded.add(idno);
+    else excluded.delete(idno);
+  }
   if (company.fiscalCode) excluded.add(company.fiscalCode);
-  const settledByBank = await loadBankSettledInvoiceKeys(new Set(debits.map((d) => d.id)));
 
   const names = new Map<string, string>();
   const candidates: Array<{ idno: string; name: string }> = [];
@@ -191,6 +188,33 @@ export async function loadCardPurchases(
       names.set(idno, c.name.trim());
     }
   }
+  return { excluded, candidates, names };
+}
+
+/**
+ * Card purchases (bank debits to the bank itself / without a fiscal code)
+ * attributed to suppliers: alias > name > amount. `purchases` = the live
+ * purchase invoices used for the amount match.
+ */
+export async function loadCardPurchases(
+  purchases: readonly SettlementPurchase[],
+  categories: SettlementInput["categories"],
+): Promise<{ cards: CardPurchase[]; names: Map<string, string> }> {
+  const bankIdnos = cardBankIdnos(categories);
+  const [{ excluded, candidates, names }, debits, aliases] = await Promise.all([
+    loadCardNameBasis(categories),
+    prisma.bankTransaction.findMany({
+      where: {
+        direction: "DEBIT",
+        currency: "MDL",
+        purpose: { not: null },
+        OR: [{ counterpartyIdno: null }, { counterpartyIdno: { in: [...bankIdnos] } }],
+      },
+      select: { id: true, amount: true, bookingDate: true, purpose: true },
+    }),
+    prisma.cardMerchantAlias.findMany({ select: { merchantKey: true, idno: true } }),
+  ]);
+  const settledByBank = await loadBankSettledInvoiceKeys(new Set(debits.map((d) => d.id)));
 
   const cards = attributeCardPurchases({
     debits: debits.map((d) => ({ ...d, amount: num(d.amount) })),

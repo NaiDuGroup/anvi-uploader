@@ -13,6 +13,22 @@ import { cn } from "@/lib/utils";
 const TH = "px-3 py-2 text-left";
 const TD = "px-3 py-2";
 
+type AliasBody = { idno: string | null } | { reset: true };
+
+/** A merchant changed in this session: stays in place with its new state and «Отменить». */
+interface ChangedMerchant {
+  /** What restores the state before the first change. */
+  prev: AliasBody;
+  /** New state as picked (supplier name / «Не поставщик»). */
+  label: string;
+}
+
+function prevOf(m: CardMerchantGroup): AliasBody {
+  if (m.source === "ignored") return { idno: null };
+  if (m.source === "alias" && m.idno) return { idno: m.idno };
+  return { reset: true };
+}
+
 /** «Оплаты картой»: card purchases → suppliers (aliases by merchant key). */
 export default function SettlementsCardPayments({
   data,
@@ -32,34 +48,63 @@ export default function SettlementsCardPayments({
   const [open, setOpen] = useState(data.unattributedCount > 0);
   const [showDone, setShowDone] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
-  const [saving, setSaving] = useState<string | null>(null);
+  const [saving, setSaving] = useState<ReadonlySet<string>>(() => new Set());
+  const [changed, setChanged] = useState<Record<string, ChangedMerchant>>({});
+  /**
+   * Row order frozen at the first change: the list is sorted by the open sum,
+   * so without it a changed row would vanish / move and the next click would
+   * land on another merchant. Cleared on «Показать / Скрыть привязанные».
+   */
+  const [frozen, setFrozen] = useState<string[] | null>(null);
 
   const pending = data.merchants.filter(
     (m) => m.source !== "ignored" && m.attributedCount < m.count,
   );
   const done = data.merchants.filter((m) => !pending.includes(m));
+  const base = showDone ? [...pending, ...done] : pending;
+  let rows = base;
+  if (frozen) {
+    const byKey = new Map(data.merchants.map((m) => [m.merchantKey, m]));
+    const inFrozen = new Set(frozen);
+    rows = [
+      ...frozen.flatMap((k) => byKey.get(k) ?? []),
+      ...base.filter((m) => !inFrozen.has(m.merchantKey)),
+    ];
+  }
 
-  async function save(m: CardMerchantGroup, body: { idno: string | null } | { reset: true }) {
-    setSaving(m.merchantKey);
+  /** `next` = label of the new state; omitted for «Отменить» (back to `prev`). */
+  async function save(m: CardMerchantGroup, body: AliasBody, next?: string) {
+    const key = m.merchantKey;
+    if (saving.has(key)) return;
+    setFrozen((f) => f ?? rows.map((r) => r.merchantKey));
+    setSaving((cur) => new Set(cur).add(key));
     try {
       const res = await fetch("/api/admin/settlements/card-alias", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ merchantKey: m.merchantKey, name: m.merchantRaw, ...body }),
+        body: JSON.stringify({ merchantKey: key, name: m.merchantRaw, ...body }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      setEditing(null);
+      setChanged((cur) => {
+        const out = { ...cur };
+        if (next === undefined) delete out[key];
+        else out[key] = { prev: cur[key]?.prev ?? prevOf(m), label: next };
+        return out;
+      });
+      setEditing((e) => (e === key ? null : e));
       await onSaved();
     } catch {
       toast.error(C.saveError);
     } finally {
-      setSaving(null);
+      setSaving((cur) => {
+        const out = new Set(cur);
+        out.delete(key);
+        return out;
+      });
     }
   }
 
   if (data.merchants.length === 0) return null;
-
-  const rows = showDone ? [...pending, ...done] : pending;
 
   return (
     <section className="mb-4 rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -95,7 +140,7 @@ export default function SettlementsCardPayments({
             {data.byAmountCount > 0 ? ` ${C.byAmount(data.byAmountCount)}.` : ""}
           </p>
 
-          {pending.length === 0 && !showDone ? (
+          {rows.length === 0 ? (
             <p className="py-3 text-sm text-gray-500">{C.allDone}</p>
           ) : (
             <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -121,18 +166,26 @@ export default function SettlementsCardPayments({
                           <SupplierPicker
                             parties={parties}
                             L={L}
-                            saving={saving === m.merchantKey}
-                            onPick={(idno) => save(m, { idno })}
+                            saving={saving.has(m.merchantKey)}
+                            onPick={(idno, name) => save(m, { idno }, name)}
                             onCancel={() => setEditing(null)}
+                          />
+                        ) : changed[m.merchantKey] ? (
+                          <ChangedState
+                            label={changed[m.merchantKey]!.label}
+                            L={L}
+                            saving={saving.has(m.merchantKey)}
+                            onUndo={() => save(m, changed[m.merchantKey]!.prev)}
+                            onEdit={() => setEditing(m.merchantKey)}
                           />
                         ) : (
                           <MerchantState
                             m={m}
                             L={L}
-                            saving={saving === m.merchantKey}
+                            saving={saving.has(m.merchantKey)}
                             onEdit={() => setEditing(m.merchantKey)}
-                            onIgnore={() => save(m, { idno: null })}
-                            onReset={() => save(m, { reset: true })}
+                            onIgnore={() => save(m, { idno: null }, C.ignored)}
+                            onReset={() => save(m, { reset: true }, C.resetDone)}
                           />
                         )}
                       </td>
@@ -145,7 +198,16 @@ export default function SettlementsCardPayments({
 
           {done.length > 0 ? (
             <div className="mt-2">
-              <Button variant="outline" size="sm" onClick={() => setShowDone(!showDone)}>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={saving.size > 0}
+                onClick={() => {
+                  setShowDone(!showDone);
+                  setChanged({});
+                  setFrozen(null);
+                }}
+              >
                 {showDone ? C.hideAttributed : C.showAttributed(done.length)}
               </Button>
             </div>
@@ -153,6 +215,46 @@ export default function SettlementsCardPayments({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function ChangedState({
+  label,
+  L,
+  saving,
+  onUndo,
+  onEdit,
+}: {
+  label: string;
+  L: SettlementLabels;
+  saving: boolean;
+  onUndo: () => void;
+  onEdit: () => void;
+}) {
+  const C = L.card;
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="font-medium text-emerald-700">→ {label}</span>
+      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" /> : null}
+      <span className="flex flex-wrap gap-1">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={onUndo}
+          className="rounded-md px-2 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {C.undo}
+        </button>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={onEdit}
+          className="rounded-md px-2 py-0.5 text-xs text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+        >
+          {C.change}
+        </button>
+      </span>
+    </div>
   );
 }
 
@@ -231,7 +333,7 @@ function SupplierPicker({
   parties: readonly SettlementRow[];
   L: SettlementLabels;
   saving: boolean;
-  onPick: (idno: string) => void;
+  onPick: (idno: string, name: string) => void;
   onCancel: () => void;
 }) {
   const C = L.card;
@@ -270,7 +372,7 @@ function SupplierPicker({
             <button
               type="button"
               disabled={saving}
-              onClick={() => onPick(p.idno)}
+              onClick={() => onPick(p.idno, p.name)}
               className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-gray-50"
             >
               <span className="truncate text-gray-900">{p.name}</span>
@@ -283,7 +385,7 @@ function SupplierPicker({
             <button
               type="button"
               disabled={saving}
-              onClick={() => onPick(rawIdno)}
+              onClick={() => onPick(rawIdno, rawIdno)}
               className="w-full px-2 py-1.5 text-left text-xs text-sky-700 hover:bg-gray-50"
             >
               {C.bindIdno(rawIdno)}
