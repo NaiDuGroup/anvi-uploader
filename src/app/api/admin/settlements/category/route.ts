@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { isCounterpartyCategory } from "@/lib/settlements/types";
+import { actorOf, writeAudit } from "@/lib/settlements/audit";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,13 @@ export async function PUT(request: NextRequest) {
   try {
     if (body.category === null) {
       await prisma.counterpartyCategory.deleteMany({ where: { idno } });
+      await writeAudit(actorOf(user), {
+        action: "category_set",
+        entityType: "counterparty",
+        entityId: idno,
+        counterpartyIdno: idno,
+        details: { category: null },
+      });
       return NextResponse.json({ ok: true, idno, category: null });
     }
     if (!isCounterpartyCategory(body.category)) {
@@ -37,6 +45,13 @@ export async function PUT(request: NextRequest) {
       where: { idno },
       create: { idno, category, name, updatedById: user.id },
       update: { category, updatedById: user.id, ...(name ? { name } : {}) },
+    });
+    await writeAudit(actorOf(user), {
+      action: "category_set",
+      entityType: "counterparty",
+      entityId: idno,
+      counterpartyIdno: idno,
+      details: { category, name },
     });
     return NextResponse.json({ ok: true, idno, category });
   } catch (error) {

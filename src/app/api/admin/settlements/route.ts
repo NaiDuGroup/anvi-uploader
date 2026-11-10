@@ -1,19 +1,16 @@
 import { NextResponse } from "next/server";
-import { getSessionUser } from "@/lib/auth";
-import { isSuperAdmin } from "@/lib/roles";
-import { computeSettlementsReport } from "@/lib/settlements/load";
+import { requireSuperAdmin } from "@/lib/settlements/guard";
+import { loadSettlementsWithChecks } from "@/lib/settlements/checksLoad";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
-/** «Взаиморасчёты»: signed balance per fiscal code across sales and purchases. */
+/** «Взаиморасчёты»: signed balance per fiscal code across sales and purchases + «Проверить» signals. */
 export async function GET() {
-  const user = await getSessionUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!isSuperAdmin(user.role)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const g = await requireSuperAdmin();
+  if ("response" in g) return g.response;
   try {
-    return NextResponse.json(await computeSettlementsReport());
+    return NextResponse.json(await loadSettlementsWithChecks());
   } catch (error) {
     console.error("GET /api/admin/settlements:", error);
     return NextResponse.json({ error: "Failed to build settlements" }, { status: 500 });

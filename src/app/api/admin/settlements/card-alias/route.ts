@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
+import { actorOf, writeAudit } from "@/lib/settlements/audit";
 
 export const runtime = "nodejs";
 
@@ -28,6 +29,12 @@ export async function PUT(request: NextRequest) {
   try {
     if (body.reset === true) {
       await prisma.cardMerchantAlias.deleteMany({ where: { merchantKey } });
+      await writeAudit(actorOf(user), {
+        action: "card_alias_set",
+        entityType: "card_merchant",
+        entityId: merchantKey,
+        details: { merchantKey, reset: true },
+      });
       return NextResponse.json({ ok: true, merchantKey, reset: true });
     }
     let idno: string | null;
@@ -39,6 +46,13 @@ export async function PUT(request: NextRequest) {
       where: { merchantKey },
       create: { merchantKey, idno, name, updatedById: user.id },
       update: { idno, updatedById: user.id, ...(name ? { name } : {}) },
+    });
+    await writeAudit(actorOf(user), {
+      action: "card_alias_set",
+      entityType: "card_merchant",
+      entityId: merchantKey,
+      counterpartyIdno: idno,
+      details: { merchantKey, idno, name },
     });
     return NextResponse.json({ ok: true, merchantKey, idno });
   } catch (error) {

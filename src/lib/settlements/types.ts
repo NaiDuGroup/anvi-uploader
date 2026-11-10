@@ -140,10 +140,65 @@ export interface CardPaymentsSummary {
   merchants: CardMerchantGroup[];
 }
 
+export const CHECK_TYPES = [
+  "duplicate_sale",
+  "payment_without_invoice",
+  "supplier_overpaid",
+  "duplicate_payment",
+  "supplier_unpaid",
+  "payment_unmatched",
+  "card_unattributed",
+  "low_confidence_sales",
+  "vat_anomaly",
+  "receipt_and_bank",
+] as const;
+
+/** «Проверить»: kinds of automatic signals. */
+export type CheckType = (typeof CHECK_TYPES)[number];
+
+export type VatAnomalyReason = "vat_negative" | "vat_over_total" | "vat_over_rate" | "sum_mismatch" | "lines_mismatch";
+
+export interface CheckDismissalDto {
+  note: string | null;
+  by: string | null;
+  at: string;
+}
+
+export interface CheckSignal {
+  /** Stable across reloads while the underlying documents stay the same. */
+  key: string;
+  type: CheckType;
+  /** Counterparty (null = global, e.g. card purchases). */
+  idno: string | null;
+  name: string | null;
+  amount: number;
+  /** Most relevant date (ISO). */
+  date: string | null;
+  /** Invoice / payment documents involved (first few). */
+  documents: string[];
+  count?: number;
+  ageDays?: number;
+  confidence?: number;
+  side?: "sales" | "purchase";
+  vatReason?: VatAnomalyReason;
+  /** Set when marked «Проверено». */
+  dismissal?: CheckDismissalDto | null;
+}
+
+export interface SettlementChecks {
+  signals: CheckSignal[];
+  /** Undismissed signals. */
+  activeCount: number;
+  /** Supplier matching has been run at least once (signals 5–6 need it). */
+  matchingRan: boolean;
+}
+
 export interface SettlementsResponse {
   rows: SettlementRow[];
   summary: SettlementSummary;
   cardPayments: CardPaymentsSummary;
+  /** «Проверить» signals; null when they could not be built. */
+  checks?: SettlementChecks | null;
   generatedAt: string;
 }
 

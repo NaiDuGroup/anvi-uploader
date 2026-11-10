@@ -16,6 +16,9 @@ import { getSettlementLabels, type PeriodPreset, type SettlementLabels } from "@
 import type { OpeningBalanceDto, SettlementLedgerResponse } from "@/lib/settlements/types";
 import { cn } from "@/lib/utils";
 import { AdminConfirmDialog } from "./AdminConfirmDialog";
+import SupplierMatchPanel from "./SupplierMatchPanel";
+import SettlementsJournal from "./SettlementsJournal";
+import { getSettlementExtraLabels } from "@/lib/settlements/checkLabels";
 import { balanceClass, CategorySelect, ledgerNote, type CategoryTarget } from "./SettlementsPageClient";
 
 const PRESETS: PeriodPreset[] = ["all", "this_year", "last_year", "custom"];
@@ -33,6 +36,8 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
   const locale = useLanguageStore((s) => s.locale);
   const L = getSettlementLabels(locale);
   const C = L.cardPage;
+  const X = getSettlementExtraLabels(locale);
+  const [journalKey, setJournalKey] = useState(0);
   const money = (n: number) => formatMoney(n.toFixed(2), "MDL", locale);
   const today = useMemo(() => dayKeyOf(new Date()), []);
 
@@ -63,6 +68,7 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
       });
       if (!res.ok) throw new Error(String(res.status));
       await mutate();
+      setJournalKey((k) => k + 1);
     } catch {
       toast.error(L.saveError);
     } finally {
@@ -145,7 +151,10 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
             firstDocumentDate={data.firstDocumentDate}
             L={L}
             money={money}
-            onSaved={() => mutate()}
+            onSaved={() => {
+              void mutate();
+              setJournalKey((k) => k + 1);
+            }}
           />
 
           {/* Period + act */}
@@ -240,6 +249,10 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
           ) : null}
 
           <LedgerTable data={data} L={L} money={money} hasPeriod={hasPeriod} range={range} />
+
+          <SupplierMatchPanel idno={idno} X={X} money={money} onChanged={() => setJournalKey((k) => k + 1)} />
+
+          <SettlementsJournal X={X} money={money} idno={idno} refreshKey={journalKey} />
         </>
       ) : null}
     </div>

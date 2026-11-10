@@ -22,6 +22,8 @@ import {
   PURCHASE_API,
   STALE_SYNC_MS,
 } from "@/app/admin/_components/purchasing/purchaseUi";
+import { PaymentStatusPill } from "@/app/admin/_components/SupplierMatchPanel";
+import { getSettlementExtraLabels } from "@/lib/settlements/checkLabels";
 
 enum ListFilter {
   Open = "open",
@@ -117,6 +119,7 @@ export default function IncomingInvoicesPageClient() {
   }, [load]);
 
   const invoices = data?.invoices ?? [];
+  const payLabels = getSettlementExtraLabels(locale).match.status;
 
   return (
     <main className="mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-5">
@@ -226,14 +229,17 @@ export default function IncomingInvoicesPageClient() {
                   </td>
                   <td className="px-4 py-3 tabular-nums text-gray-700">{p.linesProgress(done, total)}</td>
                   <td className="px-4 py-3">
-                    <span
-                      className={cn(
-                        "inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1",
-                        STATUS_TONE[inv.status],
-                      )}
-                    >
-                      {p.invoiceStatus[inv.status]}
-                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1",
+                          STATUS_TONE[inv.status],
+                        )}
+                      >
+                        {p.invoiceStatus[inv.status]}
+                      </span>
+                      {inv.paymentStatus ? <PaymentStatusPill status={inv.paymentStatus} labels={payLabels} /> : null}
+                    </div>
                   </td>
                 </tr>
               );

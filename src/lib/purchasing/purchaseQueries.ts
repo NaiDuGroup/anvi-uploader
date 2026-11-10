@@ -14,6 +14,7 @@ import {
   type SupplierMappingsResponse,
 } from "./dto";
 import { isPriceDriftSuspicious } from "./invoiceStatus";
+import { invoicePaymentStatus } from "@/lib/settlements/supplierMatch";
 import { purchaseCostsIncludeVat } from "./purchaseCostBasis";
 import { supplierKey } from "./postPurchaseLine";
 import { findUnlinkedReceipts } from "./receiptLinking";
@@ -136,8 +137,27 @@ export async function listPurchaseInvoices(
     prisma.purchaseInvoice.aggregate({ _max: { lastSyncedAt: true } }),
   ]);
 
+  // Payment pill: confirmed supplier links + B/f receipts (best-effort).
+  const paidById = new Map<string, number>();
+  try {
+    const sums = await prisma.supplierPaymentAllocation.groupBy({
+      by: ["purchaseInvoiceId"],
+      where: { purchaseInvoiceId: { in: invoices.map((i) => i.id) }, status: "confirmed" },
+      _sum: { amount: true },
+    });
+    for (const s of sums) paidById.set(s.purchaseInvoiceId, Number(s._sum.amount ?? 0));
+  } catch (error) {
+    console.error("purchase list: payment statuses not loaded:", error);
+  }
+
   return {
-    invoices: invoices.map(toListItem),
+    invoices: invoices.map((inv) => ({
+      ...toListItem(inv),
+      paymentStatus:
+        inv.totalAmount == null
+          ? null
+          : invoicePaymentStatus(Number(inv.totalAmount), paidById.get(inv.id) ?? 0, Boolean(inv.receiptSettledAt)),
+    })),
     openInvoiceCount,
     openLineCount,
     lastSyncedAt: iso(lastSync._max.lastSyncedAt),

@@ -1491,8 +1491,9 @@ model BankTransaction {
   dedupeKey          String    @unique @map("dedupe_key")
   createdAt          DateTime  @default(now()) @map("created_at")
 
-  statement   BankStatement       @relation(fields: [statementId], references: [id], onDelete: Cascade)
-  allocations PaymentAllocation[]
+  statement           BankStatement               @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  allocations         PaymentAllocation[]
+  supplierAllocations SupplierPaymentAllocation[]
 
   @@index([statementId])
   @@index([matchStatus])
@@ -1654,6 +1655,69 @@ model CardMerchantAlias {
   @@map("card_merchant_aliases")
 }
 
+/// «Взаиморасчёты»: our payment (bank debit or card purchase, both are bank
+/// transactions) ↔ supplier invoice. Explains the IDNO-level balance per
+/// invoice; never changes it. B/f-settled invoices need no row.
+model SupplierPaymentAllocation {
+  id                String    @id @default(uuid())
+  bankTransactionId String    @map("bank_transaction_id")
+  purchaseInvoiceId String    @map("purchase_invoice_id")
+  amount            Decimal   @db.Decimal(14, 2)
+  /// suggested | confirmed | rejected (rejected = remembered so it is not suggested again)
+  status            String    @default("suggested")
+  /// 0..100
+  confidence        Int       @default(0)
+  reason            String?
+  /// null = created by the auto-match.
+  createdById       String?   @map("created_by_id")
+  confirmedById     String?   @map("confirmed_by_id")
+  confirmedAt       DateTime? @map("confirmed_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  bankTransaction BankTransaction @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+
+  @@unique([bankTransactionId, purchaseInvoiceId])
+  @@index([purchaseInvoiceId])
+  @@index([status])
+  @@map("supplier_payment_allocations")
+}
+
+/// «Взаиморасчёты → Проверить»: a signal marked «Проверено» (hidden until un-dismissed).
+model SettlementCheckDismissal {
+  id              String   @id @default(uuid())
+  /// Stable key built by src/lib/settlements/checks.ts.
+  signalKey       String   @unique @map("signal_key")
+  note            String?
+  dismissedById   String?  @map("dismissed_by_id")
+  dismissedByName String?  @map("dismissed_by_name")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("settlement_check_dismissals")
+}
+
+/// «Взаиморасчёты → Журнал»: who matched / changed what in bookkeeping.
+model ReconciliationAuditLog {
+  id               String   @id @default(uuid())
+  at               DateTime @default(now())
+  /// null = automatic run.
+  userId           String?  @map("user_id")
+  userName         String?  @map("user_name")
+  /// match | unmatch | auto_match | confirm | reject | category_set | card_alias_set | opening_balance_set | check_dismissed …
+  action           String
+  entityType       String?  @map("entity_type")
+  entityId         String?  @map("entity_id")
+  counterpartyIdno String?  @map("counterparty_idno")
+  amount           Decimal? @db.Decimal(14, 2)
+  details          Json?
+
+  @@index([at])
+  @@index([counterpartyIdno, at])
+  @@index([action])
+  @@map("reconciliation_audit_log")
+}
+
 /// Incoming fiscal invoice from e-Factura where ANVI is the buyer (supplier purchases).
 /// Kept apart from `FiscalInvoice` (our receivables) so reconciliation is unaffected.
 model PurchaseInvoice {
@@ -1688,7 +1752,8 @@ model PurchaseInvoice {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  lines PurchaseInvoiceLine[]
+  lines              PurchaseInvoiceLine[]
+  paymentAllocations SupplierPaymentAllocation[]
 
   @@unique([seria, number])
   @@index([status])

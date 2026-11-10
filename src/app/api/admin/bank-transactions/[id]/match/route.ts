@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { matchTransactionSchema } from "@/lib/validations";
 import { applyAllocation } from "@/lib/reconciliation/autoMatch";
+import { actorOf, writeAudit, type AuditEntry } from "@/lib/settlements/audit";
 import {
   BANK_TRANSACTION_INCLUDE,
   toSerializableBankTransaction,
@@ -50,7 +51,7 @@ export async function POST(
     const fiscalIds = validated.allocations.map((a) => a.fiscalInvoiceId);
     const fiscalInvoices = await prisma.fiscalInvoice.findMany({
       where: { id: { in: fiscalIds } },
-      select: { id: true, totalAmount: true },
+      select: { id: true, totalAmount: true, seria: true, number: true, buyerIdno: true },
     });
     const fiscalMap = new Map(fiscalInvoices.map((i) => [i.id, i]));
     const allocSums = await prisma.paymentAllocation.groupBy({
@@ -64,6 +65,7 @@ export async function POST(
         .map((g) => [g.fiscalInvoiceId as string, g._sum.amount ?? ZERO]),
     );
 
+    const log: AuditEntry[] = [];
     await prisma.$transaction(async (dbtx) => {
       for (const a of validated.allocations) {
         const fi = fiscalMap.get(a.fiscalInvoiceId);
@@ -90,8 +92,22 @@ export async function POST(
           note: validated.note ?? null,
         });
         remainingOnTx = remainingOnTx.minus(amount);
+        log.push({
+          action: "match",
+          entityType: "bank_transaction",
+          entityId: id,
+          counterpartyIdno: fi.buyerIdno ?? tx.counterpartyIdno,
+          amount: amount.toFixed(2),
+          details: {
+            fiscalInvoiceId: fi.id,
+            document: `${fi.seria}${fi.number}`,
+            paymentDocument: tx.documentNumber,
+            note: validated.note ?? null,
+          },
+        });
       }
     });
+    await writeAudit(actorOf(user), log);
 
     const updated = await prisma.bankTransaction.findUniqueOrThrow({
       where: { id },
@@ -125,7 +141,12 @@ export async function DELETE(
   try {
     const allocations = await prisma.paymentAllocation.findMany({
       where: { bankTransactionId: id },
-      select: { fiscalInvoiceId: true },
+      select: {
+        fiscalInvoiceId: true,
+        amount: true,
+        fiscalInvoice: { select: { seria: true, number: true, buyerIdno: true } },
+        bankTransaction: { select: { counterpartyIdno: true, documentNumber: true } },
+      },
     });
     const fiscalIds = [
       ...new Set(allocations.map((a) => a.fiscalInvoiceId).filter((v): v is string => !!v)),
@@ -159,6 +180,20 @@ export async function DELETE(
         data: { matchStatus: "UNMATCHED" },
       });
     });
+    if (allocations.length > 0) {
+      const first = allocations[0]!;
+      await writeAudit(actorOf(user), {
+        action: "unmatch",
+        entityType: "bank_transaction",
+        entityId: id,
+        counterpartyIdno: first.fiscalInvoice?.buyerIdno ?? first.bankTransaction.counterpartyIdno,
+        amount: allocations.reduce((s, a) => s.plus(a.amount), ZERO).toFixed(2),
+        details: {
+          documents: allocations.map((a) => (a.fiscalInvoice ? `${a.fiscalInvoice.seria}${a.fiscalInvoice.number}` : "—")),
+          paymentDocument: first.bankTransaction.documentNumber,
+        },
+      });
+    }
 
     const updated = await prisma.bankTransaction.findUniqueOrThrow({
       where: { id },

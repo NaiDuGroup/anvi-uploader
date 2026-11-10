@@ -39,7 +39,7 @@ export const PURCHASE_BALANCE_STATUSES: readonly number[] = ISSUED_EFACTURA_STAT
 
 const num = (d: Prisma.Decimal | null): number => (d == null ? 0 : Number(d));
 
-function refundedByTx(
+export function refundedByTx(
   refunds: ReadonlyArray<{ amount: Prisma.Decimal; transaction: { id: string } }>,
 ): Map<string, number> {
   const map = new Map<string, number>();
@@ -49,7 +49,7 @@ function refundedByTx(
   return map;
 }
 
-async function loadManualCategories(): Promise<SettlementInput["categories"]> {
+export async function loadManualCategories(): Promise<SettlementInput["categories"]> {
   const rows = await prisma.counterpartyCategory.findMany({
     select: { idno: true, category: true, name: true },
   });
@@ -85,6 +85,7 @@ export async function loadOpeningBalance(idno: string): Promise<OpeningBalanceDt
 }
 
 const PURCHASE_SELECT = {
+  id: true,
   seria: true,
   number: true,
   supplierIdno: true,
@@ -94,11 +95,13 @@ const PURCHASE_SELECT = {
   receiptRef: true,
   receiptMethod: true,
   receiptSettledAt: true,
+  totalExVat: true,
+  vatAmount: true,
 } satisfies Prisma.PurchaseInvoiceSelect;
 
-type PurchaseRow = Prisma.PurchaseInvoiceGetPayload<{ select: typeof PURCHASE_SELECT }>;
+export type PurchaseRow = Prisma.PurchaseInvoiceGetPayload<{ select: typeof PURCHASE_SELECT }>;
 
-function toSettlementPurchase(p: PurchaseRow): SettlementPurchase {
+export function toSettlementPurchase(p: PurchaseRow): SettlementPurchase {
   return {
     supplierIdno: p.supplierIdno!,
     supplierName: p.supplierName,
@@ -111,7 +114,7 @@ function toSettlementPurchase(p: PurchaseRow): SettlementPurchase {
   };
 }
 
-function loadLivePurchases(where: Prisma.PurchaseInvoiceWhereInput = {}): Promise<PurchaseRow[]> {
+export function loadLivePurchases(where: Prisma.PurchaseInvoiceWhereInput = {}): Promise<PurchaseRow[]> {
   return prisma.purchaseInvoice.findMany({
     where: {
       eFacturaStatus: { in: [...PURCHASE_BALANCE_STATUSES] },
@@ -295,8 +298,43 @@ export function summarizeCardPurchases(
   };
 }
 
+/** Raw inputs behind the report, reused by «Проверить» and the supplier matching. */
+export interface SettlementsInternals {
+  purchases: PurchaseRow[];
+  debits: Array<{
+    id: string;
+    amount: number;
+    bookingDate: Date;
+    counterpartyIdno: string | null;
+    counterpartyName: string | null;
+    txTypeCode: string | null;
+    documentNumber: string | null;
+    purpose: string | null;
+  }>;
+  cards: CardPurchase[];
+  refundedByTx: Map<string, number>;
+  categories: SettlementInput["categories"];
+  salesInvoices: Array<{
+    id: string;
+    seria: string;
+    number: string;
+    buyerIdno: string | null;
+    totalAmount: Prisma.Decimal | null;
+    vatAmount: Prisma.Decimal | null;
+    issueDate: Date | null;
+  }>;
+  names: Map<string, string>;
+}
+
 /** Bulk-loads both sides (a handful of queries, no per-party lookups). */
 export async function computeSettlementsReport(): Promise<SettlementsResponse> {
+  return (await computeSettlementsReportFull()).report;
+}
+
+export async function computeSettlementsReportFull(): Promise<{
+  report: SettlementsResponse;
+  internals: SettlementsInternals;
+}> {
   const [
     salesData,
     salesInvoices,
@@ -315,7 +353,15 @@ export async function computeSettlementsReport(): Promise<SettlementsResponse> {
           buyerIdno: { not: null },
           AND: [excludeNonDeliveryWhere()],
         },
-        select: { seria: true, number: true, buyerIdno: true, totalAmount: true, issueDate: true },
+        select: {
+          id: true,
+          seria: true,
+          number: true,
+          buyerIdno: true,
+          totalAmount: true,
+          vatAmount: true,
+          issueDate: true,
+        },
       }),
       prisma.bankTransaction.findMany({
         where: { direction: "CREDIT" },
@@ -346,6 +392,7 @@ export async function computeSettlementsReport(): Promise<SettlementsResponse> {
           counterpartyName: true,
           txTypeCode: true,
           documentNumber: true,
+          purpose: true,
         },
         orderBy: { bookingDate: "desc" },
       }),
@@ -363,6 +410,8 @@ export async function computeSettlementsReport(): Promise<SettlementsResponse> {
   const settlementPurchases = purchases.map(toSettlementPurchase);
   const { cards, names: cardNames } = await loadCardPurchases(settlementPurchases, categories);
   for (const [idno, name] of cardNames) if (!names.has(idno)) names.set(idno, name);
+  const refunded = refundedByTx(salesData.attribution.refunds);
+  const debitRows = debits.map((d) => ({ ...d, amount: num(d.amount) }));
 
   const result = computeSettlements({
     ownIdno: salesData.ownIdno,
@@ -386,13 +435,13 @@ export async function computeSettlementsReport(): Promise<SettlementsResponse> {
       ),
     })),
     purchases: settlementPurchases,
-    debits: debits.map((d) => ({ ...d, amount: num(d.amount) })),
+    debits: debitRows,
     cardPayments: cards.flatMap((c) =>
       c.idno
         ? [{ debitId: c.debitId, idno: c.idno, amount: c.amount, date: c.purchaseDate, merchant: c.merchantRaw }]
         : [],
     ),
-    refundedByTx: refundedByTx(salesData.attribution.refunds),
+    refundedByTx: refunded,
     categories,
     names,
     purchasesWithoutTotals,
@@ -405,7 +454,18 @@ export async function computeSettlementsReport(): Promise<SettlementsResponse> {
     (idno) => rowName.get(idno) ?? categories.get(idno)?.name ?? names.get(idno) ?? null,
   );
 
-  return { ...result, cardPayments, generatedAt: new Date().toISOString() };
+  return {
+    report: { ...result, cardPayments, generatedAt: new Date().toISOString() },
+    internals: {
+      purchases,
+      debits: debitRows,
+      cards,
+      refundedByTx: refunded,
+      categories,
+      salesInvoices,
+      names,
+    },
+  };
 }
 
 const STATEMENT_KIND: Record<string, LedgerEntryKind | null> = {

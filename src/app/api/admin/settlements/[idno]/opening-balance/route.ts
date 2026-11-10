@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { isDayKey } from "@/lib/shop/report/period";
+import { actorOf, writeAudit } from "@/lib/settlements/audit";
 
 export const runtime = "nodejs";
 
@@ -38,7 +39,15 @@ export async function PUT(request: Request, { params }: { params: Promise<{ idno
   const rounded = Math.round(amount * 100) / 100;
   try {
     if (rounded === 0) {
-      await prisma.counterpartyOpeningBalance.deleteMany({ where: { idno } });
+      const removed = await prisma.counterpartyOpeningBalance.deleteMany({ where: { idno } });
+      if (removed.count > 0) {
+        await writeAudit(actorOf(user), {
+          action: "opening_balance_removed",
+          entityType: "opening_balance",
+          entityId: idno,
+          counterpartyIdno: idno,
+        });
+      }
       return NextResponse.json({ ok: true, openingBalance: null });
     }
     if (!isDayKey(body.asOfDate)) {
@@ -50,6 +59,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ idno
       where: { idno },
       create: { idno, asOfDate, amount: rounded, note, updatedById: user.id },
       update: { asOfDate, amount: rounded, note, updatedById: user.id },
+    });
+    await writeAudit(actorOf(user), {
+      action: "opening_balance_set",
+      entityType: "opening_balance",
+      entityId: idno,
+      counterpartyIdno: idno,
+      amount: rounded,
+      details: { asOfDate: body.asOfDate, note },
     });
     return NextResponse.json({
       ok: true,
@@ -70,7 +87,15 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const g = await guard(params);
   if ("error" in g) return g.error;
   try {
-    await prisma.counterpartyOpeningBalance.deleteMany({ where: { idno: g.idno } });
+    const removed = await prisma.counterpartyOpeningBalance.deleteMany({ where: { idno: g.idno } });
+    if (removed.count > 0) {
+      await writeAudit(actorOf(g.user), {
+        action: "opening_balance_removed",
+        entityType: "opening_balance",
+        entityId: g.idno,
+        counterpartyIdno: g.idno,
+      });
+    }
     return NextResponse.json({ ok: true, openingBalance: null });
   } catch (error) {
     console.error("DELETE /api/admin/settlements/[idno]/opening-balance:", error);

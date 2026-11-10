@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -28,6 +28,10 @@ import {
 } from "@/lib/settlements/types";
 import { cn } from "@/lib/utils";
 import SettlementsCardPayments from "./SettlementsCardPayments";
+import SettlementsChecks from "./SettlementsChecks";
+import SettlementsJournal from "./SettlementsJournal";
+import { getSettlementExtraLabels, type SettlementExtraLabels, type SettlementsView } from "@/lib/settlements/checkLabels";
+import type { CheckSignal } from "@/lib/settlements/types";
 
 const PAGE = 100;
 const TH = "px-3 py-3 text-left";
@@ -43,12 +47,14 @@ const STATE_PILL: Record<SettlementState, string> = {
   service: "bg-gray-50 text-gray-500 ring-gray-200",
 };
 
-function matchesFilter(row: SettlementRow, filter: SettlementFilter): boolean {
+const VIEWS: SettlementsView[] = ["balances", "checks", "journal"];
+
+function matchesFilter(row: SettlementRow, filter: SettlementFilter, checkIdnos: ReadonlySet<string> | null): boolean {
   switch (filter) {
     case "all":
       return row.state !== "service";
     case "check":
-      return row.flags.length > 0;
+      return checkIdnos ? checkIdnos.has(row.idno) : row.flags.length > 0;
     default:
       return row.state === filter;
   }
@@ -63,7 +69,25 @@ export function balanceClass(n: number): string {
 export default function SettlementsPageClient() {
   const locale = useLanguageStore((s) => s.locale);
   const L = getSettlementLabels(locale);
+  const X = getSettlementExtraLabels(locale);
   const money = (n: number) => formatMoney(n.toFixed(2), "MDL", locale);
+
+  const [view, setViewState] = useState<SettlementsView>("balances");
+  const [journalIdno, setJournalIdno] = useState<string>("");
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const v = q.get("view");
+    if (v === "checks" || v === "journal") setViewState(v);
+    const idno = q.get("idno");
+    if (idno) setJournalIdno(idno);
+  }, []);
+  function setView(v: SettlementsView) {
+    setViewState(v);
+    const url = new URL(window.location.href);
+    if (v === "balances") url.searchParams.delete("view");
+    else url.searchParams.set("view", v);
+    window.history.replaceState(null, "", url.toString());
+  }
 
   const [filter, setFilter] = useState<SettlementFilter>("all");
   const [query, setQuery] = useState("");
@@ -78,22 +102,36 @@ export default function SettlementsPageClient() {
     { revalidateOnFocus: false, keepPreviousData: true },
   );
 
+  const signalsByIdno = useMemo(() => {
+    if (!data?.checks) return null;
+    const map = new Map<string, CheckSignal[]>();
+    for (const sig of data.checks.signals) {
+      if (sig.dismissal || !sig.idno) continue;
+      const list = map.get(sig.idno) ?? [];
+      list.push(sig);
+      map.set(sig.idno, list);
+    }
+    return map;
+  }, [data]);
+  const checkIdnos = useMemo(() => (signalsByIdno ? new Set(signalsByIdno.keys()) : null), [signalsByIdno]);
+  const names = useMemo(() => new Map((data?.rows ?? []).map((r) => [r.idno, r.name])), [data]);
+
   const filtered = useMemo(() => {
     const q = debounced.trim().toLowerCase();
     return (data?.rows ?? []).filter(
       (r) =>
-        matchesFilter(r, filter) &&
+        matchesFilter(r, filter, checkIdnos) &&
         (!q || r.name.toLowerCase().includes(q) || r.idno.includes(q)),
     );
-  }, [data, filter, debounced]);
+  }, [data, filter, debounced, checkIdnos]);
 
   const counts = useMemo(() => {
     const out = {} as Record<SettlementFilter, number>;
     for (const f of SETTLEMENT_FILTERS) {
-      out[f] = (data?.rows ?? []).filter((r) => matchesFilter(r, f)).length;
+      out[f] = (data?.rows ?? []).filter((r) => matchesFilter(r, f, checkIdnos)).length;
     }
     return out;
-  }, [data]);
+  }, [data, checkIdnos]);
 
   const visible = filtered.slice(0, limit);
 
@@ -122,13 +160,53 @@ export default function SettlementsPageClient() {
         { label: L.sumWeOwe, value: money(summary.weOwe), tone: "text-rose-700", onClick: () => setFilter("we_owe") },
         { label: L.sumWeOverpaid, value: money(summary.weOverpaid), tone: "text-violet-700", onClick: () => setFilter("we_overpaid") },
         { label: L.sumTheyOverpaid, value: money(summary.theyOverpaid), tone: "text-sky-700", onClick: () => setFilter("they_overpaid") },
-        { label: L.sumCheck, value: String(summary.checkCount), tone: "text-orange-700", onClick: () => setFilter("check") },
+        { label: L.sumCheck, value: String(summary.checkCount), tone: "text-orange-700", onClick: () => setView("checks") },
         { label: L.sumUnclassified, value: String(summary.unclassifiedCount), tone: "text-gray-700", onClick: () => setFilter("unclassified") },
       ]
     : [];
 
+  const checkBadge = data?.checks ? data.checks.activeCount : summary?.checkCount ?? 0;
+
   return (
     <div>
+      <div className="mb-4 inline-flex rounded-lg bg-gray-100 p-1">
+        {VIEWS.map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setView(v)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium",
+              view === v ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900",
+            )}
+          >
+            {X.views[v]}
+            {v === "checks" && checkBadge > 0 ? (
+              <span className="rounded-full bg-orange-100 px-1.5 text-xs font-semibold text-orange-800">{checkBadge}</span>
+            ) : null}
+          </button>
+        ))}
+      </div>
+
+      {view === "journal" ? (
+        <SettlementsJournal X={X} money={money} initialIdno={journalIdno} names={names} />
+      ) : null}
+
+      {view === "checks" && data ? (
+        <SettlementsChecks
+          checks={data.checks}
+          X={X}
+          money={money}
+          onChanged={() => mutate()}
+          onOpenCardPayments={() => {
+            setView("balances");
+            window.setTimeout(() => document.getElementById("card-payments")?.scrollIntoView({ behavior: "smooth" }), 50);
+          }}
+        />
+      ) : null}
+
+      {view === "balances" ? (
+      <>
       <p className="mb-4 max-w-3xl text-sm text-gray-500">{L.hint}</p>
 
       {error ? (
@@ -168,13 +246,15 @@ export default function SettlementsPageClient() {
           ) : null}
 
           {data?.cardPayments ? (
-            <SettlementsCardPayments
-              data={data.cardPayments}
-              parties={data.rows}
-              L={L}
-              money={money}
-              onSaved={() => mutate()}
-            />
+            <div id="card-payments" className="scroll-mt-4">
+              <SettlementsCardPayments
+                data={data.cardPayments}
+                parties={data.rows}
+                L={L}
+                money={money}
+                onSaved={() => mutate()}
+              />
+            </div>
           ) : null}
 
           <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
@@ -236,7 +316,7 @@ export default function SettlementsPageClient() {
                       </div>
                     </button>
                     <div className="mt-2 flex flex-wrap items-center gap-1">
-                      <StatePill row={row} L={L} />
+                      <StatePill row={row} L={L} flagged={checkIdnos ? checkIdnos.has(row.idno) : row.flags.length > 0} />
                     </div>
                     <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                       <dt className="text-gray-500">{L.colSalesInvoiced}</dt>
@@ -256,7 +336,7 @@ export default function SettlementsPageClient() {
                     </div>
                     {expanded === row.idno ? (
                       <div className="mt-3 border-t border-gray-100 pt-3">
-                        <RowDetails row={row} L={L} money={money} />
+                        <RowDetails row={row} L={L} X={X} money={money} signals={signalsByIdno ? signalsByIdno.get(row.idno) ?? [] : null} />
                       </div>
                     ) : null}
                   </div>
@@ -312,7 +392,7 @@ export default function SettlementsPageClient() {
                               {money(row.balance)}
                             </td>
                             <td className={TD}>
-                              <StatePill row={row} L={L} />
+                              <StatePill row={row} L={L} flagged={checkIdnos ? checkIdnos.has(row.idno) : row.flags.length > 0} />
                             </td>
                             <td className={TD}>
                               <CategorySelect row={row} L={L} saving={savingIdno === row.idno} onChange={saveCategory} />
@@ -321,7 +401,7 @@ export default function SettlementsPageClient() {
                           {open ? (
                             <tr>
                               <td colSpan={8} className="bg-gray-50/60 px-4 pb-4 pt-1">
-                                <RowDetails row={row} L={L} money={money} />
+                                <RowDetails row={row} L={L} X={X} money={money} signals={signalsByIdno ? signalsByIdno.get(row.idno) ?? [] : null} />
                               </td>
                             </tr>
                           ) : null}
@@ -342,6 +422,8 @@ export default function SettlementsPageClient() {
             </>
           )}
         </>
+      ) : null}
+      </>
       ) : null}
     </div>
   );
@@ -374,7 +456,7 @@ export function ledgerNote(e: LedgerEntry, L: SettlementLabels): string | null {
   return e.description;
 }
 
-function StatePill({ row, L }: { row: SettlementRow; L: SettlementLabels }) {
+function StatePill({ row, L, flagged }: { row: SettlementRow; L: SettlementLabels; flagged: boolean }) {
   return (
     <span className="inline-flex flex-wrap gap-1">
       <span
@@ -385,7 +467,7 @@ function StatePill({ row, L }: { row: SettlementRow; L: SettlementLabels }) {
       >
         {L.states[row.state]}
       </span>
-      {row.flags.length > 0 ? (
+      {flagged ? (
         <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-orange-50 px-2 py-0.5 text-xs font-medium text-orange-800 ring-1 ring-orange-200">
           <AlertTriangle className="h-3 w-3" />
           {L.checkPill}
@@ -436,11 +518,16 @@ export function CategorySelect({
 function RowDetails({
   row,
   L,
+  X,
   money,
+  signals,
 }: {
   row: SettlementRow;
   L: SettlementLabels;
+  X: SettlementExtraLabels;
   money: (n: number) => string;
+  /** Active «Проверить» signals; null = not available (fall back to balance flags). */
+  signals: CheckSignal[] | null;
 }) {
   const { data, error, isLoading } = useSWR<SettlementLedgerResponse>(
     `/api/admin/settlements/${encodeURIComponent(row.idno)}`,
@@ -450,7 +537,21 @@ function RowDetails({
 
   return (
     <div className="space-y-3">
-      {row.flags.length > 0 ? (
+      {signals && signals.length > 0 ? (
+        <ul className="space-y-1">
+          {signals.map((sig) => (
+            <li
+              key={sig.key}
+              className="flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-xs text-orange-800"
+            >
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                <span className="font-medium">{X.checks.types[sig.type]}:</span> {X.checks.text(sig, money, formatShortDate)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : !signals && row.flags.length > 0 ? (
         <ul className="space-y-1">
           {row.flags.map((f, i) => (
             <li

@@ -25,6 +25,8 @@ export type PurchaseInvoiceListItem = {
   totalAmount: number | null;
   status: PurchaseInvoiceStatus;
   lineCounts: PurchaseLineCounts;
+  /** «Взаиморасчёты»: confirmed payment links / B/f receipt; absent when unknown. */
+  paymentStatus?: "paid" | "partial" | "unpaid" | "receipt" | null;
 };
 
 export type PurchaseSyncResult = {
