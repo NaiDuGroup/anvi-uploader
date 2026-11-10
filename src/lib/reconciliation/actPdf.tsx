@@ -13,6 +13,7 @@ import {
 } from "@react-pdf/renderer";
 import type { Locale } from "@/lib/i18n/types";
 import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
+import { dayKeyOf } from "@/lib/shop/report/period";
 import type { ClientStatement } from "./report";
 
 let fontsRegistered = false;
@@ -29,7 +30,57 @@ export function ensureFontsRegistered(): void {
   fontsRegistered = true;
 }
 
-const LABELS: Record<Locale, Record<string, string>> = {
+/**
+ * One font family per (act, language). With a shared family a Romanian act
+ * rendered after a Russian one in the same process lost the first glyph of
+ * bold runs («Sold» → «old»); separate families keep the @react-pdf font
+ * caches apart. Same fix as the settlements act.
+ */
+const localeFamilies = new Set<string>();
+export function ensureLocaleFontFamily(prefix: string, locale: string): string {
+  const family = `${prefix} ${locale.toUpperCase()}`;
+  if (!localeFamilies.has(family)) {
+    const fontsDir = path.join(process.cwd(), "public", "fonts");
+    Font.register({
+      family,
+      fonts: [
+        { src: path.join(fontsDir, "NotoSans-Regular.ttf"), fontWeight: "normal" },
+        { src: path.join(fontsDir, "NotoSans-Bold.ttf"), fontWeight: "bold" },
+      ],
+    });
+    localeFamilies.add(family);
+  }
+  return family;
+}
+
+interface ActLabels {
+  heading: string;
+  subtitle: string;
+  supplier: string;
+  client: string;
+  fiscalCode: string;
+  generatedAt: string;
+  colDate: string;
+  colDoc: string;
+  colDebit: string;
+  colCredit: string;
+  colBalance: string;
+  rowPayment: string;
+  rowReceipt: string;
+  rowPaperInvoice: string;
+  rowHistoricalInvoice: string;
+  rowRefund: string;
+  paidOnBehalf: string;
+  paperFiscalNote: string;
+  totalInvoiced: string;
+  totalPaid: string;
+  totalOutstanding: string;
+  empty: string;
+  signSupplier: string;
+  signClient: string;
+}
+
+const LABELS: Record<Locale, ActLabels> = {
   ro: {
     heading: "ACT DE VERIFICARE",
     subtitle: "Reconcilierea decontărilor reciproce",
@@ -46,6 +97,8 @@ const LABELS: Record<Locale, Record<string, string>> = {
     rowReceipt: "Bon fiscal",
     rowPaperInvoice: "FF pe hârtie",
     rowHistoricalInvoice: "FF veche",
+    rowRefund: "Restituire",
+    paidOnBehalf: "Achitat de",
     paperFiscalNote: "în afara e-Factura",
     totalInvoiced: "Total facturat",
     totalPaid: "Total achitat",
@@ -70,6 +123,8 @@ const LABELS: Record<Locale, Record<string, string>> = {
     rowReceipt: "Бон фискал",
     rowPaperInvoice: "Бумажная FF",
     rowHistoricalInvoice: "Старая ФФ",
+    rowRefund: "Возврат",
+    paidOnBehalf: "Оплатил",
     paperFiscalNote: "вне e-Factura",
     totalInvoiced: "Всего выставлено",
     totalPaid: "Всего оплачено",
@@ -94,6 +149,8 @@ const LABELS: Record<Locale, Record<string, string>> = {
     rowReceipt: "Fiscal receipt",
     rowPaperInvoice: "Paper FF",
     rowHistoricalInvoice: "Old FF",
+    rowRefund: "Refund",
+    paidOnBehalf: "Paid by",
     paperFiscalNote: "outside e-Factura",
     totalInvoiced: "Total invoiced",
     totalPaid: "Total paid",
@@ -217,12 +274,12 @@ export const actStyles = StyleSheet.create({
 
 const styles = actStyles;
 
+/** DD.MM.YYYY of the Chișinău calendar day (not the server's TZ — prod runs UTC). */
 export function fmtDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${dd}.${mm}.${d.getFullYear()}`;
+  const [y, m, day] = dayKeyOf(d).split("-");
+  return `${day}.${m}.${y}`;
 }
 
 export function fmtMoney(v: string, locale: Locale): string {
@@ -239,11 +296,12 @@ export async function renderActPdfBuffer(
 ): Promise<Buffer> {
   ensureFontsRegistered();
   const L = LABELS[locale] ?? LABELS.ro;
+  const fontFamily = ensureLocaleFontFamily("Noto Sans Sales Act", LABELS[locale] ? locale : "ro");
   const supplier = await getOrCreateCompanyProfile();
 
   return renderToBuffer(
     <Document>
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={[styles.page, { fontFamily }]}>
         <View style={styles.headerBlock}>
           <Text style={styles.heading}>{L.heading}</Text>
           <Text style={styles.subtitle}>{L.subtitle}</Text>

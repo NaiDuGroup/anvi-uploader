@@ -4,6 +4,7 @@ import { isSuperAdmin } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { isCounterpartyCategory } from "@/lib/settlements/types";
 import { actorOf, writeAudit } from "@/lib/settlements/audit";
+import { parseIdno } from "@/lib/settlements/guard";
 
 export const runtime = "nodejs";
 
@@ -19,8 +20,8 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const idno = typeof body.idno === "string" ? body.idno.trim() : "";
-  if (!idno || idno.length > 64) {
+  const idno = parseIdno(body.idno);
+  if (!idno) {
     return NextResponse.json({ error: "invalid_idno" }, { status: 400 });
   }
   const name = typeof body.name === "string" ? body.name.trim().slice(0, 200) || null : null;

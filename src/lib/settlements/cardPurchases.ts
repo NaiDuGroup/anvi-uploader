@@ -99,9 +99,10 @@ export function parseCardPurchase(purpose: string | null | undefined): ParsedCar
     pos.push(i);
   }
   const s = chars.join("");
-  if (!s.includes("CUMPARATURI")) return null;
-
-  const dateM = /DIN(\d{2})\.(\d{2})\.(\d{4})\//.exec(s);
+  // Anchored: the purpose must START with «Cumparaturi la Comercianti din
+  // DD.MM.YYYY/» — a reversal / fee row that merely quotes a purchase
+  // («Anulare Cumparaturi…», «Comision pentru Cumparaturi…») is not one.
+  const dateM = /^[^A-Z0-9]*CUMPARATURILACOMERCIANTIDIN(\d{2})\.(\d{2})\.(\d{4})\//.exec(s);
   if (!dateM) return null;
   const dd = Number(dateM[1]);
   const mm = Number(dateM[2]);
@@ -169,42 +170,89 @@ export interface CardInvoiceCandidate {
   supplierIdno: string;
   totalAmount: number;
   issueDate: Date | null;
+  /** Already paid another way (bank allocation / B/f): used only when nothing else fits. */
+  settled?: boolean;
 }
 
 const cents = (n: number): number => Math.round(n * 100);
 
-/** IDNOs whose normalized name contains / is contained in the key (shorter ≥ 5 chars). */
+/** Substring match only for long / proportionate keys (else a generic word swallows shops). */
+const MIN_SUBSTRING_KEY = 8;
+const MIN_SUBSTRING_SHARE = 0.6;
+
+/**
+ * Keys match when equal; one containing the other counts only when the
+ * shorter key has ≥ 8 chars or is ≥ 60 % of the longer one («MAGAZIN» is not
+ * «MAGAZINULUNIVERSAL», «PRINT» is not «PRINTERRASHOP»). Shorter < 5 never
+ * matches. Exactly one IDNO must hit.
+ */
+export function namesMatch(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const shorter = Math.min(a.length, b.length);
+  const longer = Math.max(a.length, b.length);
+  if (shorter < 5) return false;
+  if (a === b) return true;
+  if (shorter < MIN_SUBSTRING_KEY && shorter < MIN_SUBSTRING_SHARE * longer) return false;
+  return a.includes(b) || b.includes(a);
+}
+
 export function matchByName(
   merchantKey: string,
   names: ReadonlyArray<{ idno: string; key: string }>,
 ): string | null {
   const hits = new Set<string>();
   for (const n of names) {
-    if (!n.key) continue;
-    const shorter = Math.min(n.key.length, merchantKey.length);
-    if (shorter < 5) continue;
-    if (n.key.includes(merchantKey) || merchantKey.includes(n.key)) hits.add(n.idno);
+    if (namesMatch(n.key, merchantKey)) hits.add(n.idno);
   }
   return hits.size === 1 ? [...hits][0]! : null;
 }
 
-/** Exactly one invoice of that amount (±0.01) issued −5..+30 days around the card date. */
-export function matchByAmount(
-  amount: number,
-  date: Date,
-  invoices: readonly CardInvoiceCandidate[],
-): string | null {
+/** Invoices of that amount (±0.01) issued −5..+30 days around the card date. */
+function amountHits<T extends CardInvoiceCandidate>(amount: number, date: Date, invoices: readonly T[]): T[] {
   const c = cents(amount);
   const lo = date.getTime() - 5 * DAY_MS;
   const hi = date.getTime() + 30 * DAY_MS;
-  const hits = invoices.filter(
+  return invoices.filter(
     (inv) =>
       inv.issueDate &&
       Math.abs(cents(inv.totalAmount) - c) <= 1 &&
       inv.issueDate.getTime() >= lo &&
       inv.issueDate.getTime() <= hi,
   );
-  return hits.length === 1 ? hits[0]!.supplierIdno : null;
+}
+
+/**
+ * Picks the invoice a card payment of `amount` on `date` pays: among the
+ * same-amount invoices in the window, unsettled ones win over settled ones;
+ * all remaining hits must belong to ONE supplier (several invoices of the
+ * same supplier are fine — the closest-dated one is taken). Null when none
+ * or several suppliers.
+ */
+export function pickInvoiceByAmount<T extends CardInvoiceCandidate>(
+  amount: number,
+  date: Date,
+  invoices: readonly T[],
+): T | null {
+  const hits = amountHits(amount, date, invoices);
+  const open = hits.filter((h) => !h.settled);
+  const pool = open.length > 0 ? open : hits;
+  if (pool.length === 0) return null;
+  if (new Set(pool.map((h) => h.supplierIdno)).size !== 1) return null;
+  let best = pool[0]!;
+  for (const h of pool) {
+    const gap = Math.abs(h.issueDate!.getTime() - date.getTime());
+    if (gap < Math.abs(best.issueDate!.getTime() - date.getTime())) best = h;
+  }
+  return best;
+}
+
+/** Supplier of the one (or one supplier's) same-amount invoice around the card date. */
+export function matchByAmount(
+  amount: number,
+  date: Date,
+  invoices: readonly CardInvoiceCandidate[],
+): string | null {
+  return pickInvoiceByAmount(amount, date, invoices)?.supplierIdno ?? null;
 }
 
 /**
@@ -231,10 +279,12 @@ export function attributeCardPurchases(input: {
     seen.add(tag);
     nameKeys.push({ idno: n.idno, key });
   }
-  const invoices = input.invoices.filter((i) => !excluded.has(i.supplierIdno));
+  // Each invoice can absorb one card purchase: matched invoices leave the pool.
+  const invoicePool = input.invoices.filter((i) => !excluded.has(i.supplierIdno));
   const byNameCache = new Map<string, string | null>();
 
   const out: CardPurchase[] = [];
+  const pendingAmount: CardPurchase[] = [];
   for (const d of input.debits) {
     const parsed = parseCardPurchase(d.purpose);
     if (!parsed) continue;
@@ -264,13 +314,22 @@ export function attributeCardPurchases(input: {
       out.push({ ...base, idno: byName, source: "name", ignored: false });
       continue;
     }
-    const byAmount = matchByAmount(d.amount, parsed.purchaseDate, invoices);
-    out.push({
-      ...base,
-      idno: byAmount,
-      source: byAmount ? "amount" : null,
-      ignored: false,
-    });
+    const pending: CardPurchase = { ...base, idno: null, source: null, ignored: false };
+    out.push(pending);
+    pendingAmount.push(pending);
+  }
+
+  // Amount match last, oldest card first, so earlier purchases claim invoices first.
+  pendingAmount.sort(
+    (a, b) => a.purchaseDate.getTime() - b.purchaseDate.getTime() || a.debitId.localeCompare(b.debitId),
+  );
+  let pool = invoicePool;
+  for (const card of pendingAmount) {
+    const inv = pickInvoiceByAmount(card.amount, card.purchaseDate, pool);
+    if (!inv) continue;
+    card.idno = inv.supplierIdno;
+    card.source = "amount";
+    pool = pool.filter((i) => i !== inv);
   }
   return out;
 }

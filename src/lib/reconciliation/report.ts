@@ -637,9 +637,12 @@ export async function computeClientStatement(
     prisma.paymentAllocation.findMany({
       where: {
         fiscalInvoice: { buyerIdno },
+        // `{ not: buyerIdno }` alone compiles to `<> $1`, which is false for
+        // NULL — so a payer without IDNO (foreign account) would be dropped
+        // here while attributeCredits («Должники») counts it as paid.
         bankTransaction: {
           direction: "CREDIT",
-          counterpartyIdno: { not: buyerIdno },
+          OR: [{ counterpartyIdno: null }, { counterpartyIdno: { not: buyerIdno } }],
         },
       },
       select: {

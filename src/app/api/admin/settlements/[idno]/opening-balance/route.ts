@@ -4,6 +4,8 @@ import { isSuperAdmin } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { isDayKey } from "@/lib/shop/report/period";
 import { actorOf, writeAudit } from "@/lib/settlements/audit";
+import { parseIdno } from "@/lib/settlements/guard";
+import { parseAmountValue } from "@/lib/settlements/http";
 
 export const runtime = "nodejs";
 
@@ -13,9 +15,8 @@ async function guard(params: Promise<{ idno: string }>) {
   if (!isSuperAdmin(user.role)) {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
-  const { idno: raw } = await params;
-  const idno = decodeURIComponent(raw).trim();
-  if (!idno || idno.length > 64) {
+  const idno = parseIdno((await params).idno);
+  if (!idno) {
     return { error: NextResponse.json({ error: "invalid_idno" }, { status: 400 }) };
   }
   return { user, idno };
@@ -24,7 +25,9 @@ async function guard(params: Promise<{ idno: string }>) {
 /**
  * Sets the carried-over balance (from 1C) of a counterparty:
  * `{ asOfDate: "YYYY-MM-DD", amount: number (+ they owe us), note?: string }`.
- * `amount: 0` removes it.
+ * `amount` must be a finite number or a numeric string; null / "" / booleans
+ * are rejected (400) instead of silently deleting. Only an explicit
+ * `amount: 0` (or DELETE) removes it.
  */
 export async function PUT(request: Request, { params }: { params: Promise<{ idno: string }> }) {
   const g = await guard(params);
@@ -32,13 +35,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ idno
   const { user, idno } = g;
 
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const amount = typeof body.amount === "number" ? body.amount : Number(body.amount);
-  if (!Number.isFinite(amount) || Math.abs(amount) > 1e11) {
+  const amount = parseAmountValue(body.amount);
+  if (amount === null || Math.abs(amount) > 1e11) {
     return NextResponse.json({ error: "invalid_amount" }, { status: 400 });
   }
   const rounded = Math.round(amount * 100) / 100;
+  // Rounds to 0 but is not an explicit 0 (e.g. "0.001", "0") → not a delete.
+  if (rounded === 0 && body.amount !== 0) {
+    return NextResponse.json({ error: "invalid_amount" }, { status: 400 });
+  }
   try {
-    if (rounded === 0) {
+    if (body.amount === 0) {
       const removed = await prisma.counterpartyOpeningBalance.deleteMany({ where: { idno } });
       if (removed.count > 0) {
         await writeAudit(actorOf(user), {

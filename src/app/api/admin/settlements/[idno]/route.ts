@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
+import { parseIdno } from "@/lib/settlements/guard";
 import { loadSettlementLedger } from "@/lib/settlements/load";
 import { parseSettlementPeriod } from "@/lib/settlements/period";
 
@@ -19,9 +20,8 @@ export async function GET(
   if (!isSuperAdmin(user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const { idno: raw } = await params;
-  const idno = decodeURIComponent(raw).trim();
-  if (!idno || idno.length > 64) {
+  const idno = parseIdno((await params).idno);
+  if (!idno) {
     return NextResponse.json({ error: "invalid_idno" }, { status: 400 });
   }
   try {

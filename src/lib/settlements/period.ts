@@ -138,3 +138,25 @@ export function sliceLedger(entries: readonly LedgerEntry[], period: SettlementP
     totals: ledgerTotals(inside),
   };
 }
+
+/**
+ * First day the act subtitle names («за период с … по …») when the period has
+ * no explicit start: the earliest entry day, or the 1C opening balance date if
+ * that is earlier — but the opening only counts when it is actually included
+ * (dated on/before `to`; one dated after `to` is left out of the slice).
+ */
+export function actPeriodStart(
+  period: SettlementPeriod,
+  entries: readonly Pick<LedgerEntry, "date">[],
+  openingAsOf: string | null,
+): string | null {
+  if (period.from) return period.from;
+  let first: string | null = null;
+  for (const e of entries) {
+    const day = entryDay(e);
+    if (day && (first === null || day < first)) first = day;
+  }
+  const openingIncluded = !!openingAsOf && (!period.to || openingAsOf <= period.to);
+  if (openingIncluded && (first === null || openingAsOf! < first)) return openingAsOf;
+  return first;
+}

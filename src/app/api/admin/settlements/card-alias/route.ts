@@ -3,6 +3,9 @@ import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { actorOf, writeAudit } from "@/lib/settlements/audit";
+import { DEFAULT_COUNTERPARTY_CATEGORIES } from "@/lib/settlements/categories";
+import { parseIdno } from "@/lib/settlements/guard";
+import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
 
 export const runtime = "nodejs";
 
@@ -10,7 +13,8 @@ export const runtime = "nodejs";
  * «Оплаты картой»: binds a card merchant (normalized key) to a supplier.
  * Body `{ merchantKey, idno: string | null, name? }` — `idno: null` marks the
  * merchant «не поставщик» (stays a bank row). `{ merchantKey, reset: true }`
- * removes the manual choice (back to automatic attribution).
+ * removes the manual choice (back to automatic attribution). An alias to our
+ * own IDNO (company fiscal code / category «own») is rejected: 400 own_idno.
  */
 export async function PUT(request: NextRequest) {
   const user = await getSessionUser();
@@ -39,8 +43,18 @@ export async function PUT(request: NextRequest) {
     }
     let idno: string | null;
     if (body.idno === null) idno = null;
-    else if (typeof body.idno === "string" && /^\d{7,20}$/.test(body.idno.trim())) idno = body.idno.trim();
-    else return NextResponse.json({ error: "invalid_idno" }, { status: 400 });
+    else {
+      idno = parseIdno(body.idno);
+      if (!idno) return NextResponse.json({ error: "invalid_idno" }, { status: 400 });
+      const [company, manual] = await Promise.all([
+        getOrCreateCompanyProfile(),
+        prisma.counterpartyCategory.findUnique({ where: { idno }, select: { category: true } }),
+      ]);
+      const own =
+        idno === company.fiscalCode?.trim() ||
+        (manual ? manual.category === "own" : DEFAULT_COUNTERPARTY_CATEGORIES[idno] === "own");
+      if (own) return NextResponse.json({ error: "own_idno" }, { status: 400 });
+    }
 
     await prisma.cardMerchantAlias.upsert({
       where: { merchantKey },

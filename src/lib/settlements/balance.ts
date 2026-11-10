@@ -315,11 +315,13 @@ export function computeSettlements(input: SettlementInput): SettlementResult {
   );
   for (const r of receipts) {
     const amount = cents(r.amount);
-    if (amount <= 0) continue;
+    if (amount === 0) continue;
+    // A B/f storno (negative total) nets against its invoice exactly like the
+    // ledger's receipt_out does — skipping it would leave a phantom balance.
     const acc = get(r.supplierIdno, null);
     acc.paid += amount;
     acc.paidReceipt += amount;
-    acc.paidOut.push({ amount, date: r.date, document: r.document });
+    if (amount > 0) acc.paidOut.push({ amount, date: r.date, document: r.document });
   }
 
   for (const [idno, amount] of input.openingBalances ?? []) {

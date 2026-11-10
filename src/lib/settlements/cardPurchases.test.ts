@@ -103,7 +103,15 @@ describe("matchByName", () => {
     expect(matchByName("ULTRACOMLIVRARE", names)).toBe("2");
   });
   it("needs exactly one IDNO", () => {
-    expect(matchByName("METROCASHCARRYSTAUCENI", names)).toBeNull();
+    expect(
+      matchByName("METROCASHCARRYSTAUCENI", [...names, { idno: "5", key: "METROCASH" }]),
+    ).toBeNull();
+  });
+  it("short key inside a long one is not a hit (METRO vs METROCASHCARRYSTAUCENI)", () => {
+    expect(matchByName("METROCASHCARRYSTAUCENI", names)).toBe("4");
+    expect(matchByName("METROSTAUCENI", [{ idno: "3", key: "METRO" }])).toBeNull();
+    // ≥ 60 % of the longer key is still a substring match.
+    expect(matchByName("SOLINGS", [{ idno: "1", key: "SOLING" }])).toBe("1");
   });
   it("needs at least 5 chars on the shorter side", () => {
     expect(matchByName("TMLIVRARE", [{ idno: "9", key: "TM" }])).toBeNull();

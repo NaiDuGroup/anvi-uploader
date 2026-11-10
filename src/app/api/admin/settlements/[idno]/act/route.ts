@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { buildSettlementAct } from "@/lib/settlements/act";
+import { parseIdno } from "@/lib/settlements/guard";
+import { pdfContentDisposition } from "@/lib/settlements/http";
 import { loadSettlementLedger } from "@/lib/settlements/load";
-import { entryDay, parseSettlementPeriod } from "@/lib/settlements/period";
+import { actPeriodStart, parseSettlementPeriod } from "@/lib/settlements/period";
 
 export const runtime = "nodejs";
 
@@ -14,9 +16,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ idno
   if (!isSuperAdmin(user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const { idno: raw } = await params;
-  const idno = decodeURIComponent(raw).trim();
-  if (!idno || idno.length > 64) {
+  const idno = parseIdno((await params).idno);
+  if (!idno) {
     return NextResponse.json({ error: "invalid_idno" }, { status: 400 });
   }
   const url = new URL(request.url);
@@ -26,9 +27,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ idno
   try {
     const ledger = await loadSettlementLedger(idno, period);
     const act = buildSettlementAct(ledger);
-    const firstDated = ledger.entries.find((e) => e.date);
-    const firstDay =
-      ledger.openingBalance?.asOfDate ?? (firstDated ? entryDay(firstDated) : null);
+    const firstDay = actPeriodStart(period, ledger.entries, ledger.openingBalance?.asOfDate ?? null);
 
     const { renderSettlementActPdf } = await import("@/lib/settlements/actPdf");
     const buffer = await renderSettlementActPdf({
@@ -44,7 +43,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ idno
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="act-sverki-${encodeURIComponent(safeName)}.pdf"`,
+        "Content-Disposition": pdfContentDisposition(`act-sverki-${safeName}`),
         "Cache-Control": "no-store",
       },
     });

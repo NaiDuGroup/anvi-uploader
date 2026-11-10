@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { User } from "@prisma/client";
 import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
+import { IDNO_PATTERN, parseIdnoValue } from "./http";
 
 /** Bookkeeping API guard: super admin only. */
 export async function requireSuperAdmin(): Promise<{ user: User } | { response: NextResponse }> {
@@ -11,7 +12,10 @@ export async function requireSuperAdmin(): Promise<{ user: User } | { response: 
   return { user };
 }
 
-export const IDNO_RE = /^[0-9A-Za-z]{4,20}$/;
+export const IDNO_RE = IDNO_PATTERN;
+
+/** Trimmed IDNO matching IDNO_RE, else null (→ 400 invalid_idno). */
+export const parseIdno = parseIdnoValue;
 
 /** `{ ids: string[] }` → up to 500 distinct non-empty ids. */
 export function parseIds(body: unknown): string[] | null {

@@ -128,23 +128,68 @@ function parseAttachedRef(xml: string): string | null {
 }
 
 /**
- * Interprets an attached-document reference. Any fiscal-receipt / POS marker
- * (bon fiscal / b/f, bon, cec, numerar, card) means the invoice was already
- * collected at the counter, so it will never appear as a bank transfer.
+ * Fiscal-receipt markers. A bare «bon» is NOT one: «bon de comandă» (purchase
+ * order), «bon de livrare / predare» (delivery note) are ordinary paperwork.
+ * Accepted: b/f (b f, b.f), «bon(ul) fiscal», «bonuri fiscale», «cec / cek»
+ * (optionally «fiscal»).
  */
-function interpretReceipt(ref: string | null): {
+const RECEIPT_MARKERS: readonly RegExp[] = [
+  /\bb\s*[/.]?\s*f\b\.?/i,
+  /\bbon(?:ul|uri)?\s+fiscal(?:e)?\b/i,
+  /\bce[ck](?:ul)?\b(?:\s+fiscal\b)?/i,
+];
+/** Payment-method words that on their own also mean "collected at the counter". */
+const METHOD_MARKERS: readonly RegExp[] = [/\bnumerar\b/i, /\bcard\b/i];
+
+const DATE_RE = /(\d{2})[.\-/](\d{2})[.\-/](\d{2,4})/g;
+
+function firstMarkerIndex(ref: string, patterns: readonly RegExp[]): number {
+  let best = -1;
+  for (const re of patterns) {
+    const m = re.exec(ref);
+    if (m && (best < 0 || m.index < best)) best = m.index;
+  }
+  return best;
+}
+
+/** DD.MM.YYYY nearest after `from` (else the last one before it) as UTC midnight ISO. */
+function receiptDateNear(ref: string, from: number): string | null {
+  let before: RegExpExecArray | null = null;
+  let after: RegExpExecArray | null = null;
+  for (const m of ref.matchAll(DATE_RE)) {
+    const dd = Number(m[1]);
+    const mm = Number(m[2]);
+    if (dd < 1 || dd > 31 || mm < 1 || mm > 12) continue;
+    if (m.index! >= from) {
+      after = m as RegExpExecArray;
+      break;
+    }
+    before = m as RegExpExecArray;
+  }
+  const m = after ?? before;
+  if (!m) return null;
+  let year = Number(m[3]);
+  if (year < 100) year += 2000;
+  return new Date(Date.UTC(year, Number(m[2]) - 1, Number(m[1]))).toISOString();
+}
+
+/**
+ * Interprets an attached-document reference. A fiscal-receipt marker (b/f,
+ * bon fiscal, cec) or a POS payment word (numerar, card) means the invoice
+ * was already collected at the counter, so it will never appear as a bank
+ * transfer. The receipt date is the date nearest AFTER the marker (a contract
+ * date earlier in the same note is not the receipt date). Shared by the sales
+ * (fiscal_invoices) and purchase sides.
+ */
+export function interpretReceipt(ref: string | null): {
   settledByReceipt: boolean;
   receiptMethod: "card" | "cash" | null;
   receiptDate: string | null;
 } {
   if (!ref) return { settledByReceipt: false, receiptMethod: null, receiptDate: null };
-  const isReceipt =
-    /\bb\s*\/?\s*f\b/i.test(ref) ||
-    /\bbon\b/i.test(ref) ||
-    /\bcec\b/i.test(ref) ||
-    /\bnumerar\b/i.test(ref) ||
-    /\bcard\b/i.test(ref);
-  if (!isReceipt) {
+  const receiptAt = firstMarkerIndex(ref, RECEIPT_MARKERS);
+  const methodAt = firstMarkerIndex(ref, METHOD_MARKERS);
+  if (receiptAt < 0 && methodAt < 0) {
     return { settledByReceipt: false, receiptMethod: null, receiptDate: null };
   }
   const receiptMethod: "card" | "cash" | null = /\bcard\b/i.test(ref)
@@ -152,14 +197,7 @@ function interpretReceipt(ref: string | null): {
     : /\bnumerar\b/i.test(ref)
       ? "cash"
       : null;
-  // First DD.MM.YYYY / DD.MM.YY (also with - or / separators) anywhere in the ref.
-  const m = ref.match(/(\d{2})[.\-/](\d{2})[.\-/](\d{2,4})/);
-  let receiptDate: string | null = null;
-  if (m) {
-    let year = Number(m[3]);
-    if (year < 100) year += 2000;
-    receiptDate = new Date(Date.UTC(year, Number(m[2]) - 1, Number(m[1]))).toISOString();
-  }
+  const receiptDate = receiptDateNear(ref, receiptAt >= 0 ? receiptAt : methodAt);
   return { settledByReceipt: true, receiptMethod, receiptDate };
 }
 

@@ -136,7 +136,9 @@ export async function loadCardPurchases(
   categories: SettlementInput["categories"],
 ): Promise<{ cards: CardPurchase[]; names: Map<string, string> }> {
   const bankIdnos = new Set<string>();
-  const excluded = new Set<string>();
+  // Never auto-chosen: own, service categories and operational IDNOs
+  // (Сверка «не клиент» list). A manual non-service category lifts it.
+  const excluded = new Set<string>(await loadOperationalIdnos());
   for (const [idno, cat] of Object.entries(DEFAULT_COUNTERPARTY_CATEGORIES)) {
     if (cat === "bank") bankIdnos.add(idno);
     if (SERVICE_CATEGORIES.has(cat)) excluded.add(idno);
@@ -171,6 +173,7 @@ export async function loadCardPurchases(
     }),
   ]);
   if (company.fiscalCode) excluded.add(company.fiscalCode);
+  const settledByBank = await loadBankSettledInvoiceKeys(new Set(debits.map((d) => d.id)));
 
   const names = new Map<string, string>();
   const candidates: Array<{ idno: string; name: string }> = [];
@@ -197,10 +200,38 @@ export async function loadCardPurchases(
       supplierIdno: p.supplierIdno,
       totalAmount: p.totalAmount,
       issueDate: p.issueDate,
+      // Already paid by B/f or a confirmed bank transfer: a card amount match
+      // takes these only when no open invoice fits.
+      settled: !!p.receipt || settledByBank.has(`${p.supplierIdno}|${p.document}`),
     })),
     excludedIdnos: excluded,
   });
   return { cards, names };
+}
+
+/**
+ * `supplierIdno|seria+number` of purchase invoices with a confirmed payment
+ * allocation from a bank transfer (not from one of the card debits being
+ * attributed). Empty when the table is missing.
+ */
+async function loadBankSettledInvoiceKeys(cardDebitIds: ReadonlySet<string>): Promise<Set<string>> {
+  try {
+    const rows = await prisma.supplierPaymentAllocation.findMany({
+      where: { status: "confirmed" },
+      select: {
+        bankTransactionId: true,
+        purchaseInvoice: { select: { supplierIdno: true, seria: true, number: true } },
+      },
+    });
+    const keys = new Set<string>();
+    for (const r of rows) {
+      if (cardDebitIds.has(r.bankTransactionId) || !r.purchaseInvoice.supplierIdno) continue;
+      keys.add(`${r.purchaseInvoice.supplierIdno}|${r.purchaseInvoice.seria}${r.purchaseInvoice.number}`);
+    }
+    return keys;
+  } catch {
+    return new Set();
+  }
 }
 
 /** Counts / sums for «Оплаты картой» and merchants grouped by key. */
@@ -516,7 +547,10 @@ export async function loadSettlementLedger(
     categories,
   );
   const cards = allCards.filter((c) => c.idno === idno);
-  const cardIds = new Set(cards.map((c) => c.debitId));
+  // A card debit attributed to ANY supplier moves off the bank's row (the
+  // list does the same in computeSettlements), so skip every attributed one —
+  // not just this party's — or the bank ledger counts it twice.
+  const cardIds = new Set(allCards.flatMap((c) => (c.idno ? [c.debitId] : [])));
 
   type Raw = Omit<LedgerEntry, "balance"> & { sort: number };
   const raw: Raw[] = [];
