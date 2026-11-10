@@ -1607,6 +1607,24 @@ model ReconciliationExclusion {
   @@map("reconciliation_exclusions")
 }
 
+/// «Взаиморасчёты»: what kind of party a fiscal code (IDNO/IDNP) is. Service
+/// categories (tax, own, bank, staff, courier) stay out of supplier payments
+/// and balances. Built-in defaults live in `src/lib/settlements/categories.ts`;
+/// a row here overrides them.
+model CounterpartyCategory {
+  id          String   @id @default(uuid())
+  idno        String   @unique
+  /// supplier | customer | tax | own | bank | staff | courier | other
+  category    String
+  name        String?
+  note        String?
+  updatedById String?  @map("updated_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("counterparty_categories")
+}
+
 /// Incoming fiscal invoice from e-Factura where ANVI is the buyer (supplier purchases).
 /// Kept apart from `FiscalInvoice` (our receivables) so reconciliation is unaffected.
 model PurchaseInvoice {
@@ -1623,6 +1641,9 @@ model PurchaseInvoice {
   totalAmount      Decimal?  @map("total_amount") @db.Decimal(14, 2)
   /// new | needs_review | partially_posted | posted | ignored
   status           String    @default("new")
+  /// Imported by the history backfill (issued before the normal sync window).
+  /// Totals only: no lines, never enters the stock review / auto-post flow.
+  historical       Boolean   @default(false)
   rawXml           String?   @map("raw_xml") @db.Text
   detailsFetchedAt DateTime? @map("details_fetched_at")
   lastSyncedAt     DateTime  @default(now()) @map("last_synced_at")
@@ -1635,6 +1656,7 @@ model PurchaseInvoice {
   @@index([status])
   @@index([supplierIdno])
   @@index([issueDate])
+  @@index([historical, detailsFetchedAt])
   @@map("purchase_invoices")
 }
 

@@ -21,12 +21,13 @@ import {
 import { unifiedVariantUnit } from "./unifiedStockTarget";
 
 /** Incoming statuses worth importing: sent to us, and signed by us. */
-const INCOMING_STATUSES: readonly number[] = [
+export const INCOMING_STATUSES: readonly number[] = [
   EFACTURA_STATUS.SENT_TO_BUYER,
   EFACTURA_STATUS.SIGNED_BUYER,
 ];
 
-const DEFAULT_LOOKBACK_DAYS = 45;
+/** Normal sync window; older invoices only arrive through the history backfill. */
+export const DEFAULT_LOOKBACK_DAYS = 45;
 /** XML fetches per run — keeps a cron invocation well under its time limit. */
 const MAX_DETAIL_FETCHES = 60;
 
@@ -46,28 +47,35 @@ function decimalOrNull(n: number | null): Prisma.Decimal | null {
   return n == null ? null : new Prisma.Decimal(n);
 }
 
+/** Invoice header fields (supplier, dates, totals) parsed from its XML. */
+export function purchaseHeaderFromXml(
+  parsed: ParsedInvoiceXml,
+  xml: string,
+): Prisma.PurchaseInvoiceUpdateInput {
+  const total: number | null = toNumber(parsed.totalAmount);
+  const vat: number | null = toNumber(parsed.vatAmount);
+  return {
+    supplierIdno: parsed.supplierIdno,
+    supplierName: parsed.supplierName,
+    issueDate: toDate(parsed.issueDate),
+    deliveryDate: toDate(parsed.deliveryDate),
+    totalAmount: decimalOrNull(total),
+    vatAmount: decimalOrNull(vat),
+    totalExVat: decimalOrNull(total != null ? total - (vat ?? 0) : null),
+    rawXml: xml,
+    detailsFetchedAt: new Date(),
+  };
+}
+
 async function storeInvoiceDetails(
   invoiceId: string,
   parsed: ParsedInvoiceXml,
   xml: string,
 ): Promise<void> {
-  const total: number | null = toNumber(parsed.totalAmount);
-  const vat: number | null = toNumber(parsed.vatAmount);
-
   await prisma.$transaction(async (tx) => {
     await tx.purchaseInvoice.update({
       where: { id: invoiceId },
-      data: {
-        supplierIdno: parsed.supplierIdno,
-        supplierName: parsed.supplierName,
-        issueDate: toDate(parsed.issueDate),
-        deliveryDate: toDate(parsed.deliveryDate),
-        totalAmount: decimalOrNull(total),
-        vatAmount: decimalOrNull(vat),
-        totalExVat: decimalOrNull(total != null ? total - (vat ?? 0) : null),
-        rawXml: xml,
-        detailsFetchedAt: new Date(),
-      },
+      data: purchaseHeaderFromXml(parsed, xml),
     });
 
     const lines: Prisma.PurchaseInvoiceLineCreateManyInput[] = parsed.lines
@@ -208,14 +216,18 @@ async function applyMappings(invoiceId: string, costsIncludeVat: boolean): Promi
   return outcomes;
 }
 
-async function discover(
+export type InvoiceIdentity = { seria: string; number: string; status: number };
+
+/** Lists invoice identities (no totals) issued in the range, per e-Factura status. */
+export async function discoverPurchaseInvoices(
   client: EFacturaClient,
-  issuedFrom: Date,
-): Promise<Array<{ seria: string; number: string; status: number }>> {
+  range: { issuedFrom: Date; issuedTo: Date; statuses?: readonly number[] },
+): Promise<InvoiceIdentity[]> {
   if (!client.searchInvoices) return [];
-  const found: Array<{ seria: string; number: string; status: number }> = [];
-  for (const invoiceStatus of INCOMING_STATUSES) {
-    const rows = await client.searchInvoices({ invoiceStatus, issuedFrom, issuedTo: new Date() });
+  const { issuedFrom, issuedTo } = range;
+  const found: InvoiceIdentity[] = [];
+  for (const invoiceStatus of range.statuses ?? INCOMING_STATUSES) {
+    const rows = await client.searchInvoices({ invoiceStatus, issuedFrom, issuedTo });
     for (const r of rows) {
       if (r.seria && r.number) found.push({ seria: r.seria, number: r.number, status: r.status });
     }
@@ -229,7 +241,7 @@ async function discover(
  * Idempotent: re-running only refreshes statuses and resumes pending work.
  */
 export async function syncPurchaseInvoices(
-  options: { lookbackDays?: number } = {},
+  options: { lookbackDays?: number; statuses?: readonly number[] } = {},
 ): Promise<PurchaseSyncResult> {
   const result: PurchaseSyncResult = {
     skipped: null,
@@ -247,7 +259,11 @@ export async function syncPurchaseInvoices(
 
   const lookbackDays: number = options.lookbackDays ?? DEFAULT_LOOKBACK_DAYS;
   const issuedFrom = new Date(Date.now() - lookbackDays * 24 * 60 * 60 * 1000);
-  const identities = await discover(client, issuedFrom);
+  const identities = await discoverPurchaseInvoices(client, {
+    issuedFrom,
+    issuedTo: new Date(),
+    statuses: options.statuses,
+  });
   result.discovered = identities.length;
 
   for (const id of identities) {
@@ -258,8 +274,9 @@ export async function syncPurchaseInvoices(
     });
   }
 
+  // Backfilled history fetches its own totals and never gets lines.
   const pending = await prisma.purchaseInvoice.findMany({
-    where: { detailsFetchedAt: null },
+    where: { detailsFetchedAt: null, historical: false },
     orderBy: { createdAt: "asc" },
     select: { id: true, seria: true, number: true },
   });
@@ -282,6 +299,7 @@ export async function syncPurchaseInvoices(
   const open = await prisma.purchaseInvoice.findMany({
     where: {
       detailsFetchedAt: { not: null },
+      historical: false,
       lines: {
         some: { status: { in: [PurchaseLineStatus.Unmatched, PurchaseLineStatus.Suggested] } },
       },
