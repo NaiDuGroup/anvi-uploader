@@ -92,6 +92,7 @@ export interface SettlementExtraLabels {
     autoUser: string;
     idnoFilter: string;
     actions: Record<AuditAction, string>;
+    unrejectAction: string;
     colAt: string;
     colUser: string;
     colAction: string;
@@ -272,6 +273,7 @@ const RU: SettlementExtraLabels = {
     allActions: "Все действия",
     allUsers: "Все пользователи",
     autoUser: "Автоматически",
+    unrejectAction: "Вернул отклонённую подсказку",
     idnoFilter: "IDNO",
     actions: {
       match: "Сопоставил оплату",

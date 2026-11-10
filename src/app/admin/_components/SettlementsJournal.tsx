@@ -43,6 +43,10 @@ export default function SettlementsJournal({
   names?: ReadonlyMap<string, string>;
 }) {
   const J = X.journal;
+  const actionLabel = (e: { action: string; details: Record<string, unknown> | null }) =>
+    e.action === "unconfirm" && e.details?.previousStatus === "rejected"
+      ? J.unrejectAction
+      : ((J.actions as Record<string, string>)[e.action] ?? e.action);
   const compact = Boolean(fixedIdno);
   const [page, setPage] = useState(1);
   const [action, setAction] = useState("");
@@ -171,7 +175,7 @@ export default function SettlementsJournal({
                   {e.amount != null ? <span className="shrink-0 tabular-nums text-gray-800">{money(e.amount)}</span> : null}
                 </div>
                 <div className="font-medium text-gray-900">
-                  {(J.actions as Record<string, string>)[e.action] ?? e.action}
+                  {actionLabel(e)}
                   {!compact && e.counterpartyIdno ? (
                     <Link
                       href={`/admin/bookkeeping/settlements/${encodeURIComponent(e.counterpartyIdno)}`}
@@ -207,7 +211,7 @@ export default function SettlementsJournal({
                       <td className="whitespace-nowrap px-3 py-1.5 text-xs text-gray-500">{formatAt(e.at)}</td>
                       <td className="whitespace-nowrap px-3 py-1.5 text-xs text-gray-700">{e.userName ?? J.autoUser}</td>
                       <td className="whitespace-nowrap px-3 py-1.5 text-xs font-medium text-gray-900">
-                        {(J.actions as Record<string, string>)[e.action] ?? e.action}
+                        {actionLabel(e)}
                       </td>
                       <td className="px-3 py-1.5 text-xs">{partyCell(e.counterpartyIdno)}</td>
                       <td className="whitespace-nowrap px-3 py-1.5 text-right text-xs tabular-nums text-gray-800">
