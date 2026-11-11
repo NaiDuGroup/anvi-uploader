@@ -55,12 +55,12 @@ export default function BookkeepingLayoutClient({
   return (
     <div>
       <div
-        className="sticky z-10 border-b border-gray-200/80 bg-white/95 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/90"
+        className="z-10 border-b md:sticky border-gray-200/80 bg-white/95 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/90"
         style={{ top: "var(--admin-header-h, 7.5rem)" }}
       >
-        <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5 sm:py-3.5">
+        <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-5 sm:py-3.5">
           <div className="min-w-0">
-            <h1 className="text-lg font-bold tracking-tight text-gray-900 sm:text-xl">
+            <h1 className="text-base font-bold tracking-tight text-gray-900 sm:text-xl">
               {t.admin.navBookkeeping}
             </h1>
             <p className="mt-0.5 hidden text-sm text-gray-500 sm:block">
@@ -80,7 +80,7 @@ export default function BookkeepingLayoutClient({
                   key={tab.href}
                   href={tab.href}
                   className={cn(
-                    "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium transition-all sm:flex-none sm:px-4 sm:text-sm",
+                    "inline-flex min-h-10 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-1.5 py-2 text-[11px] sm:min-h-0 min-[380px]:text-xs font-medium transition-all sm:flex-none sm:px-4 sm:text-sm",
                     active
                       ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200/80"
                       : "text-gray-500 hover:text-gray-800",

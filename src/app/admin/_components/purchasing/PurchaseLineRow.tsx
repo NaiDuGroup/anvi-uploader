@@ -191,7 +191,7 @@ export default function PurchaseLineRow({
       </div>
 
       {line.posted && (
-        <p className="mt-2 flex items-center gap-2 text-sm text-emerald-800">
+        <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-emerald-800 md:flex-nowrap">
           <Check className="h-4 w-4" aria-hidden />
           {line.status === PurchaseLineStatus.Ignored
             ? p.ignoredNote
@@ -215,7 +215,7 @@ export default function PurchaseLineRow({
             <Button
               size="sm"
               variant="ghost"
-              className="ml-auto h-7 text-gray-600"
+              className="ml-auto h-9 text-gray-600 md:h-7"
               disabled={busy}
               onClick={() => void onUnpost(line.id)}
             >
@@ -233,7 +233,7 @@ export default function PurchaseLineRow({
       {!done && (
         <>
           {line.suggestions.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-col gap-2 md:flex-row md:flex-wrap">
               {line.suggestions.map((s) => {
                 const left: number = Math.max(0, AUTO_POST_CONFIRMATIONS - s.confirmedCount);
                 const active: boolean = s.kind === draftKind && (s.targetId ?? "") === draft.targetId;
@@ -243,30 +243,41 @@ export default function PurchaseLineRow({
                     type="button"
                     onClick={() => setDraft(draftFromSuggestion(s, knownTargets, locale))}
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs ring-1",
+                      "flex min-h-10 w-full items-start gap-2 rounded-xl px-3 py-2 text-left text-xs ring-1 md:inline-flex md:min-h-0 md:w-auto md:items-center md:gap-1.5 md:rounded-full md:py-1 md:text-center",
                       active
                         ? "bg-amber-50 text-amber-900 ring-amber-300"
                         : "bg-gray-50 text-gray-700 ring-gray-200 hover:bg-gray-100",
                     )}
                   >
                     {s.source === SuggestionSource.Mapping ? (
-                      <Zap className="h-3.5 w-3.5" aria-hidden />
+                      <Zap className="mt-0.5 h-3.5 w-3.5 shrink-0 md:mt-0" aria-hidden />
                     ) : (
-                      <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                      <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 md:mt-0" aria-hidden />
                     )}
-                    {s.kind === StockTargetKind.Ignore
-                      ? p.kinds.ignore
-                      : targetDisplayName(s.kind, s.targetId, s.targetName, t, locale, knownTargets)}
-                    {s.source === SuggestionSource.Mapping && (
-                      <span className="text-gray-500">
-                        · {p.rememberedRule(s.confirmedCount)} ·{" "}
-                        {left === 0 ? p.autoReady : p.autoAfter(left)}
+                    {/* Phone: name on its own line, reason below in small gray; md+: `contents` keeps the one-line pill. */}
+                    <span className="min-w-0 flex-1 md:contents">
+                      <span className="block break-words font-medium md:inline md:font-normal">
+                        {s.kind === StockTargetKind.Ignore
+                          ? p.kinds.ignore
+                          : targetDisplayName(s.kind, s.targetId, s.targetName, t, locale, knownTargets)}
                       </span>
+                      {s.source === SuggestionSource.Mapping && (
+                        <span className="mt-0.5 block text-[11px] text-gray-500 md:mt-0 md:inline md:text-xs">
+                          <span className="hidden md:inline">· </span>
+                          {p.rememberedRule(s.confirmedCount)} ·{" "}
+                          {left === 0 ? p.autoReady : p.autoAfter(left)}
+                        </span>
+                      )}
+                      {s.source === SuggestionSource.Similarity && (
+                        <span className="mt-0.5 block text-[11px] text-gray-500 md:mt-0 md:inline md:text-xs md:text-gray-400">
+                          <span className="hidden md:inline">· </span>
+                          {p.similarity}
+                        </span>
+                      )}
+                    </span>
+                    {s.priceDrift && (
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-600 md:mt-0" aria-label={p.priceDrift} />
                     )}
-                    {s.source === SuggestionSource.Similarity && (
-                      <span className="text-gray-400">· {p.similarity}</span>
-                    )}
-                    {s.priceDrift && <AlertTriangle className="h-3.5 w-3.5 text-red-600" aria-label={p.priceDrift} />}
                   </button>
                 );
               })}
@@ -368,7 +379,7 @@ export default function PurchaseLineRow({
                     ? <span className="text-amber-700">{p.errorWholeUnits}</span>
                     : ""}
             </p>
-            <div className="flex gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto">
               <Button
                 variant="outline"
                 disabled={busy}

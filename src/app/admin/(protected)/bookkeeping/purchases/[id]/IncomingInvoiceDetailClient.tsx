@@ -197,13 +197,13 @@ export default function IncomingInvoiceDetailClient({ invoiceId }: Props) {
     <main className="mx-auto w-full max-w-[1600px] px-4 pb-6 sm:px-5">
       <Link
         href="/admin/bookkeeping/purchases"
-        className="mb-4 inline-block text-sm text-gray-600 hover:text-gray-900"
+        className="mb-4 inline-block py-2 text-sm text-gray-600 hover:text-gray-900 md:py-0"
       >
         {p.backToList}
       </Link>
 
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-gray-900">
             {invoice.seria} {invoice.number}
           </h1>
@@ -216,7 +216,7 @@ export default function IncomingInvoiceDetailClient({ invoiceId }: Props) {
             {p.invoiceStatus[invoice.status]}
           </p>
         </div>
-        <div className="text-right text-sm tabular-nums">
+        <div className="w-full text-sm tabular-nums md:w-auto md:text-right">
           <p className="text-gray-700">
             {invoice.totalExVat != null ? formatMdl(invoice.totalExVat, locale) : "—"} {p.exVat}
           </p>
@@ -240,7 +240,11 @@ export default function IncomingInvoiceDetailClient({ invoiceId }: Props) {
 
       {bulkLines.length > 0 && (
         <div className="mb-4 flex justify-end">
-          <Button onClick={() => void postAllSuggested()} disabled={bulkBusy || busyLineId !== null}>
+          <Button
+            className="w-full md:w-auto"
+            onClick={() => void postAllSuggested()}
+            disabled={bulkBusy || busyLineId !== null}
+          >
             {bulkBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             ) : (

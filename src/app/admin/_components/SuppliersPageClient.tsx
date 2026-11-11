@@ -68,14 +68,14 @@ export default function SuppliersPageClient() {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-500">{L.suppliersSubtitle}</p>
-        <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+        <div className="grid w-full grid-cols-3 gap-0.5 rounded-lg border border-gray-200 bg-white p-0.5 md:inline-flex md:w-auto md:gap-0">
           {KINDS.map((k) => (
             <button
               key={k}
               type="button"
               onClick={() => setKind(k)}
               className={cn(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                "min-h-10 rounded-md px-1.5 py-1.5 text-center text-xs font-medium leading-tight transition-colors md:min-h-0 md:px-3 md:text-sm md:leading-normal",
                 kind === k
                   ? "bg-gray-900 text-white"
                   : "text-gray-600 hover:bg-gray-100",
@@ -88,7 +88,7 @@ export default function SuppliersPageClient() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="relative w-full max-w-xs">
+        <div className="relative w-full md:max-w-xs">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input
             value={query}
@@ -106,6 +106,8 @@ export default function SuppliersPageClient() {
           }}
           locale={locale}
           t={t}
+          phoneFill
+          className="max-sm:w-full"
         />
         {hasFilters && (
           <button
@@ -115,7 +117,7 @@ export default function SuppliersPageClient() {
               setDateFrom("");
               setDateTo("");
             }}
-            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-500"
+            className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-500 md:min-h-0"
           >
             <X className="h-3.5 w-3.5" />
             {L.filterReset}
@@ -123,10 +125,10 @@ export default function SuppliersPageClient() {
         )}
       </div>
 
-      <div className="mb-4 flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm md:flex-nowrap">
         <Wallet className="h-5 w-5 text-gray-400" />
         <span className="text-sm text-gray-500">{L.totalPaidLabel}:</span>
-        <span className="text-lg font-bold text-gray-900">
+        <span className="whitespace-nowrap text-lg font-bold text-gray-900">
           {formatMoney(grandTotal, CUR, locale)}
         </span>
       </div>
@@ -142,9 +144,50 @@ export default function SuppliersPageClient() {
         </div>
       ) : (
         <>
+          <ul
+            className={cn(
+              "space-y-2 transition-opacity md:hidden",
+              isLoading && "opacity-60",
+            )}
+          >
+            {suppliers.map((s) => (
+              <li key={s.idno ?? s.name}>
+                <button
+                  type="button"
+                  onClick={() => setSelected(s)}
+                  className="block w-full rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-colors active:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 break-words font-medium text-gray-900">
+                      {s.name}
+                    </span>
+                    <span className="whitespace-nowrap font-semibold tabular-nums text-gray-900">
+                      {formatMoney(s.total, CUR, locale)}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 text-xs text-gray-500">
+                    <span className="whitespace-nowrap">
+                      {formatShortDate(s.lastPaymentDate)}
+                    </span>
+                    {" · "}
+                    <span className="whitespace-nowrap">
+                      {L.colPaymentsCount}: {s.count}
+                    </span>
+                    {s.idno ? (
+                      <>
+                        {" · "}
+                        <span className="whitespace-nowrap">{s.idno}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+
           <div
             className={cn(
-              "overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm transition-opacity",
+              "hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm transition-opacity md:block",
               isLoading && "opacity-60",
             )}
           >
@@ -188,7 +231,7 @@ export default function SuppliersPageClient() {
             </table>
           </div>
 
-          <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-600 md:flex-nowrap md:gap-0">
             <span>{L.suppliersCount(totalCount)}</span>
             {totalPages > 1 && (
               <div className="flex items-center gap-2">
@@ -258,9 +301,9 @@ function SupplierPaymentsDrawer({
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/30" onClick={onClose} aria-hidden />
       <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-xl">
-        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-100 bg-white px-5 py-4">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">{supplier.name}</h2>
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-gray-100 bg-white px-4 py-4 md:gap-0 md:px-5">
+          <div className="min-w-0">
+            <h2 className="break-words text-lg font-bold text-gray-900">{supplier.name}</h2>
             {supplier.idno && (
               <p className="mt-0.5 text-sm text-gray-400">{supplier.idno}</p>
             )}
@@ -275,7 +318,7 @@ function SupplierPaymentsDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            className="shrink-0 rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 md:p-1.5"
             title={L.close}
           >
             <X className="h-5 w-5" />
@@ -292,11 +335,11 @@ function SupplierPaymentsDrawer({
           <ul className="divide-y divide-gray-100">
             {payments.map((p) => (
               <li key={p.id} className="px-5 py-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-gray-900">
+                <div className="flex items-center justify-between gap-2 md:gap-0">
+                  <span className="whitespace-nowrap font-semibold text-gray-900 md:whitespace-normal">
                     {formatMoney(p.amount, p.currency, locale)}
                   </span>
-                  <span className="text-xs text-gray-400">
+                  <span className="whitespace-nowrap text-xs text-gray-400 md:whitespace-normal">
                     {formatShortDate(p.bookingDate)}
                   </span>
                 </div>

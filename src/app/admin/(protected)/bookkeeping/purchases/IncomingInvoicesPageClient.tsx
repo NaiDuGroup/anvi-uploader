@@ -128,8 +128,8 @@ export default function IncomingInvoicesPageClient() {
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">{p.title}</h1>
           <p className="mt-1 text-sm text-gray-600">{p.intro}</p>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex gap-2">
+        <div className="flex w-full flex-col items-stretch gap-1 md:w-auto md:items-end">
+          <div className="grid grid-cols-1 gap-2 md:flex">
             <Button variant="outline" asChild>
               <Link href="/admin/bookkeeping/purchases/mappings">{p.mappingsLink}</Link>
             </Button>
@@ -142,7 +142,7 @@ export default function IncomingInvoicesPageClient() {
               {syncing ? p.checking : p.checkNow}
             </Button>
           </div>
-          <span className="text-xs text-gray-500">
+          <span className="break-words text-xs text-gray-500">
             {data?.lastSyncedAt ? p.lastSync(formatDateTime(data.lastSyncedAt, locale)) : p.neverSynced}
           </span>
         </div>
@@ -164,14 +164,14 @@ export default function IncomingInvoicesPageClient() {
         </p>
       )}
 
-      <div className="mb-4 inline-flex rounded-lg bg-gray-100 p-1">
+      <div className="mb-4 grid grid-cols-2 rounded-lg bg-gray-100 p-1 md:inline-flex">
         {[ListFilter.Open, ListFilter.All].map((f) => (
           <button
             key={f}
             type="button"
             onClick={() => setFilter(f)}
             className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium",
+              "min-h-9 rounded-md px-3 py-1.5 text-sm font-medium md:min-h-0",
               filter === f ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900",
             )}
           >
@@ -180,7 +180,70 @@ export default function IncomingInvoicesPageClient() {
         ))}
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="md:hidden">
+        {loading && invoices.length === 0 && (
+          <div className="py-8 text-center text-gray-500">
+            <Loader2 className="mx-auto h-5 w-5 animate-spin" aria-hidden />
+          </div>
+        )}
+        {!loading && invoices.length === 0 && (
+          <p className="rounded-xl border border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">
+            {filter === ListFilter.Open ? p.empty : p.emptyAll}
+          </p>
+        )}
+        <ul className="space-y-2">
+          {invoices.map((inv) => {
+            const total: number = Object.values(inv.lineCounts).reduce((a, b) => a + b, 0);
+            const done: number =
+              inv.lineCounts[PurchaseLineStatus.Posted] + inv.lineCounts[PurchaseLineStatus.Ignored];
+            return (
+              <li key={inv.id}>
+                <Link
+                  href={`/admin/bookkeeping/purchases/${inv.id}`}
+                  className="block rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-sm active:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 break-words font-medium text-gray-900">
+                      {inv.supplierName ?? inv.supplierIdno ?? "—"}
+                    </span>
+                    <span className="whitespace-nowrap font-medium tabular-nums text-gray-900">
+                      {inv.totalAmount != null ? `${formatMdl(inv.totalAmount, locale)} MDL` : "—"}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 text-xs text-gray-500">
+                    <span className="whitespace-nowrap">{formatDate(inv.deliveryDate ?? inv.issueDate, locale)}</span>
+                    {" · "}
+                    <span className="whitespace-nowrap">
+                      {inv.seria} {inv.number}
+                    </span>
+                    {inv.supplierName && inv.supplierIdno ? (
+                      <>
+                        {" · "}
+                        <span className="whitespace-nowrap">{inv.supplierIdno}</span>
+                      </>
+                    ) : null}
+                    {" · "}
+                    <span className="whitespace-nowrap tabular-nums">{p.linesProgress(done, total)}</span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    <span
+                      className={cn(
+                        "inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1",
+                        STATUS_TONE[inv.status],
+                      )}
+                    >
+                      {p.invoiceStatus[inv.status]}
+                    </span>
+                    {inv.paymentStatus ? <PaymentStatusPill status={inv.paymentStatus} labels={payLabels} /> : null}
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm md:block">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
             <tr>

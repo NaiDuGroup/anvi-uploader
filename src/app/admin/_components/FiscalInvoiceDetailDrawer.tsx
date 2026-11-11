@@ -74,9 +74,9 @@ export default function FiscalInvoiceDetailDrawer({
         aria-hidden
       />
       <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-xl">
-        <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-100 bg-white px-5 py-4">
-          <div>
-            <div className="flex items-center gap-2">
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-gray-100 bg-white px-4 py-4 md:gap-0 md:px-5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
               <h2 className="text-lg font-bold text-gray-900">
                 {inv?.fullNumber ?? "…"}
               </h2>
@@ -115,7 +115,7 @@ export default function FiscalInvoiceDetailDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+            className="shrink-0 rounded-lg p-2.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 md:p-1.5"
             title={L.close}
           >
             <X className="h-5 w-5" />
@@ -127,7 +127,7 @@ export default function FiscalInvoiceDetailDrawer({
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
         ) : (
-          <div className="flex flex-col gap-6 p-5">
+          <div className="flex flex-col gap-6 p-4 md:p-5">
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400">
                 {L.detailInfo}
@@ -191,7 +191,7 @@ export default function FiscalInvoiceDetailDrawer({
             </section>
 
             <section>
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 md:flex-nowrap md:gap-0">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
                   {L.detailLines}
                 </h3>
@@ -212,7 +212,34 @@ export default function FiscalInvoiceDetailDrawer({
                 )}
               </div>
               {detail && detail.lines.length > 0 ? (
-                <div className="overflow-x-auto rounded-xl border border-gray-200">
+                <>
+                <ul className="space-y-2 md:hidden">
+                  {detail.lines.map((line, i) => (
+                    <li
+                      key={i}
+                      className="rounded-xl border border-gray-200 bg-white p-3 text-sm"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 break-words font-medium text-gray-900">
+                          {line.name ?? "—"}
+                        </span>
+                        <span className="whitespace-nowrap font-medium tabular-nums text-gray-900">
+                          {formatMoney(line.total, cur, locale)}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 text-xs tabular-nums text-gray-500">
+                        <span className="whitespace-nowrap">
+                          {line.quantity ?? "—"} {line.unit ?? ""}
+                        </span>
+                        {" × "}
+                        <span className="whitespace-nowrap">
+                          {formatMoney(line.unitPrice, cur, locale)}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="hidden overflow-x-auto rounded-xl border border-gray-200 md:block">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-100 bg-gray-50/80 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -246,6 +273,7 @@ export default function FiscalInvoiceDetailDrawer({
                     </tbody>
                   </table>
                 </div>
+                </>
               ) : (
                 <p className="rounded-xl border border-dashed border-gray-200 px-4 py-6 text-center text-sm text-gray-400">
                   {L.linesUnavailable}

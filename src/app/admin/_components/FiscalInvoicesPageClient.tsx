@@ -261,7 +261,7 @@ export default function FiscalInvoicesPageClient() {
             {live ? L.live : L.mock}
           </span>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="grid w-full grid-cols-1 gap-2 md:flex md:w-auto md:flex-wrap md:items-center md:justify-end">
         <Button variant="outline" onClick={() => setImportOpen((v) => !v)}>
           <Download className="mr-2 h-4 w-4" />
           {L.importPortal}
@@ -347,9 +347,9 @@ export default function FiscalInvoicesPageClient() {
 
       <div
         ref={listTopRef}
-        className="mb-4 flex min-w-0 items-center gap-2 scroll-mt-24"
+        className="mb-4 grid min-w-0 grid-cols-2 gap-2 scroll-mt-24 md:flex md:items-center"
       >
-        <div className="relative min-w-0 max-w-xs flex-1">
+        <div className="relative col-span-2 min-w-0 flex-1 md:max-w-xs">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
           <Input
             value={query}
@@ -366,7 +366,7 @@ export default function FiscalInvoicesPageClient() {
           options={statusFilterOptions}
           onChange={setStatusFilter}
           leadingIcon={<Filter className="h-3.5 w-3.5 shrink-0" />}
-          className="w-[160px] shrink-0"
+          className="w-full shrink-0 md:w-[160px]"
           buttonClassName={cn(
             "h-9 rounded-lg border px-2.5 text-xs font-medium shadow-none",
             statusFilter
@@ -382,7 +382,7 @@ export default function FiscalInvoicesPageClient() {
           options={paymentFilterOptions}
           onChange={setPaymentFilter}
           leadingIcon={<CreditCard className="h-3.5 w-3.5 shrink-0" />}
-          className="w-[180px] shrink-0"
+          className="w-full shrink-0 md:w-[180px]"
           buttonClassName={cn(
             "h-9 rounded-lg border px-2.5 text-xs font-medium shadow-none",
             paymentFilter
@@ -400,14 +400,15 @@ export default function FiscalInvoicesPageClient() {
           }}
           locale={locale}
           t={t}
-          className="shrink-0"
+          phoneFill
+          className="col-span-2 shrink-0"
         />
 
         {hasFilters && (
           <button
             type="button"
             onClick={resetFilters}
-            className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-500"
+            className="col-span-2 inline-flex min-h-10 shrink-0 items-center justify-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-red-500 md:min-h-0 md:justify-start"
           >
             <X className="h-3.5 w-3.5" />
             {L.filterReset}
@@ -426,9 +427,77 @@ export default function FiscalInvoicesPageClient() {
         </div>
       ) : (
         <>
+          <ul
+            className={cn(
+              "space-y-2 transition-opacity md:hidden",
+              isLoading && "opacity-60",
+            )}
+          >
+            {fiscalInvoices.map((f) => (
+              <li key={f.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpenId(f.id)}
+                  className="block w-full rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition-colors active:bg-gray-50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 break-words font-medium text-gray-900">
+                      {f.buyerName ?? "—"}
+                    </span>
+                    <span className="whitespace-nowrap font-medium tabular-nums text-gray-900">
+                      {formatMoney(f.totalAmount, f.currency, locale)}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 text-xs text-gray-500">
+                    <span className="whitespace-nowrap">{formatShortDate(f.issueDate)}</span>
+                    {" · "}
+                    <span className="whitespace-nowrap">{f.fullNumber}</span>
+                    {f.buyerIdno ? (
+                      <>
+                        {" · "}
+                        <span className="whitespace-nowrap">{f.buyerIdno}</span>
+                      </>
+                    ) : null}
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                      {eFacturaStatusLabel(f.status, locale)}
+                    </span>
+                    <span
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                        f.receiptSettledAt
+                          ? "bg-blue-100 text-blue-700"
+                          : f.paidAt
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-600",
+                      )}
+                    >
+                      {f.receiptSettledAt ? (
+                        <>
+                          <CreditCard className="h-3 w-3" />
+                          {L.paidByReceipt}
+                        </>
+                      ) : f.paidAt ? (
+                        L.paid
+                      ) : (
+                        L.unpaid
+                      )}
+                    </span>
+                    {isNonDeliveryFiscal(f.redirections) ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                        {L.nonLivrare}
+                      </span>
+                    ) : null}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+
           <div
             className={cn(
-              "overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm transition-opacity",
+              "hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm transition-opacity md:block",
               isLoading && "opacity-60",
             )}
           >

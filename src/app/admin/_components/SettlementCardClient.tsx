@@ -106,7 +106,7 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
     <div className="space-y-4">
       <Link
         href="/admin/bookkeeping/settlements"
-        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
+        className="inline-flex min-h-10 items-center gap-1 text-sm text-gray-500 hover:text-gray-900 md:min-h-0"
       >
         <ArrowLeft className="h-4 w-4" />
         {C.back}
@@ -129,7 +129,7 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
           {/* Header */}
           <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0 space-y-1.5">
-              <h2 className="text-lg font-bold tracking-tight text-gray-900 sm:text-xl">{data.name}</h2>
+              <h2 className="break-words text-lg font-bold tracking-tight text-gray-900 sm:text-xl">{data.name}</h2>
               <div className="text-sm text-gray-500">IDNO {data.idno}</div>
               <div className="max-w-xs">
                 <CategorySelect
@@ -169,8 +169,8 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
 
           {/* Period + act */}
           <div className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="-mx-0.5 flex flex-wrap gap-1">
+            <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center">
+              <div className="-mx-0.5 grid grid-cols-2 gap-1 md:flex md:flex-wrap">
                 {PRESETS.map((p) => (
                   <button
                     key={p}
@@ -184,7 +184,7 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
                       setPreset(p);
                     }}
                     className={cn(
-                      "mx-0.5 rounded-full px-3 py-1 text-xs font-medium ring-1 transition",
+                      "mx-0.5 min-h-9 rounded-full px-3 py-2 text-xs font-medium ring-1 transition md:min-h-0 md:py-1",
                       preset === p
                         ? "bg-gray-900 text-white ring-gray-900"
                         : "bg-white text-gray-600 ring-gray-200 hover:text-gray-900",
@@ -195,25 +195,25 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
                 ))}
               </div>
               {preset === "custom" ? (
-                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                  <label className="flex items-center gap-1">
+                <div className="grid grid-cols-1 gap-2 text-xs text-gray-600 md:flex md:flex-wrap md:items-center">
+                  <label className="flex items-center gap-2 md:gap-1">
                     {C.from}
                     <Input
                       type="date"
                       value={customFrom}
                       max={customTo || undefined}
                       onChange={(e) => setCustomRange(e.target.value, customTo)}
-                      className="h-8 w-[9.5rem] text-xs"
+                      className="h-10 flex-1 text-xs md:h-8 md:w-[9.5rem] md:flex-none"
                     />
                   </label>
-                  <label className="flex items-center gap-1">
+                  <label className="flex items-center gap-2 md:gap-1">
                     {C.to}
                     <Input
                       type="date"
                       value={customTo}
                       min={customFrom || undefined}
                       onChange={(e) => setCustomRange(customFrom, e.target.value)}
-                      className="h-8 w-[9.5rem] text-xs"
+                      className="h-10 flex-1 text-xs md:h-8 md:w-[9.5rem] md:flex-none"
                     />
                   </label>
                 </div>
@@ -224,14 +224,14 @@ export default function SettlementCardClient({ idno }: { idno: string }) {
               <select
                 value={actLocale}
                 onChange={(e) => setActLocale(e.target.value === "ro" ? "ro" : "ru")}
-                className="h-9 rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none"
+                className="h-10 rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none md:h-9"
                 aria-label={C.act.lang}
                 title={C.act.lang}
               >
                 <option value="ru">RU</option>
                 <option value="ro">RO</option>
               </select>
-              <Button size="sm" onClick={downloadAct} disabled={downloading} className="gap-1.5">
+              <Button size="sm" onClick={downloadAct} disabled={downloading} className="h-10 flex-1 gap-1.5 md:h-9 md:flex-none">
                 {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 {C.act.download}
               </Button>
@@ -336,10 +336,10 @@ function LedgerTable({
                   </span>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <span className="truncate text-gray-800">{e.document}</span>
+                  <span className="min-w-0 break-words text-gray-800">{e.document}</span>
                   <span className="shrink-0 tabular-nums text-gray-500">{money(e.balance)}</span>
                 </div>
-                {note ? <div className="truncate text-gray-400">{note}</div> : null}
+                {note ? <div className="break-words text-gray-400">{note}</div> : null}
               </li>
             );
           })
@@ -556,7 +556,7 @@ function OpeningBalancePanel({
           <p className="mt-0.5 max-w-2xl text-xs text-gray-400">{O.hint}</p>
         </div>
         {!editing ? (
-          <Button variant="outline" size="sm" onClick={startEdit} className="gap-1.5">
+          <Button variant="outline" size="sm" onClick={startEdit} className="h-10 w-full gap-1.5 sm:w-auto md:h-9">
             <Pencil className="h-3.5 w-3.5" />
             {value ? O.edit : O.add}
           </Button>
@@ -594,7 +594,7 @@ function OpeningBalancePanel({
             {O.note}
             <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={500} className="mt-1 h-9" />
           </label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 [&>button]:h-10 [&>button]:flex-1 md:[&>button]:h-9 md:[&>button]:flex-none">
             <Button size="sm" onClick={save} disabled={busy}>
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {O.save}

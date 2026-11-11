@@ -141,7 +141,7 @@ export default function SettlementsChecks({
     <div className="space-y-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <p className="max-w-3xl text-sm text-gray-500">{C.hint}</p>
-        <Button size="sm" variant="outline" className="gap-1.5 self-start" onClick={runMatching} disabled={busy !== null}>
+        <Button size="sm" variant="outline" className="h-10 w-full gap-1.5 self-start sm:w-auto md:h-9" onClick={runMatching} disabled={busy !== null}>
           {busy === "run" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           {progress ? C.running(progress.done, progress.total) : C.runMatching}
         </Button>
@@ -154,7 +154,7 @@ export default function SettlementsChecks({
         </div>
       ) : null}
 
-      <div className="-mx-1 flex flex-wrap gap-1">
+      <div className="-mx-1 flex gap-1 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
         {(["all", ...CHECK_TYPES] as const).map((t) => {
           const n = t === "all" ? pool.length : counts.get(t) ?? 0;
           if (t !== "all" && n === 0) return null;
@@ -164,7 +164,7 @@ export default function SettlementsChecks({
               type="button"
               onClick={() => setType(t)}
               className={cn(
-                "mx-0.5 rounded-full px-3 py-1 text-xs font-medium ring-1 transition",
+                "mx-0.5 shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-xs font-medium ring-1 transition md:py-1",
                 type === t ? "bg-gray-900 text-white ring-gray-900" : "bg-white text-gray-600 ring-gray-200 hover:text-gray-900",
               )}
             >
@@ -198,7 +198,7 @@ export default function SettlementsChecks({
                       {s.idno ? (
                         <Link
                           href={`/admin/bookkeeping/settlements/${encodeURIComponent(s.idno)}`}
-                          className="text-sm font-medium text-gray-900 hover:underline"
+                          className="break-words text-sm font-medium text-gray-900 hover:underline"
                         >
                           {s.name ?? s.idno}
                         </Link>
@@ -212,16 +212,16 @@ export default function SettlementsChecks({
                       </p>
                     ) : null}
                   </div>
-                  <div className="flex shrink-0 flex-col items-start gap-1.5 sm:items-end">
-                    <div className="text-right">
+                  <div className="flex shrink-0 flex-col items-stretch gap-1.5 sm:items-end">
+                    <div className="flex items-baseline justify-between gap-2 sm:block sm:text-right">
                       <div className="text-sm font-semibold tabular-nums text-gray-900">{money(s.amount)}</div>
                       {s.date ? <div className="text-xs text-gray-500">{formatShortDate(s.date)}</div> : null}
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap">
                       {href ? (
                         <Link
                           href={href}
-                          className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-medium text-gray-800 hover:border-gray-300"
+                          className="inline-flex h-10 items-center justify-center gap-1 rounded-md md:h-7 border border-gray-200 bg-white px-2 text-xs font-medium text-gray-800 hover:border-gray-300"
                         >
                           {C.action[s.type]}
                           <ArrowRight className="h-3.5 w-3.5" />
@@ -230,7 +230,7 @@ export default function SettlementsChecks({
                         <button
                           type="button"
                           onClick={onOpenCardPayments}
-                          className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-xs font-medium text-gray-800 hover:border-gray-300"
+                          className="inline-flex h-10 items-center justify-center gap-1 rounded-md md:h-7 border border-gray-200 bg-white px-2 text-xs font-medium text-gray-800 hover:border-gray-300"
                         >
                           {C.action[s.type]}
                           <ArrowRight className="h-3.5 w-3.5" />
@@ -240,7 +240,7 @@ export default function SettlementsChecks({
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 gap-1 text-xs"
+                          className="h-10 gap-1 text-xs md:h-7"
                           disabled={busy !== null}
                           onClick={() => send("DELETE", s)}
                         >
@@ -251,7 +251,7 @@ export default function SettlementsChecks({
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-7 gap-1 text-xs"
+                          className="h-10 gap-1 text-xs md:h-7"
                           title={C.dismissTitle}
                           onClick={() => {
                             setEditing(s.key);
@@ -274,17 +274,17 @@ export default function SettlementsChecks({
                       onChange={(e) => setNote(e.target.value)}
                       placeholder={C.notePlaceholder}
                       aria-label={C.note}
-                      className="h-8 text-xs sm:flex-1"
+                      className="h-10 text-xs sm:flex-1 md:h-8"
                       onKeyDown={(e) => {
                         if (e.key === "Enter") void send("POST", s, note);
                       }}
                     />
                     <div className="flex gap-1.5">
-                      <Button size="sm" className="h-8 text-xs" disabled={busy !== null} onClick={() => send("POST", s, note)}>
+                      <Button size="sm" className="h-10 flex-1 text-xs md:h-8 md:flex-none" disabled={busy !== null} onClick={() => send("POST", s, note)}>
                         {busy === s.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                         {C.dismiss}
                       </Button>
-                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setEditing(null)}>
+                      <Button size="sm" variant="outline" className="h-10 flex-1 text-xs md:h-8 md:flex-none" onClick={() => setEditing(null)}>
                         {C.cancel}
                       </Button>
                     </div>
@@ -300,7 +300,7 @@ export default function SettlementsChecks({
         <div className="flex justify-center">
           <button
             type="button"
-            className="text-xs text-gray-500 underline hover:text-gray-900"
+            className="min-h-10 text-xs text-gray-500 underline hover:text-gray-900 md:min-h-0"
             onClick={() => setShowDismissed(!showDismissed)}
           >
             {showDismissed ? C.hideDismissed : C.showDismissed(dismissedCount)}

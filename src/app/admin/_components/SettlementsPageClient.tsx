@@ -34,6 +34,8 @@ import { getSettlementExtraLabels, type SettlementExtraLabels, type SettlementsV
 import type { CheckSignal } from "@/lib/settlements/types";
 
 const PAGE = 100;
+/** Phone card list grows 50 at a time (each card is tall). */
+const PHONE_PAGE = 50;
 const TH = "px-3 py-3 text-left";
 const TD = "px-3 py-2.5";
 
@@ -98,7 +100,13 @@ export default function SettlementsPageClient() {
   const [filter, setFilter] = useState<SettlementFilter>("all");
   const [query, setQuery] = useState("");
   const debounced = useDebounce(query, 200);
-  const [limit, setLimit] = useState(PAGE);
+  const [limit, setLimitState] = useState(PAGE);
+  const [phoneLimit, setPhoneLimit] = useState(PHONE_PAGE);
+  /** Any limit change from a filter/search resets the phone list too. */
+  function setLimit(n: number) {
+    setLimitState(n);
+    setPhoneLimit(PHONE_PAGE);
+  }
   const [expanded, setExpanded] = useState<string | null>(null);
   const [savingIdno, setSavingIdno] = useState<string | null>(null);
 
@@ -144,6 +152,7 @@ export default function SettlementsPageClient() {
   }, [searched, checkIdnos, searching]);
 
   const visible = filtered.slice(0, limit);
+  const phoneVisible = filtered.slice(0, phoneLimit);
 
   async function saveCategory(row: CategoryTarget, value: string) {
     const category: CounterpartyCategoryCode | null = value === "" ? null : (value as CounterpartyCategoryCode);
@@ -179,14 +188,14 @@ export default function SettlementsPageClient() {
 
   return (
     <div>
-      <div className="mb-4 inline-flex rounded-lg bg-gray-100 p-1">
+      <div className="mb-4 flex w-full rounded-lg bg-gray-100 p-1 md:inline-flex md:w-auto">
         {VIEWS.map((v) => (
           <button
             key={v}
             type="button"
             onClick={() => setView(v)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium",
+              "inline-flex min-h-10 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium md:min-h-0 md:flex-none md:px-3",
               view === v ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900",
             )}
           >
@@ -268,7 +277,7 @@ export default function SettlementsPageClient() {
           ) : null}
 
           <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <div className="-mx-1 flex flex-wrap gap-1">
+            <div className="-mx-1 flex gap-1 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
               {SETTLEMENT_FILTERS.map((f) => (
                 <button
                   key={f}
@@ -278,7 +287,7 @@ export default function SettlementsPageClient() {
                     setLimit(PAGE);
                   }}
                   className={cn(
-                    "mx-0.5 rounded-full px-3 py-1 text-xs font-medium ring-1 transition",
+                    "mx-0.5 shrink-0 whitespace-nowrap rounded-full px-3 py-2 text-xs font-medium ring-1 transition md:py-1",
                     filter === f
                       ? "bg-gray-900 text-white ring-gray-900"
                       : "bg-white text-gray-600 ring-gray-200 hover:text-gray-900",
@@ -310,7 +319,7 @@ export default function SettlementsPageClient() {
             <>
               {/* Phone: cards */}
               <div className="space-y-2 md:hidden">
-                {visible.map((row) => (
+                {phoneVisible.map((row) => (
                   <div key={row.idno} className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
                     <button
                       type="button"
@@ -318,29 +327,17 @@ export default function SettlementsPageClient() {
                       onClick={() => setExpanded(expanded === row.idno ? null : row.idno)}
                     >
                       <div className="min-w-0">
-                        <div className="truncate font-medium text-gray-900">{row.name}</div>
+                        <div className="break-words font-medium text-gray-900">{row.name}</div>
                         <div className="text-xs text-gray-500">{row.idno}</div>
                       </div>
-                      <div className={cn("shrink-0 text-right font-semibold tabular-nums", balanceClass(row.balance))}>
+                      <div className={cn("shrink-0 whitespace-nowrap text-right font-semibold tabular-nums", balanceClass(row.balance))}>
                         {money(row.balance)}
                       </div>
                     </button>
                     <div className="mt-2 flex flex-wrap items-center gap-1">
                       <StatePill row={row} L={L} flagged={checkIdnos ? checkIdnos.has(row.idno) : row.flags.length > 0} />
                     </div>
-                    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                      <dt className="text-gray-500">{L.colSalesInvoiced}</dt>
-                      <dd className="text-right tabular-nums">{money(row.salesInvoiced)}</dd>
-                      <dt className="text-gray-500">{L.colReceived}</dt>
-                      <dd className="text-right tabular-nums">{money(row.receivedFromThem)}</dd>
-                      <dt className="text-gray-500">{L.colPurchasesInvoiced}</dt>
-                      <dd className="text-right tabular-nums">{money(row.purchasesInvoiced)}</dd>
-                      <dt className="text-gray-500">{L.colPaid}</dt>
-                      <dd className="text-right tabular-nums">
-                        {money(row.paidToThem)}
-                        <PaidParts row={row} L={L} money={money} />
-                      </dd>
-                    </dl>
+                    <PhoneAmounts row={row} L={L} money={money} />
                     <div className="mt-2">
                       <CategorySelect row={row} L={L} saving={savingIdno === row.idno} onChange={saveCategory} />
                     </div>
@@ -422,8 +419,15 @@ export default function SettlementsPageClient() {
                 </table>
               </div>
 
+              {filtered.length > phoneLimit ? (
+                <div className="mt-3 md:hidden">
+                  <Button variant="outline" className="min-h-10 w-full" onClick={() => setPhoneLimit(phoneLimit + PHONE_PAGE)}>
+                    {L.showMore(Math.min(PHONE_PAGE, filtered.length - phoneLimit))}
+                  </Button>
+                </div>
+              ) : null}
               {filtered.length > limit ? (
-                <div className="mt-3 flex justify-center">
+                <div className="mt-3 hidden justify-center md:flex">
                   <Button variant="outline" size="sm" onClick={() => setLimit(limit + PAGE)}>
                     {L.showMore(Math.min(PAGE, filtered.length - limit))}
                   </Button>
@@ -436,6 +440,38 @@ export default function SettlementsPageClient() {
       </>
       ) : null}
     </div>
+  );
+}
+
+/** Phone card amounts: only non-zero rows (all four zero → nothing). */
+function PhoneAmounts({
+  row,
+  L,
+  money,
+}: {
+  row: SettlementRow;
+  L: SettlementLabels;
+  money: (n: number) => string;
+}) {
+  const items: Array<{ key: string; label: string; value: number; extra?: boolean }> = [
+    { key: "si", label: L.colSalesInvoiced, value: row.salesInvoiced },
+    { key: "rc", label: L.colReceived, value: row.receivedFromThem },
+    { key: "pi", label: L.colPurchasesInvoiced, value: row.purchasesInvoiced },
+    { key: "pd", label: L.colPaid, value: row.paidToThem, extra: true },
+  ].filter((it) => Math.abs(it.value) >= 0.005);
+  if (items.length === 0) return null;
+  return (
+    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+      {items.map((it) => (
+        <Fragment key={it.key}>
+          <dt className="text-gray-500">{it.label}</dt>
+          <dd className="text-right tabular-nums">
+            {money(it.value)}
+            {it.extra ? <PaidParts row={row} L={L} money={money} /> : null}
+          </dd>
+        </Fragment>
+      ))}
+    </dl>
   );
 }
 
@@ -506,7 +542,7 @@ export function CategorySelect({
         value={row.category ?? ""}
         disabled={saving}
         onChange={(e) => onChange(row, e.target.value)}
-        className="h-8 w-full min-w-[9rem] rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none md:w-auto"
+        className="h-9 w-full min-w-0 rounded-md md:h-8 md:min-w-[9rem] border border-gray-200 bg-white px-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none md:w-auto"
         aria-label={L.colCategory}
       >
         {/* Empty = drop the manual row: the party goes back to its automatic category. */}
@@ -580,7 +616,7 @@ function RowDetails({
         <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">{L.ledgerTitle}</div>
         <Link
           href={`/admin/bookkeeping/settlements/${encodeURIComponent(row.idno)}`}
-          className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-800 hover:border-gray-300"
+          className="inline-flex min-h-10 items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium md:min-h-0 text-gray-800 hover:border-gray-300"
         >
           {L.cardPage.open}
           <ArrowRight className="h-3.5 w-3.5" />

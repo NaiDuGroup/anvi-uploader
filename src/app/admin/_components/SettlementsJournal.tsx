@@ -70,7 +70,7 @@ export default function SettlementsJournal({
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
   const selectCls =
-    "h-9 rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none";
+    "h-10 w-full rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-800 focus:border-gray-400 focus:outline-none sm:w-auto md:h-9";
 
   const partyCell = (v: string | null) =>
     v ? (
@@ -89,7 +89,7 @@ export default function SettlementsJournal({
           <div className="text-sm font-medium text-gray-900">{J.recentTitle}</div>
           <Link
             href={`/admin/bookkeeping/settlements?view=journal&idno=${encodeURIComponent(fixedIdno!)}`}
-            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-900"
+            className="inline-flex min-h-10 items-center gap-1 text-xs text-gray-500 hover:text-gray-900 md:min-h-0"
           >
             {J.openFull}
             <ArrowRight className="h-3.5 w-3.5" />
@@ -141,7 +141,7 @@ export default function SettlementsJournal({
                   setPage(1);
                 }}
                 placeholder={J.idnoFilter}
-                className="h-9 pl-8 text-xs"
+                className="h-10 pl-8 text-xs md:h-9"
               />
             </div>
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin text-gray-400" /> : null}
@@ -186,7 +186,7 @@ export default function SettlementsJournal({
                   ) : null}
                 </div>
                 {J.details(e.action, e.details) ? (
-                  <div className="truncate text-gray-500">{J.details(e.action, e.details)}</div>
+                  <div className="break-words text-gray-500 md:truncate">{J.details(e.action, e.details)}</div>
                 ) : null}
               </li>
             ))}
@@ -231,13 +231,13 @@ export default function SettlementsJournal({
           {pages > 1 || !compact ? (
             <div className="mt-2 flex flex-wrap items-center justify-center gap-2 text-xs text-gray-600">
               {pages > 1 ? (
-                <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                <Button size="sm" variant="outline" className="h-10 text-xs md:h-7" disabled={page <= 1} onClick={() => setPage(page - 1)}>
                   {J.prev}
                 </Button>
               ) : null}
               <span className="tabular-nums">{J.page(Math.min(data.page, pages), pages, data.total)}</span>
               {pages > 1 ? (
-                <Button size="sm" variant="outline" className="h-7 text-xs" disabled={page >= pages} onClick={() => setPage(page + 1)}>
+                <Button size="sm" variant="outline" className="h-10 text-xs md:h-7" disabled={page >= pages} onClick={() => setPage(page + 1)}>
                   {J.next}
                 </Button>
               ) : null}

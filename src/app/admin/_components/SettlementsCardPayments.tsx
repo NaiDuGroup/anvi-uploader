@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, CreditCard, Loader2, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -46,6 +46,10 @@ export default function SettlementsCardPayments({
 }) {
   const C = L.card;
   const [open, setOpen] = useState(data.unattributedCount > 0);
+  // Phones: start collapsed (the block pushes the counterparty list far down); desktop unchanged.
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 767px)").matches) setOpen(false);
+  }, []);
   const [showDone, setShowDone] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [saving, setSaving] = useState<ReadonlySet<string>>(() => new Set());
@@ -108,6 +112,35 @@ export default function SettlementsCardPayments({
     }
   }
 
+  function stateCell(m: CardMerchantGroup) {
+    return editing === m.merchantKey ? (
+      <SupplierPicker
+        parties={parties}
+        L={L}
+        saving={saving.has(m.merchantKey)}
+        onPick={(idno, name) => save(m, { idno }, name)}
+        onCancel={() => setEditing(null)}
+      />
+    ) : changed[m.merchantKey] ? (
+      <ChangedState
+        label={changed[m.merchantKey]!.label}
+        L={L}
+        saving={saving.has(m.merchantKey)}
+        onUndo={() => save(m, changed[m.merchantKey]!.prev)}
+        onEdit={() => setEditing(m.merchantKey)}
+      />
+    ) : (
+      <MerchantState
+        m={m}
+        L={L}
+        saving={saving.has(m.merchantKey)}
+        onEdit={() => setEditing(m.merchantKey)}
+        onIgnore={() => save(m, { idno: null }, C.ignored)}
+        onReset={() => save(m, { reset: true }, C.resetDone)}
+      />
+    );
+  }
+
   if (data.merchants.length === 0) return null;
 
   return (
@@ -115,7 +148,7 @@ export default function SettlementsCardPayments({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex w-full flex-col gap-2 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between"
+        className="flex min-h-10 w-full flex-col gap-2 px-4 py-3 text-left sm:flex-row sm:items-center sm:justify-between"
       >
         <span className="flex items-center gap-2 font-medium text-gray-900">
           {open ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
@@ -147,7 +180,23 @@ export default function SettlementsCardPayments({
           {rows.length === 0 ? (
             <p className="py-3 text-sm text-gray-500">{C.allDone}</p>
           ) : (
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <>
+            {/* Phone: cards */}
+            <ul className="space-y-2 md:hidden">
+              {rows.map((m) => (
+                <li key={m.merchantKey} className="rounded-xl border border-gray-200 bg-white p-3">
+                  <div className="min-w-0 break-words text-sm font-medium text-gray-900">{m.merchantRaw}</div>
+                  <div className="mt-0.5 flex items-baseline justify-between gap-2 text-xs text-gray-500">
+                    <span className="whitespace-nowrap">
+                      {C.colCount}: <span className="tabular-nums">{m.count}</span> · {formatShortDate(m.lastDate)}
+                    </span>
+                    <span className="whitespace-nowrap text-sm font-semibold tabular-nums text-gray-900">{money(m.sum)}</span>
+                  </div>
+                  <div className="mt-2 text-xs">{stateCell(m)}</div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden overflow-x-auto rounded-lg border border-gray-200 md:block">
               <table className="w-full text-xs">
                 <thead className="border-b border-gray-100 bg-gray-50 text-gray-500">
                   <tr>
@@ -166,38 +215,14 @@ export default function SettlementsCardPayments({
                       <td className={cn(TD, "whitespace-nowrap text-right tabular-nums")}>{money(m.sum)}</td>
                       <td className={cn(TD, "whitespace-nowrap text-gray-500")}>{formatShortDate(m.lastDate)}</td>
                       <td className={cn(TD, "min-w-[16rem]")}>
-                        {editing === m.merchantKey ? (
-                          <SupplierPicker
-                            parties={parties}
-                            L={L}
-                            saving={saving.has(m.merchantKey)}
-                            onPick={(idno, name) => save(m, { idno }, name)}
-                            onCancel={() => setEditing(null)}
-                          />
-                        ) : changed[m.merchantKey] ? (
-                          <ChangedState
-                            label={changed[m.merchantKey]!.label}
-                            L={L}
-                            saving={saving.has(m.merchantKey)}
-                            onUndo={() => save(m, changed[m.merchantKey]!.prev)}
-                            onEdit={() => setEditing(m.merchantKey)}
-                          />
-                        ) : (
-                          <MerchantState
-                            m={m}
-                            L={L}
-                            saving={saving.has(m.merchantKey)}
-                            onEdit={() => setEditing(m.merchantKey)}
-                            onIgnore={() => save(m, { idno: null }, C.ignored)}
-                            onReset={() => save(m, { reset: true }, C.resetDone)}
-                          />
-                        )}
+                        {stateCell(m)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            </>
           )}
 
           {showDone || hiddenDone > 0 ? (
@@ -205,6 +230,7 @@ export default function SettlementsCardPayments({
               <Button
                 variant="outline"
                 size="sm"
+                className="h-10 w-full md:h-9 md:w-auto"
                 disabled={saving.size > 0}
                 onClick={() => {
                   setShowDone(!showDone);
@@ -240,12 +266,12 @@ function ChangedState({
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <span className="font-medium text-emerald-700">→ {label}</span>
       {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" /> : null}
-      <span className="flex flex-wrap gap-1">
+      <span className="flex w-full flex-col gap-1.5 md:w-auto md:flex-row md:flex-wrap md:gap-1">
         <button
           type="button"
           disabled={saving}
           onClick={onUndo}
-          className="rounded-md px-2 py-0.5 text-xs font-medium text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50 disabled:opacity-50"
+          className="min-h-10 w-full rounded-md px-2 py-0.5 text-xs md:min-h-0 md:w-auto font-medium text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50 disabled:opacity-50"
         >
           {C.undo}
         </button>
@@ -253,7 +279,7 @@ function ChangedState({
           type="button"
           disabled={saving}
           onClick={onEdit}
-          className="rounded-md px-2 py-0.5 text-xs text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+          className="min-h-10 w-full rounded-md px-2 py-0.5 text-xs md:min-h-0 md:w-auto text-sky-700 hover:bg-sky-50 disabled:opacity-50"
         >
           {C.change}
         </button>
@@ -295,11 +321,11 @@ function MerchantState({
       {saving ? (
         <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" />
       ) : (
-        <span className="flex flex-wrap gap-1">
+        <span className="flex w-full flex-col gap-1.5 md:w-auto md:flex-row md:flex-wrap md:gap-1">
           <button
             type="button"
             onClick={onEdit}
-            className="rounded-md px-2 py-0.5 text-xs font-medium text-sky-700 ring-1 ring-sky-200 hover:bg-sky-50"
+            className="min-h-10 w-full rounded-md px-2 py-0.5 text-xs md:min-h-0 md:w-auto font-medium text-sky-700 ring-1 ring-sky-200 hover:bg-sky-50"
           >
             {m.idno || m.attributedCount > 0 ? C.change : C.pick}
           </button>
@@ -307,7 +333,7 @@ function MerchantState({
             <button
               type="button"
               onClick={onIgnore}
-              className="rounded-md px-2 py-0.5 text-xs text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"
+              className="min-h-10 w-full rounded-md px-2 py-0.5 text-xs md:min-h-0 md:w-auto text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"
             >
               {C.notSupplier}
             </button>
@@ -316,7 +342,7 @@ function MerchantState({
             <button
               type="button"
               onClick={onReset}
-              className="rounded-md px-2 py-0.5 text-xs text-gray-500 hover:text-gray-800"
+              className="min-h-10 w-full rounded-md px-2 py-0.5 text-xs md:min-h-0 md:w-auto text-gray-500 hover:text-gray-800"
             >
               {C.reset}
             </button>
@@ -362,10 +388,10 @@ function SupplierPicker({
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder={C.search}
-            className="h-8 pl-7 text-xs"
+            className="h-10 pl-7 text-xs md:h-8"
           />
         </div>
-        <Button variant="outline" size="sm" onClick={onCancel} disabled={saving}>
+        <Button variant="outline" size="sm" className="h-10 md:h-9" onClick={onCancel} disabled={saving}>
           {C.cancel}
         </Button>
         {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-400" /> : null}
@@ -377,7 +403,7 @@ function SupplierPicker({
               type="button"
               disabled={saving}
               onClick={() => onPick(p.idno, p.name)}
-              className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-gray-50"
+              className="flex w-full items-center justify-between gap-2 px-2 py-2.5 text-left text-xs hover:bg-gray-50 md:py-1.5"
             >
               <span className="truncate text-gray-900">{p.name}</span>
               <span className="shrink-0 text-gray-400">{p.idno}</span>
@@ -390,7 +416,7 @@ function SupplierPicker({
               type="button"
               disabled={saving}
               onClick={() => onPick(rawIdno, rawIdno)}
-              className="w-full px-2 py-1.5 text-left text-xs text-sky-700 hover:bg-gray-50"
+              className="w-full px-2 py-2.5 text-left text-xs text-sky-700 md:py-1.5 hover:bg-gray-50"
             >
               {C.bindIdno(rawIdno)}
             </button>

@@ -341,7 +341,7 @@ export default function ReconciliationPageClient() {
         <div>
           <p className="text-sm text-gray-500">{L.subtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto md:items-center">
           <input
             ref={fileRef}
             type="file"
@@ -374,6 +374,7 @@ export default function ReconciliationPageClient() {
           />
           <Button
             variant="outline"
+            className={HEADER_BTN}
             onClick={() => fileRef.current?.click()}
             disabled={uploading || autoMatching}
           >
@@ -386,6 +387,7 @@ export default function ReconciliationPageClient() {
           </Button>
           <Button
             variant="outline"
+            className={HEADER_BTN}
             onClick={() => cardFileRef.current?.click()}
             disabled={uploading || autoMatching}
           >
@@ -398,6 +400,7 @@ export default function ReconciliationPageClient() {
           </Button>
           <Button
             variant="outline"
+            className={HEADER_BTN}
             onClick={() => extrasFileRef.current?.click()}
             disabled={uploading || autoMatching}
           >
@@ -408,7 +411,11 @@ export default function ReconciliationPageClient() {
             )}
             {L.uploadExtras}
           </Button>
-          <Button onClick={handleAutoMatch} disabled={autoMatching || uploading}>
+          <Button
+            onClick={handleAutoMatch}
+            disabled={autoMatching || uploading}
+            className={cn(HEADER_BTN, "order-first col-span-2 md:order-none")}
+          >
             {autoMatching ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -443,14 +450,14 @@ export default function ReconciliationPageClient() {
       {tab === "queue" ? (
         <>
           {queuePayer ? (
-            <div className="mb-3 flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 md:flex-nowrap">
               <span className="font-medium">{L.queueFilteredByPayer}:</span>
-              <span>{queuePayer.clientName}</span>
+              <span className="min-w-0 break-words">{queuePayer.clientName}</span>
               <span className="text-sky-600">{queuePayer.buyerIdno}</span>
               <Button
                 size="sm"
                 variant="ghost"
-                className="ml-auto h-6"
+                className="ml-auto h-9 md:h-6"
                 onClick={() => {
                   setQueuePayer(null);
                   setQueuePage(1);
@@ -498,9 +505,9 @@ export default function ReconciliationPageClient() {
               value={ledgerDirection}
               options={ledgerDirectionOptions}
               onChange={setLedgerDirection}
-              className="w-[180px] shrink-0"
+              className="w-full shrink-0 md:w-[180px]"
               buttonClassName={cn(
-                "h-9 rounded-lg border px-2.5 text-xs font-medium shadow-none",
+                "h-10 rounded-lg md:h-9 border px-2.5 text-xs font-medium shadow-none",
                 ledgerDirection
                   ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100/70"
                   : "border-gray-300 bg-white text-gray-600",
@@ -696,7 +703,7 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+        "min-h-10 border-b-2 px-3 py-2 text-sm font-medium transition-colors md:min-h-0",
         active
           ? "border-gold text-gray-900"
           : "border-transparent text-gray-500 hover:text-gray-900",
@@ -751,105 +758,171 @@ function BankLedgerTable({
       <p className="py-12 text-center text-sm text-gray-500">{L.ledgerEmpty}</p>
     );
   }
+  const canRestore = (tx: LedgerTransaction) =>
+    tx.matchStatus === "IGNORED" ||
+    tx.matchStatus === "HISTORICAL" ||
+    tx.matchStatus === "ACT_SETTLED";
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-      <table className="w-full text-sm">
-        <thead className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          <tr>
-            <th className={TH}>{L.colDate}</th>
-            <th className={TH}>{L.colDirection}</th>
-            <th className={TH}>{L.colPayer}</th>
-            <th className={cn(TH, "hidden lg:table-cell")}>{L.colPurpose}</th>
-            <th className={cn(TH, "text-right")}>{L.colAmount}</th>
-            <th className={cn(TH, "hidden md:table-cell")}>{L.colMatchStatus}</th>
-            <th className={cn(TH, "hidden xl:table-cell")}>{L.colStatement}</th>
-            <th className={cn(TH, "text-right")}>{L.colActions}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {transactions.map((tx) => {
-            const isCredit = tx.direction === "CREDIT";
-            const busy = busyTxId === tx.id;
-            return (
-              <tr key={tx.id} className="align-top hover:bg-gray-50/60">
-                <td className={cn(TD, "whitespace-nowrap")}>
-                  {formatShortDate(tx.bookingDate)}
-                </td>
-                <td className={TD}>
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
-                      isCredit
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-rose-50 text-rose-700",
-                    )}
-                  >
-                    {isCredit ? (
-                      <ArrowDownLeft className="h-3 w-3" />
-                    ) : (
-                      <ArrowUpRight className="h-3 w-3" />
-                    )}
-                    {isCredit ? L.directionCredit : L.directionDebit}
-                  </span>
-                </td>
-                <td className={TD}>
-                  <div className="font-medium text-gray-900">
-                    {tx.counterpartyName ?? "—"}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {tx.counterpartyIdno ?? ""}
-                  </div>
-                </td>
-                <td
+    <>
+      <div className="space-y-2 md:hidden">
+        {transactions.map((tx) => {
+          const isCredit = tx.direction === "CREDIT";
+          const busy = busyTxId === tx.id;
+          return (
+            <div key={tx.id} className={CARD}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 break-words font-medium text-gray-900">
+                  {tx.counterpartyName ?? "—"}
+                </div>
+                <div
                   className={cn(
-                    TD,
-                    "hidden max-w-xs text-xs text-gray-500 lg:table-cell",
-                  )}
-                >
-                  {tx.purpose ?? "—"}
-                </td>
-                <td
-                  className={cn(
-                    TD,
-                    "whitespace-nowrap text-right font-medium",
+                    "whitespace-nowrap text-right font-medium tabular-nums",
                     isCredit ? "text-emerald-700" : "text-rose-700",
                   )}
                 >
                   {isCredit ? "+" : "−"}
                   {formatMoney(tx.amount, tx.currency, locale)}
-                </td>
-                <td className={cn(TD, "hidden text-xs text-gray-600 md:table-cell")}>
+                </div>
+              </div>
+              <div className="mt-0.5 text-xs text-gray-500">
+                {[formatShortDate(tx.bookingDate), tx.counterpartyIdno]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+              {tx.purpose ? (
+                <div className="mt-1 break-words text-xs text-gray-500">{tx.purpose}</div>
+              ) : null}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <DirectionPill isCredit={isCredit} L={L} />
+                <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
                   {matchStatusLabel(tx.matchStatus, L)}
-                </td>
-                <td
-                  className={cn(
-                    TD,
-                    "hidden max-w-[10rem] truncate text-xs text-gray-500 xl:table-cell",
-                  )}
-                  title={tx.statementFileName ?? undefined}
-                >
-                  {tx.statementFileName ?? "—"}
-                </td>
-                <td className={cn(TD, "whitespace-nowrap text-right")}>
-                  {busy ? (
-                    <Loader2 className="ml-auto h-4 w-4 animate-spin" />
-                  ) : tx.matchStatus === "IGNORED" ||
-                    tx.matchStatus === "HISTORICAL" ||
-                    tx.matchStatus === "ACT_SETTLED" ? (
-                    <Button size="sm" variant="ghost" onClick={() => onRestore(tx)}>
-                      <Undo2 className="mr-1 h-4 w-4" />
-                      {L.restoreToQueue}
-                    </Button>
-                  ) : (
-                    <span className="text-xs text-gray-400">—</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                </span>
+              </div>
+              {tx.statementFileName ? (
+                <div className="mt-1 break-all text-[11px] text-gray-400">
+                  {tx.statementFileName}
+                </div>
+              ) : null}
+              {busy ? (
+                <Loader2 className="mt-2 h-4 w-4 animate-spin" />
+              ) : canRestore(tx) ? (
+                <div className="mt-2 flex">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={CARD_BTN}
+                    onClick={() => onRestore(tx)}
+                  >
+                    <Undo2 className="mr-1 h-4 w-4" />
+                    {L.restoreToQueue}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm md:block">
+        <table className="w-full text-sm">
+          <thead className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <tr>
+              <th className={TH}>{L.colDate}</th>
+              <th className={TH}>{L.colDirection}</th>
+              <th className={TH}>{L.colPayer}</th>
+              <th className={cn(TH, "hidden lg:table-cell")}>{L.colPurpose}</th>
+              <th className={cn(TH, "text-right")}>{L.colAmount}</th>
+              <th className={cn(TH, "hidden md:table-cell")}>{L.colMatchStatus}</th>
+              <th className={cn(TH, "hidden xl:table-cell")}>{L.colStatement}</th>
+              <th className={cn(TH, "text-right")}>{L.colActions}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {transactions.map((tx) => {
+              const isCredit = tx.direction === "CREDIT";
+              const busy = busyTxId === tx.id;
+              return (
+                <tr key={tx.id} className="align-top hover:bg-gray-50/60">
+                  <td className={cn(TD, "whitespace-nowrap")}>
+                    {formatShortDate(tx.bookingDate)}
+                  </td>
+                  <td className={TD}>
+                    <DirectionPill isCredit={isCredit} L={L} />
+                  </td>
+                  <td className={TD}>
+                    <div className="font-medium text-gray-900">
+                      {tx.counterpartyName ?? "—"}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {tx.counterpartyIdno ?? ""}
+                    </div>
+                  </td>
+                  <td
+                    className={cn(
+                      TD,
+                      "hidden max-w-xs text-xs text-gray-500 lg:table-cell",
+                    )}
+                  >
+                    {tx.purpose ?? "—"}
+                  </td>
+                  <td
+                    className={cn(
+                      TD,
+                      "whitespace-nowrap text-right font-medium",
+                      isCredit ? "text-emerald-700" : "text-rose-700",
+                    )}
+                  >
+                    {isCredit ? "+" : "−"}
+                    {formatMoney(tx.amount, tx.currency, locale)}
+                  </td>
+                  <td className={cn(TD, "hidden text-xs text-gray-600 md:table-cell")}>
+                    {matchStatusLabel(tx.matchStatus, L)}
+                  </td>
+                  <td
+                    className={cn(
+                      TD,
+                      "hidden max-w-[10rem] truncate text-xs text-gray-500 xl:table-cell",
+                    )}
+                    title={tx.statementFileName ?? undefined}
+                  >
+                    {tx.statementFileName ?? "—"}
+                  </td>
+                  <td className={cn(TD, "whitespace-nowrap text-right")}>
+                    {busy ? (
+                      <Loader2 className="ml-auto h-4 w-4 animate-spin" />
+                    ) : canRestore(tx) ? (
+                      <Button size="sm" variant="ghost" onClick={() => onRestore(tx)}>
+                        <Undo2 className="mr-1 h-4 w-4" />
+                        {L.restoreToQueue}
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function DirectionPill({ isCredit, L }: { isCredit: boolean; L: Labels }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+        isCredit ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700",
+      )}
+    >
+      {isCredit ? (
+        <ArrowDownLeft className="h-3 w-3" />
+      ) : (
+        <ArrowUpRight className="h-3 w-3" />
+      )}
+      {isCredit ? L.directionCredit : L.directionDebit}
+    </span>
   );
 }
 
@@ -871,6 +944,17 @@ function ConfidenceBadge({ value, label }: { value: number; label: string }) {
     </span>
   );
 }
+
+/** Header action buttons: full-width wrapping grid cells on phones, unchanged from md up. */
+const HEADER_BTN =
+  "h-auto min-h-10 w-full whitespace-normal text-center md:h-9 md:min-h-0 md:w-auto md:whitespace-nowrap";
+/** Phone card shell (tables switch to these below md). */
+const CARD = "rounded-xl border border-gray-200 bg-white p-3 shadow-sm";
+/** Phone card action buttons: ≥40px tap target, wrap in a row. */
+const CARD_BTN = "min-h-10 flex-1 basis-[calc(50%-0.25rem)] whitespace-normal";
+/** ActLink rendered as an outline button inside phone cards. */
+const ACT_LINK_BTN =
+  "min-h-10 flex-1 basis-[calc(50%-0.25rem)] justify-center rounded-md border border-gray-200 px-3 text-sm font-medium hover:no-underline hover:bg-gray-50";
 
 const TH = "px-4 py-3 text-left";
 const TD = "px-4 py-3";
@@ -906,172 +990,196 @@ function QueueTable({
   if (!rows || rows.length === 0) {
     return <p className="py-12 text-center text-sm text-gray-500">{L.queueEmpty}</p>;
   }
+  const view = (row: QueueRow, mobile: boolean) => {
+    const { transaction: tx, suggestions, hasOpenReceivables } = row;
+    const best = suggestions[0];
+    const busy = busyTxId === tx.id;
+    const hasAllocations = tx.allocations.length > 0;
+    const isMatched = tx.matchStatus === "MATCHED";
+    const leftoverKind = leftoverBadgeKind(
+      Number(tx.unallocatedAmount),
+      !!hasOpenReceivables,
+    );
+    const showLeftover = hasAllocations && leftoverKind !== "none";
+    const canAllocateRemainder =
+      leftoverKind === "remainder" &&
+      tx.matchStatus === "SUGGESTED" &&
+      !!tx.counterpartyIdno;
+    const isResolved = isMatched || hasAllocations;
+    const btn = mobile ? CARD_BTN : undefined;
+    const suggestion = isResolved ? (
+      <div className="space-y-1">
+        {tx.allocations.map((a) => (
+          <div
+            key={a.id}
+            className={cn(
+              "flex items-center gap-1 text-green-600",
+              mobile && "flex-wrap",
+            )}
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span className={cn("font-medium text-gray-900", mobile && "min-w-0 break-words")}>
+              {a.targetLabel}
+            </span>
+            <span className={cn("text-xs text-gray-500", mobile && "whitespace-nowrap")}>
+              {formatMoney(a.amount, tx.currency, locale)}
+            </span>
+          </div>
+        ))}
+        {showLeftover ? (
+          <span
+            className={
+              leftoverKind === "remainder"
+                ? "inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800"
+                : "inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+            }
+          >
+            {leftoverKind === "remainder" ? L.remainderToAllocate : L.overpaid}
+            : {formatMoney(tx.unallocatedAmount, tx.currency, locale)}
+          </span>
+        ) : null}
+      </div>
+    ) : best ? (
+      <div className="space-y-1">
+        <div className={cn("font-medium text-gray-900", mobile && "break-words")}>
+          {best.fiscalNumber}
+          <span className="ml-1 text-xs font-normal text-gray-500">
+            {best.buyerName}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          <ConfidenceBadge value={best.confidence} label={L.confidence} />
+          {best.signals.crossPayerName ? (
+            <span
+              title={L.crossPayerHint}
+              className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+            >
+              <AlertTriangle className="h-3 w-3" />
+              {L.crossPayerBadge}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    ) : (
+      <span className="text-xs text-gray-500">{L.noSuggestion}</span>
+    );
+    const actions = busy ? (
+      <Loader2 className={cn("h-4 w-4 animate-spin", !mobile && "ml-auto")} />
+    ) : isResolved ? (
+      <div className={cn("flex gap-1", mobile ? "flex-wrap gap-2" : "justify-end")}>
+        {canAllocateRemainder ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className={btn}
+            onClick={() => onAllocateRemainder(tx.id)}
+          >
+            {L.allocateRemainder}
+          </Button>
+        ) : null}
+        <Button
+          size="sm"
+          variant={mobile ? "outline" : "ghost"}
+          className={btn}
+          onClick={() => onUnmatch(tx.id)}
+        >
+          <Undo2 className="mr-1 h-4 w-4" />
+          {L.unmatch}
+        </Button>
+      </div>
+    ) : (
+      <div className={cn("flex gap-1", mobile ? "flex-wrap gap-2" : "justify-end")}>
+        {best ? (
+          <Button size="sm" className={btn} onClick={() => onConfirm(row)}>
+            <CheckCircle2 className="mr-1 h-4 w-4" />
+            {L.confirm}
+          </Button>
+        ) : null}
+        <Button
+          size="sm"
+          variant={mobile ? "outline" : "ghost"}
+          className={btn}
+          onClick={() => onIgnore(tx.id)}
+        >
+          <XCircle className="mr-1 h-4 w-4" />
+          {L.ignore}
+        </Button>
+      </div>
+    );
+    return { tx, suggestion, actions };
+  };
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-      <table className="w-full text-sm">
-        <thead className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          <tr>
-            <th className={TH}>{L.colDate}</th>
-            <th className={TH}>{L.colPayer}</th>
-            <th className={cn(TH, "hidden lg:table-cell")}>{L.colPurpose}</th>
-            <th className={cn(TH, "text-right")}>{L.colAmount}</th>
-            <th className={TH}>{L.colSuggestion}</th>
-            <th className={cn(TH, "text-right")}>{L.colActions}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {rows.map(({ transaction: tx, suggestions, hasOpenReceivables }) => {
-            const best = suggestions[0];
-            const busy = busyTxId === tx.id;
-            const hasAllocations = tx.allocations.length > 0;
-            const isMatched = tx.matchStatus === "MATCHED";
-            const leftoverKind = leftoverBadgeKind(
-              Number(tx.unallocatedAmount),
-              !!hasOpenReceivables,
-            );
-            const showLeftover =
-              hasAllocations && leftoverKind !== "none";
-            const canAllocateRemainder =
-              leftoverKind === "remainder" &&
-              tx.matchStatus === "SUGGESTED" &&
-              !!tx.counterpartyIdno;
-            const isResolved = isMatched || hasAllocations;
-            return (
-              <tr key={tx.id} className="align-top hover:bg-gray-50/60">
-                <td className={cn(TD, "whitespace-nowrap")}>
-                  {formatShortDate(tx.bookingDate)}
-                </td>
-                <td className={TD}>
-                  <div className="font-medium text-gray-900">
-                    {tx.counterpartyName ?? "—"}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {tx.counterpartyIdno ?? ""}
-                  </div>
-                </td>
-                <td className={cn(TD, "hidden max-w-xs text-xs text-gray-500 lg:table-cell")}>
-                  {tx.purpose ?? "—"}
-                </td>
-                <td className={cn(TD, "whitespace-nowrap text-right font-medium")}>
+    <>
+      <div className="space-y-2 md:hidden">
+        {rows.map((row) => {
+          const { tx, suggestion, actions } = view(row, true);
+          return (
+            <div key={tx.id} className={CARD}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 break-words font-medium text-gray-900">
+                  {tx.counterpartyName ?? "—"}
+                </div>
+                <div className="whitespace-nowrap text-right font-medium tabular-nums">
                   {formatMoney(tx.amount, tx.currency, locale)}
-                </td>
-                <td className={TD}>
-                  {isResolved ? (
-                    <div className="space-y-1">
-                      {tx.allocations.map((a) => (
-                        <div
-                          key={a.id}
-                          className="flex items-center gap-1 text-green-600"
-                        >
-                          <CheckCircle2 className="h-4 w-4 shrink-0" />
-                          <span className="font-medium text-gray-900">
-                            {a.targetLabel}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {formatMoney(a.amount, tx.currency, locale)}
-                          </span>
-                        </div>
-                      ))}
-                      {showLeftover ? (
-                        <span
-                          className={
-                            leftoverKind === "remainder"
-                              ? "inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800"
-                              : "inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
-                          }
-                        >
-                          {leftoverKind === "remainder"
-                            ? L.remainderToAllocate
-                            : L.overpaid}
-                          : {formatMoney(tx.unallocatedAmount, tx.currency, locale)}
-                        </span>
-                      ) : null}
+                </div>
+              </div>
+              <div className="mt-0.5 text-xs text-gray-500">
+                {[formatShortDate(tx.bookingDate), tx.counterpartyIdno]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+              {tx.purpose ? (
+                <div className="mt-1 break-words text-xs text-gray-500">{tx.purpose}</div>
+              ) : null}
+              <div className="mt-2 border-t border-gray-100 pt-2 text-sm">{suggestion}</div>
+              <div className="mt-2">{actions}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm md:block">
+        <table className="w-full text-sm">
+          <thead className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <tr>
+              <th className={TH}>{L.colDate}</th>
+              <th className={TH}>{L.colPayer}</th>
+              <th className={cn(TH, "hidden lg:table-cell")}>{L.colPurpose}</th>
+              <th className={cn(TH, "text-right")}>{L.colAmount}</th>
+              <th className={TH}>{L.colSuggestion}</th>
+              <th className={cn(TH, "text-right")}>{L.colActions}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {rows.map((row) => {
+              const { tx, suggestion, actions } = view(row, false);
+              return (
+                <tr key={tx.id} className="align-top hover:bg-gray-50/60">
+                  <td className={cn(TD, "whitespace-nowrap")}>
+                    {formatShortDate(tx.bookingDate)}
+                  </td>
+                  <td className={TD}>
+                    <div className="font-medium text-gray-900">
+                      {tx.counterpartyName ?? "—"}
                     </div>
-                  ) : best ? (
-                    <div className="space-y-1">
-                      <div className="font-medium text-gray-900">
-                        {best.fiscalNumber}
-                        <span className="ml-1 text-xs font-normal text-gray-500">
-                          {best.buyerName}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1">
-                        <ConfidenceBadge
-                          value={best.confidence}
-                          label={L.confidence}
-                        />
-                        {best.signals.crossPayerName ? (
-                          <span
-                            title={L.crossPayerHint}
-                            className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
-                          >
-                            <AlertTriangle className="h-3 w-3" />
-                            {L.crossPayerBadge}
-                          </span>
-                        ) : null}
-                      </div>
+                    <div className="text-xs text-gray-500">
+                      {tx.counterpartyIdno ?? ""}
                     </div>
-                  ) : (
-                    <span className="text-xs text-gray-500">{L.noSuggestion}</span>
-                  )}
-                </td>
-                <td className={cn(TD, "whitespace-nowrap text-right")}>
-                  {busy ? (
-                    <Loader2 className="ml-auto h-4 w-4 animate-spin" />
-                  ) : isResolved ? (
-                    <div className="flex justify-end gap-1">
-                      {canAllocateRemainder ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onAllocateRemainder(tx.id)}
-                        >
-                          {L.allocateRemainder}
-                        </Button>
-                      ) : null}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onUnmatch(tx.id)}
-                      >
-                        <Undo2 className="mr-1 h-4 w-4" />
-                        {L.unmatch}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex justify-end gap-1">
-                      {best ? (
-                        <Button
-                          size="sm"
-                          onClick={() =>
-                            onConfirm({
-                              transaction: tx,
-                              suggestions,
-                              hasOpenReceivables,
-                            })
-                          }
-                        >
-                          <CheckCircle2 className="mr-1 h-4 w-4" />
-                          {L.confirm}
-                        </Button>
-                      ) : null}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onIgnore(tx.id)}
-                      >
-                        <XCircle className="mr-1 h-4 w-4" />
-                        {L.ignore}
-                      </Button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  </td>
+                  <td className={cn(TD, "hidden max-w-xs text-xs text-gray-500 lg:table-cell")}>
+                    {tx.purpose ?? "—"}
+                  </td>
+                  <td className={cn(TD, "whitespace-nowrap text-right font-medium")}>
+                    {formatMoney(tx.amount, tx.currency, locale)}
+                  </td>
+                  <td className={TD}>{suggestion}</td>
+                  <td className={cn(TD, "whitespace-nowrap text-right")}>{actions}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -1245,7 +1353,7 @@ function DebtorsDashboard({
       ) : null}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm">
+        <div className="flex w-full rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm md:inline-flex md:w-auto">
           <SectionButton
             active={section === "debtors"}
             onClick={() => switchSection("debtors")}
@@ -1265,7 +1373,7 @@ function DebtorsDashboard({
             {L.sectionOperational} · {operational?.length ?? 0}
           </SectionButton>
         </div>
-        <div className="w-full max-w-sm sm:ml-auto">
+        <div className="w-full sm:ml-auto md:max-w-sm">
           <MenuSelect
             value={clientIdno}
             options={clientOptions}
@@ -1437,7 +1545,7 @@ function SectionButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+        "min-h-9 flex-1 rounded-md px-2 py-2 text-xs font-medium transition-colors md:min-h-0 md:flex-none md:px-3 md:py-1.5 md:text-sm",
         active ? "bg-gold text-white" : "text-gray-600 hover:bg-gray-50",
       )}
     >
@@ -1451,11 +1559,14 @@ function ActLink({
   clientName,
   locale,
   L,
+  className,
 }: {
   idno: string;
   clientName?: string;
   locale: Loc;
   L: Labels;
+  /** Overrides the link look (phone cards render it as a button). */
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -1463,7 +1574,7 @@ function ActLink({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 text-gold hover:underline"
+        className={cn("inline-flex items-center gap-1 text-gold hover:underline", className)}
       >
         <FileText className="h-4 w-4" />
         {L.act}
@@ -1689,7 +1800,7 @@ function ActLedgerPanel({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={L.actSearchPlaceholder}
-            className="h-9 w-full rounded-lg border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-sm outline-none ring-gold/30 focus:border-gold focus:ring-2"
+            className="h-10 w-full rounded-lg border border-gray-200 bg-white py-1.5 pl-8 pr-3 text-sm outline-none ring-gold/30 focus:border-gold focus:ring-2 md:h-9"
           />
         </div>
         <div className="flex flex-wrap gap-1">
@@ -1699,7 +1810,7 @@ function ActLedgerPanel({
               type="button"
               onClick={() => setKindFilter(c.id)}
               className={cn(
-                "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                "min-h-9 rounded-md px-3 py-2 text-xs font-medium transition-colors md:min-h-0 md:px-2.5 md:py-1.5",
                 kindFilter === c.id
                   ? "bg-gold text-white"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200",
@@ -1712,6 +1823,7 @@ function ActLedgerPanel({
         <Button
           variant="outline"
           size="sm"
+          className="h-10 w-full md:h-9 md:w-auto"
           onClick={() => void handleDownload()}
           disabled={downloading}
         >
@@ -1764,73 +1876,141 @@ function DebtorList({
   const DueIcon =
     dueSort === "dueAsc" ? ArrowUp : dueSort === "dueDesc" ? ArrowDown : ArrowUpDown;
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-      <table className="w-full text-sm">
-        <thead className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          <tr>
-            <th className={TH}>{L.colClient}</th>
-            <th className={cn(TH, "hidden md:table-cell")}>{L.colIdno}</th>
-            <th className={cn(TH, "text-right")}>{L.colOpenInvoices}</th>
-            <th className={cn(TH, "text-right")}>{L.colOutstanding}</th>
-            <th className={cn(TH, "hidden md:table-cell")}>
-              <button
-                type="button"
-                onClick={onCycleDueSort}
-                title={L.sortByDue}
-                className={cn(
-                  "inline-flex items-center gap-1 uppercase tracking-wider",
-                  dueSort !== "amount"
-                    ? "font-semibold text-gray-800"
-                    : "font-semibold text-gray-500",
-                )}
-              >
-                {L.colOldestDue}
-                <DueIcon className="h-3.5 w-3.5" />
-              </button>
-            </th>
-            <th className={cn(TH, "text-right")}>{L.colActions}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {rows.map((d) => (
-            <tr key={d.buyerIdno} className="hover:bg-gray-50/60">
-              <td className={cn(TD, "font-medium text-gray-900")}>{d.clientName}</td>
-              <td className={cn(TD, "hidden text-xs text-gray-500 md:table-cell")}>
-                {d.buyerIdno ?? "—"}
-              </td>
-              <td className={cn(TD, "text-right")}>{d.openInvoices}</td>
-              <td className={cn(TD, "text-right font-medium text-red-600 tabular-nums")}>
+    <>
+      <div className="space-y-2 md:hidden">
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onCycleDueSort}
+            title={L.sortByDue}
+            className={cn(
+              "inline-flex min-h-9 items-center gap-1 rounded-md px-2 text-xs font-semibold uppercase tracking-wider",
+              dueSort !== "amount" ? "text-gray-800" : "text-gray-500",
+            )}
+          >
+            {L.colOldestDue}
+            <DueIcon className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        {rows.map((d) => (
+          <div key={d.buyerIdno} className={CARD}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 break-words font-medium text-gray-900">
+                {d.clientName}
+              </div>
+              <div className="whitespace-nowrap text-right font-medium text-red-600 tabular-nums">
                 {formatMoney(d.amount, "MDL", locale)}
-              </td>
-              <td className={cn(TD, "hidden md:table-cell")}>
-                <span className={d.daysOverdue != null ? "text-red-600" : ""}>
+              </div>
+            </div>
+            <div className="mt-0.5 text-xs text-gray-500">
+              {[d.buyerIdno, `${L.colOpenInvoices}: ${d.openInvoices}`]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+            {d.oldestDueDate ? (
+              <div className="mt-2">
+                <span
+                  className={cn(
+                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+                    d.daysOverdue != null
+                      ? "bg-red-50 text-red-700"
+                      : "bg-gray-100 text-gray-600",
+                  )}
+                >
                   {formatShortDate(d.oldestDueDate)}
                   {d.daysOverdue != null ? ` · ${L.overdueDays(d.daysOverdue)}` : ""}
                 </span>
-              </td>
-              <td className={cn(TD, "text-right")}>
-                <div className="flex flex-wrap items-center justify-end gap-1">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => onSettle(d)}
-                  >
-                    <Banknote className="mr-1 h-4 w-4" />
-                    {L.settlePos}
-                  </Button>
-                  <ActLink
-                    idno={d.buyerIdno}
-                    clientName={d.clientName}
-                    locale={locale}
-                    L={L}
-                  />
-                </div>
-              </td>
+              </div>
+            ) : null}
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className={CARD_BTN}
+                onClick={() => onSettle(d)}
+              >
+                <Banknote className="mr-1 h-4 w-4" />
+                {L.settlePos}
+              </Button>
+              <ActLink
+                idno={d.buyerIdno}
+                clientName={d.clientName}
+                locale={locale}
+                L={L}
+                className={ACT_LINK_BTN}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm md:block">
+        <table className="w-full text-sm">
+          <thead className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <tr>
+              <th className={TH}>{L.colClient}</th>
+              <th className={cn(TH, "hidden md:table-cell")}>{L.colIdno}</th>
+              <th className={cn(TH, "text-right")}>{L.colOpenInvoices}</th>
+              <th className={cn(TH, "text-right")}>{L.colOutstanding}</th>
+              <th className={cn(TH, "hidden md:table-cell")}>
+                <button
+                  type="button"
+                  onClick={onCycleDueSort}
+                  title={L.sortByDue}
+                  className={cn(
+                    "inline-flex items-center gap-1 uppercase tracking-wider",
+                    dueSort !== "amount"
+                      ? "font-semibold text-gray-800"
+                      : "font-semibold text-gray-500",
+                  )}
+                >
+                  {L.colOldestDue}
+                  <DueIcon className="h-3.5 w-3.5" />
+                </button>
+              </th>
+              <th className={cn(TH, "text-right")}>{L.colActions}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {rows.map((d) => (
+              <tr key={d.buyerIdno} className="hover:bg-gray-50/60">
+                <td className={cn(TD, "font-medium text-gray-900")}>{d.clientName}</td>
+                <td className={cn(TD, "hidden text-xs text-gray-500 md:table-cell")}>
+                  {d.buyerIdno ?? "—"}
+                </td>
+                <td className={cn(TD, "text-right")}>{d.openInvoices}</td>
+                <td className={cn(TD, "text-right font-medium text-red-600 tabular-nums")}>
+                  {formatMoney(d.amount, "MDL", locale)}
+                </td>
+                <td className={cn(TD, "hidden md:table-cell")}>
+                  <span className={d.daysOverdue != null ? "text-red-600" : ""}>
+                    {formatShortDate(d.oldestDueDate)}
+                    {d.daysOverdue != null ? ` · ${L.overdueDays(d.daysOverdue)}` : ""}
+                  </span>
+                </td>
+                <td className={cn(TD, "text-right")}>
+                  <div className="flex flex-wrap items-center justify-end gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onSettle(d)}
+                    >
+                      <Banknote className="mr-1 h-4 w-4" />
+                      {L.settlePos}
+                    </Button>
+                    <ActLink
+                      idno={d.buyerIdno}
+                      clientName={d.clientName}
+                      locale={locale}
+                      L={L}
+                    />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -2173,7 +2353,56 @@ function CreditorList({
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <span>{L.creditHint}</span>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="space-y-2 md:hidden">
+        {rows.map((c) => (
+          <div key={c.buyerIdno} className={CARD}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 break-words font-medium text-gray-900">
+                {c.clientName}
+              </div>
+              <div className="whitespace-nowrap text-right font-medium text-amber-600 tabular-nums">
+                {formatMoney(c.amount, "MDL", locale)}
+              </div>
+            </div>
+            <div className="mt-0.5 text-xs text-gray-500">
+              {[c.buyerIdno, `${L.colOpenInvoices}: ${c.openInvoices}`]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className={CARD_BTN}
+                onClick={() => onLink(c)}
+              >
+                {L.linkToInvoice}
+              </Button>
+              <ActLink
+                idno={c.buyerIdno}
+                clientName={c.clientName}
+                locale={locale}
+                L={L}
+                className={ACT_LINK_BTN}
+              />
+              <Button
+                size="sm"
+                variant="ghost"
+                className={cn(CARD_BTN, "basis-full")}
+                disabled={busyIdno === c.buyerIdno}
+                onClick={() => onMarkNotClient(c)}
+              >
+                {busyIdno === c.buyerIdno ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  L.markNotClient
+                )}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm md:block">
         <table className="w-full text-sm">
           <thead className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wider text-gray-500">
             <tr>
@@ -2261,7 +2490,41 @@ function OperationalList({
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <span>{L.operationalHint}</span>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="space-y-2 md:hidden">
+        {rows.map((o) => (
+          <div key={o.buyerIdno} className={CARD}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 break-words font-medium text-gray-900">
+                {o.clientName}
+              </div>
+              <div className="whitespace-nowrap text-right font-medium text-gray-700 tabular-nums">
+                {formatMoney(o.amount, "MDL", locale)}
+              </div>
+            </div>
+            {o.buyerIdno ? (
+              <div className="mt-0.5 text-xs text-gray-500">{o.buyerIdno}</div>
+            ) : null}
+            {o.removable ? (
+              <div className="mt-2 flex">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={CARD_BTN}
+                  disabled={busyIdno === o.buyerIdno}
+                  onClick={() => onUnmark(o.buyerIdno)}
+                >
+                  {busyIdno === o.buyerIdno ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    L.unmarkClient
+                  )}
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm md:block">
         <table className="w-full text-sm">
           <thead className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wider text-gray-500">
             <tr>
@@ -2390,7 +2653,7 @@ function ActView({ L, locale, initialIdno = "" }: { L: Labels; locale: Loc; init
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="w-full max-w-sm">
+        <div className="w-full md:max-w-sm">
           <MenuSelect
             value={idno}
             options={options}
@@ -2463,15 +2726,142 @@ function LedgerTable({
   showTotals?: boolean;
 }) {
   const cur = "MDL";
+  const view = (e: StatementEntry, mobile: boolean) => {
+    const isPayment = e.kind === "payment";
+    const isReceipt = e.kind === "receipt";
+    const isPaperInvoice = e.kind === "paper_invoice";
+    const isHistoricalInvoice = e.kind === "historical_invoice";
+    const isRefund = e.kind === "refund";
+    const bal = Number(e.balance);
+    const fiscalId = fiscalIdFromEntry(e);
+    const clickable = Boolean(fiscalId && onOpenInvoice);
+    const open = () => {
+      if (fiscalId && onOpenInvoice) onOpenInvoice(fiscalId);
+    };
+    const docTitle = isPayment
+      ? `${L.rowPayment}: ${e.document}`
+      : isReceipt
+        ? `${L.rowReceipt}: ${e.document}`
+        : isPaperInvoice
+          ? `${L.rowPaperInvoice}: ${e.document}`
+          : isHistoricalInvoice
+            ? `${L.rowHistoricalInvoice}: ${e.document}`
+            : isRefund
+              ? `${L.rowRefund}: ${e.document}`
+              : e.document;
+    // Phone cards wrap long text instead of truncating it.
+    const clip = mobile ? "break-words" : "max-w-md truncate";
+    const doc = (
+      <>
+        <div
+          className={cn(
+            "font-medium",
+            mobile && "min-w-0 break-words",
+            clickable && "text-gold hover:underline",
+            !clickable &&
+              (isReceipt
+                ? "text-blue-700"
+                : isPayment
+                  ? "text-green-700"
+                  : isPaperInvoice || isHistoricalInvoice
+                    ? "text-amber-800"
+                    : isRefund
+                      ? "text-rose-700"
+                      : "text-gray-900"),
+          )}
+        >
+          {docTitle}
+          {e.paperFiscal ? (
+            <span className="ml-2 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+              {L.paperFiscalNote}
+            </span>
+          ) : null}
+        </div>
+        {e.payerName ? (
+          <div className={cn(clip, "text-xs font-medium text-amber-700")}>
+            {L.paidOnBehalf}: {e.payerName}
+            {e.payerIdno ? ` · ${e.payerIdno}` : ""}
+          </div>
+        ) : null}
+        {e.description ? (
+          <div className={cn(clip, "text-xs text-gray-400")}>{e.description}</div>
+        ) : isPaperInvoice || isHistoricalInvoice ? (
+          <div className="max-w-md text-xs text-gray-400">
+            {isHistoricalInvoice ? L.rowHistoricalInvoice : L.paperFiscalNote}
+          </div>
+        ) : null}
+        {isReceipt && e.receiptPhotoKey ? (
+          <a
+            href={`/api/admin/file-by-key?key=${encodeURIComponent(e.receiptPhotoKey)}`}
+            target="_blank"
+            rel="noreferrer"
+            className={cn(
+              "mt-0.5 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline",
+              mobile && "min-h-9",
+            )}
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <ImageIcon className="h-3.5 w-3.5" />
+            {L.receiptPhoto}
+          </a>
+        ) : null}
+      </>
+    );
+    return { key: `${e.kind}-${e.sourceId}`, bal, clickable, open, doc };
+  };
   return (
     <div>
       {showBuyerHeader ? (
-        <div className="mb-2 text-sm text-gray-500">
+        <div className="mb-2 break-words text-sm text-gray-500">
           <span className="font-medium text-gray-900">{statement.buyer.name}</span>
           {statement.buyer.idno ? ` · ${statement.buyer.idno}` : ""}
         </div>
       ) : null}
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="space-y-2 md:hidden">
+        {entries.map((e) => {
+          const { key, bal, clickable, open, doc } = view(e, true);
+          const isDebit = e.debit !== "0.00";
+          const isCredit = e.credit !== "0.00";
+          return (
+            <div
+              key={key}
+              className={cn(CARD, clickable && "cursor-pointer active:bg-gray-50")}
+              onClick={open}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">{doc}</div>
+                <div className="shrink-0 text-right tabular-nums">
+                  {isDebit ? (
+                    <div className="whitespace-nowrap font-medium text-red-600">
+                      {formatMoney(e.debit, cur, locale)}
+                    </div>
+                  ) : null}
+                  {isCredit ? (
+                    <div className="whitespace-nowrap font-medium text-green-700">
+                      {formatMoney(e.credit, cur, locale)}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 text-xs text-gray-500">
+                <span className="whitespace-nowrap">{formatShortDate(e.date)}</span>
+                <span className="whitespace-nowrap">
+                  {L.colBalance}:{" "}
+                  <span
+                    className={cn(
+                      "font-medium tabular-nums",
+                      bal > 0 ? "text-red-600" : "text-gray-500",
+                    )}
+                  >
+                    {formatMoney(e.balance, cur, locale)}
+                  </span>
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm md:block">
         <table className="w-full text-sm">
           <thead className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wider text-gray-500">
             <tr>
@@ -2484,93 +2874,20 @@ function LedgerTable({
           </thead>
           <tbody className="divide-y divide-gray-100">
             {entries.map((e) => {
-              const isPayment = e.kind === "payment";
-              const isReceipt = e.kind === "receipt";
-              const isPaperInvoice = e.kind === "paper_invoice";
-              const isHistoricalInvoice = e.kind === "historical_invoice";
-              const isRefund = e.kind === "refund";
-              const bal = Number(e.balance);
-              const fiscalId = fiscalIdFromEntry(e);
-              const clickable = Boolean(fiscalId && onOpenInvoice);
-              const docTitle = isPayment
-                ? `${L.rowPayment}: ${e.document}`
-                : isReceipt
-                  ? `${L.rowReceipt}: ${e.document}`
-                  : isPaperInvoice
-                    ? `${L.rowPaperInvoice}: ${e.document}`
-                    : isHistoricalInvoice
-                      ? `${L.rowHistoricalInvoice}: ${e.document}`
-                      : isRefund
-                        ? `${L.rowRefund}: ${e.document}`
-                        : e.document;
+              const { key, bal, clickable, open, doc } = view(e, false);
               return (
                 <tr
-                  key={`${e.kind}-${e.sourceId}`}
+                  key={key}
                   className={cn(
                     "align-top hover:bg-gray-50/60",
                     clickable && "cursor-pointer",
                   )}
-                  onClick={() => {
-                    if (fiscalId && onOpenInvoice) onOpenInvoice(fiscalId);
-                  }}
+                  onClick={open}
                 >
                   <td className={cn(TD, "whitespace-nowrap")}>
                     {formatShortDate(e.date)}
                   </td>
-                  <td className={TD}>
-                    <div
-                      className={cn(
-                        "font-medium",
-                        clickable && "text-gold hover:underline",
-                        !clickable &&
-                          (isReceipt
-                            ? "text-blue-700"
-                            : isPayment
-                              ? "text-green-700"
-                              : isPaperInvoice || isHistoricalInvoice
-                                ? "text-amber-800"
-                                : isRefund
-                                  ? "text-rose-700"
-                                  : "text-gray-900"),
-                      )}
-                    >
-                      {docTitle}
-                      {e.paperFiscal ? (
-                        <span className="ml-2 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800">
-                          {L.paperFiscalNote}
-                        </span>
-                      ) : null}
-                    </div>
-                    {e.payerName ? (
-                      <div className="max-w-md truncate text-xs font-medium text-amber-700">
-                        {L.paidOnBehalf}: {e.payerName}
-                        {e.payerIdno ? ` · ${e.payerIdno}` : ""}
-                      </div>
-                    ) : null}
-                    {e.description ? (
-                      <div className="max-w-md truncate text-xs text-gray-400">
-                        {e.description}
-                      </div>
-                    ) : isPaperInvoice || isHistoricalInvoice ? (
-                      <div className="max-w-md text-xs text-gray-400">
-                        {isHistoricalInvoice
-                          ? L.rowHistoricalInvoice
-                          : L.paperFiscalNote}
-                      </div>
-                    ) : null}
-                    {isReceipt && e.receiptPhotoKey ? (
-                      <a
-                        href={`/api/admin/file-by-key?key=${encodeURIComponent(e.receiptPhotoKey)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-0.5 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
-                        onClick={(ev) => ev.stopPropagation()}
-                      >
-                        <ImageIcon className="h-3.5 w-3.5" />
-                        {L.receiptPhoto}
-                      </a>
-                    ) : null}
-                  </td>
+                  <td className={TD}>{doc}</td>
                   <td className={cn(TD, "whitespace-nowrap text-right text-red-600")}>
                     {e.debit === "0.00" ? "" : formatMoney(e.debit, cur, locale)}
                   </td>
@@ -2597,13 +2914,13 @@ function LedgerTable({
         <div className="mt-3 flex flex-col items-end gap-1 text-sm">
           <div className="flex w-full max-w-xs justify-between">
             <span className="text-gray-500">{L.actTotalInvoiced}</span>
-            <span className="font-medium">
+            <span className="whitespace-nowrap font-medium">
               {formatMoney(statement.totalInvoiced, cur, locale)}
             </span>
           </div>
           <div className="flex w-full max-w-xs justify-between">
             <span className="text-gray-500">{L.actTotalPaid}</span>
-            <span className="font-medium">
+            <span className="whitespace-nowrap font-medium">
               {formatMoney(statement.totalPaid, cur, locale)}
             </span>
           </div>
@@ -2611,7 +2928,7 @@ function LedgerTable({
             <span className="font-semibold text-gray-900">{L.actBalance}</span>
             <span
               className={cn(
-                "font-bold",
+                "whitespace-nowrap font-bold",
                 Number(statement.totalOutstanding) > 0
                   ? "text-red-600"
                   : "text-gray-900",
@@ -2647,7 +2964,42 @@ function StatementsView({ L, locale }: { L: Labels; locale: Loc }) {
 
   return (
     <>
-      <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="space-y-2 md:hidden">
+        {statements.map((s) => (
+          <div key={s.id} className={CARD}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 break-all font-medium text-gray-900">
+                {s.fileName}
+              </div>
+              <div className="whitespace-nowrap text-right text-sm font-medium tabular-nums">
+                {s.transactionCount} {L.rows}
+              </div>
+            </div>
+            <div className="mt-0.5 text-xs text-gray-500">
+              <span className="whitespace-nowrap">
+                {formatShortDate(s.periodFrom)}–{formatShortDate(s.periodTo)}
+              </span>
+              {s.uploadedByName ? ` · ${s.uploadedByName}` : ""}
+              {" · "}
+              <span className="whitespace-nowrap">
+                {L.uploaded} {formatShortDate(s.createdAt)}
+              </span>
+            </div>
+            <div className="mt-2 flex">
+              <Button
+                size="sm"
+                variant="outline"
+                className={CARD_BTN}
+                onClick={() => setOpenId(s.id)}
+              >
+                <FileText className="mr-1 h-4 w-4" />
+                {L.viewTransactions}
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm md:block">
         <table className="w-full text-sm">
           <thead className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wider text-gray-500">
             <tr>
@@ -2728,8 +3080,8 @@ function StatementDrawer({
       <div className="absolute inset-0 bg-black/30" onClick={onClose} aria-hidden />
       <aside className="relative flex h-full w-full max-w-3xl flex-col overflow-y-auto bg-white shadow-xl">
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-100 bg-white px-5 py-4">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">
+          <div className="min-w-0">
+            <h2 className="break-all text-lg font-bold text-gray-900 md:break-normal">
               {statement?.fileName ?? "…"}
             </h2>
             {statement ? (
@@ -2755,8 +3107,54 @@ function StatementDrawer({
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
         ) : (
-          <div className="p-5">
-            <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <div className="p-3 md:p-5">
+            <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200 md:hidden">
+              {transactions.map((t) => {
+                const inc = t.direction === "CREDIT";
+                return (
+                  <li key={t.id} className="p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 break-words font-medium text-gray-900">
+                        {t.counterpartyName ?? "—"}
+                      </div>
+                      <div
+                        className={cn(
+                          "whitespace-nowrap text-right font-medium tabular-nums",
+                          inc ? "text-green-700" : "text-gray-900",
+                        )}
+                      >
+                        {inc ? "+" : "−"}
+                        {formatMoney(t.amount, t.currency, locale)}
+                      </div>
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
+                      <span className="whitespace-nowrap">
+                        {formatShortDate(t.bookingDate)}
+                      </span>
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 font-medium",
+                          inc ? "text-green-700" : "text-gray-500",
+                        )}
+                      >
+                        {inc ? (
+                          <ArrowDownLeft className="h-3.5 w-3.5" />
+                        ) : (
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        )}
+                        {inc ? L.dirIn : L.dirOut}
+                      </span>
+                    </div>
+                    {t.purpose ? (
+                      <div className="mt-1 break-words text-xs text-gray-400">
+                        {t.purpose}
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="hidden overflow-x-auto rounded-xl border border-gray-200 md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/80 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">

@@ -156,7 +156,7 @@ export default function SupplierMatchPanel({
         <Button
           size="sm"
           variant="outline"
-          className="gap-1.5 self-start"
+          className="h-10 w-full gap-1.5 self-start sm:w-auto md:h-9"
           disabled={busy !== null}
           onClick={() => run("auto", () => post("/api/admin/settlements/supplier-match/auto", { idno }))}
         >
@@ -175,7 +175,7 @@ export default function SupplierMatchPanel({
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-xs"
+              className="h-10 w-full text-xs sm:w-auto md:h-7"
               disabled={busy !== null}
               onClick={() => run("all", () => post("/api/admin/settlements/supplier-match/confirm", { ids: strong }))}
             >
@@ -209,10 +209,10 @@ export default function SupplierMatchPanel({
                   </div>
                   {s.reason ? <div className="text-gray-500">{s.reason}</div> : null}
                 </div>
-                <div className="flex shrink-0 gap-1.5">
+                <div className="flex shrink-0 gap-1.5 [&>button]:flex-1 sm:[&>button]:flex-none">
                   <Button
                     size="sm"
-                    className="h-7 gap-1 text-xs"
+                    className="h-10 gap-1 text-xs md:h-7"
                     disabled={busy !== null}
                     onClick={() =>
                       run(s.allocationId, () => post("/api/admin/settlements/supplier-match/confirm", { ids: [s.allocationId] }))
@@ -224,7 +224,7 @@ export default function SupplierMatchPanel({
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 gap-1 text-xs"
+                    className="h-10 gap-1 text-xs md:h-7"
                     disabled={busy !== null}
                     onClick={() =>
                       run(`r${s.allocationId}`, () => post("/api/admin/settlements/supplier-match/reject", { ids: [s.allocationId] }))
@@ -242,7 +242,7 @@ export default function SupplierMatchPanel({
           <div className="mt-2 border-t border-violet-100 pt-2">
             <button
               type="button"
-              className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700"
+              className="flex min-h-10 items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700 md:min-h-0"
               aria-expanded={showRejected}
               onClick={() => setShowRejected((v) => !v)}
             >
@@ -279,7 +279,7 @@ export default function SupplierMatchPanel({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 shrink-0 gap-1 self-start text-xs sm:self-auto"
+                        className="h-10 shrink-0 gap-1 self-stretch text-xs sm:self-auto md:h-7"
                         disabled={busy !== null}
                         onClick={() =>
                           run(`u${s.allocationId}`, async () => {
@@ -315,9 +315,9 @@ export default function SupplierMatchPanel({
             {data.stale.map((l) => (
               <li
                 key={l.allocationId}
-                className="flex items-center justify-between gap-2 rounded-md border border-amber-100 bg-white px-2.5 py-1.5 text-xs"
+                className="flex flex-col gap-2 rounded-md border border-amber-100 bg-white px-2.5 py-1.5 text-xs md:flex-row md:items-center md:justify-between"
               >
-                <span className="min-w-0 truncate text-gray-700">
+                <span className="min-w-0 break-words text-gray-700 md:truncate">
                   {l.paymentKind === "card" ? <CreditCard className="mr-1 inline h-3 w-3" /> : <Landmark className="mr-1 inline h-3 w-3" />}
                   {l.paymentDate ? `${formatShortDate(l.paymentDate)} · ` : ""}
                   {l.paymentDocument ?? "—"} → {l.invoiceDocument ?? "—"} · {money(l.amount)}{" "}
@@ -326,7 +326,7 @@ export default function SupplierMatchPanel({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-6 shrink-0 px-2 text-[11px]"
+                  className="h-10 shrink-0 px-2 text-[11px] md:h-6"
                   disabled={busy !== null}
                   onClick={() => setUndoLink(l)}
                 >
@@ -375,14 +375,14 @@ export default function SupplierMatchPanel({
                       <ul className="mt-1 space-y-0.5">
                         {confirmed.map((l) => (
                           <li key={l.allocationId} className="flex items-center justify-between gap-2 text-gray-500">
-                            <span className="min-w-0 truncate">
+                            <span className="min-w-0 break-words md:truncate">
                               {l.paymentKind === "card" ? <CreditCard className="mr-1 inline h-3 w-3" /> : <Landmark className="mr-1 inline h-3 w-3" />}
                               {formatShortDate(l.paymentDate)} · {l.paymentDocument} · {money(l.amount)}{" "}
                               <span className="text-gray-400">({l.auto ? M.auto : M.manual})</span>
                             </span>
                             <button
                               type="button"
-                              className="shrink-0 rounded px-1 text-gray-400 hover:bg-gray-100 hover:text-rose-700"
+                              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded px-1 text-gray-400 hover:bg-gray-100 hover:text-rose-700 md:h-auto md:w-auto"
                               title={M.undo}
                               aria-label={M.undo}
                               onClick={() => setUndoLink(l)}
@@ -399,7 +399,7 @@ export default function SupplierMatchPanel({
             </ul>
           )}
           {data.invoices.length > LIST_LIMIT && !showAllInvoices ? (
-            <button type="button" className="mt-1 text-xs text-gray-500 underline" onClick={() => setShowAllInvoices(true)}>
+            <button type="button" className="mt-1 min-h-10 text-xs text-gray-500 underline md:min-h-0" onClick={() => setShowAllInvoices(true)}>
               {M.showAll(data.invoices.length)}
             </button>
           ) : null}
@@ -426,7 +426,7 @@ export default function SupplierMatchPanel({
                           <Landmark className="h-3.5 w-3.5 shrink-0 text-gray-400" />
                         )}
                         <span className="text-gray-500">{formatShortDate(p.date)}</span>
-                        <span className="truncate font-medium text-gray-900">{p.document}</span>
+                        <span className="min-w-0 break-words font-medium text-gray-900 md:truncate">{p.document}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="tabular-nums text-gray-700">{money(p.amount)}</span>
@@ -434,7 +434,7 @@ export default function SupplierMatchPanel({
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-6 gap-1 px-2 text-[11px]"
+                            className="h-10 gap-1 px-3 text-[11px] md:h-6 md:px-2"
                             onClick={() => setLinking(linking === p.id ? null : p.id)}
                           >
                             <Link2 className="h-3 w-3" />
@@ -444,7 +444,7 @@ export default function SupplierMatchPanel({
                       </div>
                     </div>
                     {p.purpose ? (
-                      <div className="mt-0.5 truncate text-gray-400" title={p.purpose}>
+                      <div className="mt-0.5 break-words text-gray-400 md:truncate" title={p.purpose}>
                         {p.purpose}
                       </div>
                     ) : null}
@@ -480,7 +480,7 @@ export default function SupplierMatchPanel({
             </ul>
           )}
           {data.payments.length > LIST_LIMIT && !showAllPayments ? (
-            <button type="button" className="mt-1 text-xs text-gray-500 underline" onClick={() => setShowAllPayments(true)}>
+            <button type="button" className="mt-1 min-h-10 text-xs text-gray-500 underline md:min-h-0" onClick={() => setShowAllPayments(true)}>
               {M.showAll(data.payments.length)}
             </button>
           ) : null}
@@ -573,7 +573,7 @@ function LinkForm({
         <ul className="max-h-64 space-y-1 overflow-y-auto">
           {open.map((i) => (
             <li key={i.id} className="flex flex-wrap items-center gap-2 text-xs">
-              <label className="flex min-w-0 flex-1 items-center gap-1.5">
+              <label className="flex min-h-10 min-w-0 flex-1 flex-wrap items-center gap-1.5 md:min-h-0 md:flex-nowrap">
                 <input type="checkbox" checked={i.id in picked} onChange={() => toggle(i.id, i.open)} />
                 <span className="font-medium text-gray-900">{i.document}</span>
                 <span className="text-gray-500">{formatShortDate(i.issueDate)}</span>
@@ -586,7 +586,7 @@ function LinkForm({
                     value={picked[i.id]}
                     onChange={(e) => setPicked((cur) => ({ ...cur, [i.id]: e.target.value }))}
                     className={cn(
-                      "h-7 w-28 text-xs tabular-nums",
+                      "h-10 w-28 text-xs tabular-nums md:h-7",
                       overInvoice.has(i.id) && "border-rose-400 text-rose-700 focus-visible:ring-rose-300",
                     )}
                     aria-label={M.linkAmount}
@@ -602,7 +602,7 @@ function LinkForm({
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <Button
           size="sm"
-          className="h-7 text-xs"
+          className="h-10 flex-1 text-xs md:h-7 md:flex-none"
           disabled={busy || over || Object.keys(picked).length === 0}
           onClick={() =>
             onSave(
@@ -615,7 +615,7 @@ function LinkForm({
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
           {M.linkSave}
         </Button>
-        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onCancel} disabled={busy}>
+        <Button size="sm" variant="outline" className="h-10 flex-1 text-xs md:h-7 md:flex-none" onClick={onCancel} disabled={busy}>
           {cancelLabel}
         </Button>
         <span className={cn("text-[11px] tabular-nums", overPayment ? "font-medium text-rose-700" : "text-gray-500")}>
