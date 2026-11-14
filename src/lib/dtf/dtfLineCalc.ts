@@ -139,6 +139,8 @@ export function presetUnitPrice(
     | "runDiscount2Pct"
     | "runDiscount3MinQty"
     | "runDiscount3Pct"
+    | "runDiscount4MinQty"
+    | "runDiscount4Pct"
     | "runDiscountRoundToMdl"
   >,
   quantity: number = 1,
@@ -180,6 +182,10 @@ function zonePreset(
   return { preset, widthCm, heightCm };
 }
 
+/** Price label of a zone priced as a sleeve print («Mânecă 10×10»). */
+export const SLEEVE_PRESET_LABEL = "Mânecă";
+const fmtCm = (v: number): string => String(Math.round(v * 10) / 10);
+
 /**
  * Turn zone requests into priced zones; throws {@link DtfLineError}.
  * Format prices take the retail run-size discount (dealers pay their own
@@ -216,7 +222,18 @@ export function resolveDtfZones(
     ) {
       throw new DtfLineError(DtfLineErrorCode.NoPressUnavailable);
     }
-    const unitListPriceMdl: number = noPress ? (preset.dealerNoPressPrice as number) : priceOf(preset);
+    // A sleeve print up to the sleeve size has its own flat price (settings), not the format's.
+    const sleeve: boolean =
+      !noPress &&
+      (req.placement === "sleeve_left" || req.placement === "sleeve_right") &&
+      Math.max(widthCm, heightCm) <= settings.sleeveMaxCm + SIZE_EPS_CM;
+    const sleevePrice: number =
+      customerType === "dealer" ? settings.sleevePriceDealerMdl : settings.sleevePriceRetailMdl;
+    const unitListPriceMdl: number = noPress
+      ? (preset.dealerNoPressPrice as number)
+      : sleeve
+        ? sleevePrice
+        : priceOf(preset);
     let unitIncludedCreditMdl = 0;
     if (index === 0 && ctx.includedPrint && !noPress) {
       // The item price already holds its standard print: another size moves the
@@ -231,12 +248,16 @@ export function resolveDtfZones(
         ? { placementNote: req.placementNote.trim() }
         : {}),
       presetId: preset.id,
-      presetLabel: preset.label,
+      presetLabel: sleeve ? `${SLEEVE_PRESET_LABEL} ${fmtCm(settings.sleeveMaxCm)}×${fmtCm(settings.sleeveMaxCm)}` : preset.label,
       customSize: req.presetId == null,
       widthCm,
       heightCm,
-      unitFormatPriceMdl: customerType === "dealer" && preset.dealerPrice != null ? preset.dealerPrice : preset.retailPrice,
-      runDiscountPct: pctOff,
+      unitFormatPriceMdl: sleeve
+        ? sleevePrice
+        : customerType === "dealer" && preset.dealerPrice != null
+          ? preset.dealerPrice
+          : preset.retailPrice,
+      runDiscountPct: sleeve ? 0 : pctOff,
       noPress,
       unitListPriceMdl,
       unitIncludedCreditMdl,

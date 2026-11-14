@@ -1,6 +1,7 @@
 "use client";
 
 import { StatusWriteNotice, useStatusWriteNotice } from "./StatusWriteNotice";
+import { TshirtClientViews } from "./TshirtClientViews";
 import { orderStatusWriteNotice } from "@/lib/orderStatusWriteClient";
 import React, {
   useEffect,
@@ -1636,6 +1637,13 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 {line.productType === "paper_print" && line.shopLineData != null && (
                   <ShopPrintLineSummary dataRaw={line.shopLineData} className="mb-2" />
                 )}
+                {line.productType === "dtf_apparel" && (
+                  <TshirtClientViews
+                    designerData={line.designerData}
+                    title={t.admin.tshirtClientViews}
+                    sideName={(p) => t.admin.tshirtSides[p as keyof typeof t.admin.tshirtSides] ?? p}
+                  />
+                )}
                 <OrderFileSpecs
                   files={line.files}
                   t={t}
@@ -3089,6 +3097,13 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               )}
               {line.productType === "dtf_apparel" && line.files.length === 0 && (
                 <DtfNoFileBadge t={t} className="mb-2" />
+              )}
+              {line.productType === "dtf_apparel" && (
+                <TshirtClientViews
+                  designerData={line.designerData}
+                  title={t.admin.tshirtClientViews}
+                  sideName={(p) => t.admin.tshirtSides[p as keyof typeof t.admin.tshirtSides] ?? p}
+                />
               )}
               {line.productType === "uv_print" && (
                 <UvLineSummary dataRaw={line.uvLineData} setData={line.setData} t={t} className="mb-2" />

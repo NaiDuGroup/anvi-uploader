@@ -1,5 +1,6 @@
 "use client";
 
+import { TshirtClientViews } from "./TshirtClientViews";
 import { GiftSetBadge } from "@/components/orders/GiftSetBadge";
 import { isGiftSetSku } from "@/lib/giftSet/giftSet";
 import React, {
@@ -565,7 +566,7 @@ function BoardLineCard({
       <p className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-gray-400">
         <span className="inline-flex items-center gap-1">
           <UserCheck className="h-3 w-3 shrink-0" aria-hidden />
-          <span>{line.createdByName ?? <span className="italic text-gray-300">клиент</span>}</span>
+          <span>{line.createdByName ?? <span className="italic text-gray-300">{t.common.createdByClient}</span>}</span>
         </span>
         {(line.sentToWorkshopByName ?? line.createdByName) && (
           <span className="inline-flex items-center gap-1">
@@ -590,6 +591,15 @@ function BoardLineCard({
         <div className="mb-2">
           <FileThumbnailStrip files={line.files} />
         </div>
+      )}
+
+      {/* T-shirt: how the client saw each side (where and how big it is printed) */}
+      {line.clientViews && line.clientViews.length > 0 && (
+        <TshirtClientViews
+          designerData={{ tool: "tshirt", sides: line.clientViews.map((v) => ({ placement: v.placement, mockupKey: v.key })) }}
+          title={t.admin.tshirtClientViews}
+          sideName={(p) => t.admin.tshirtSides[p as keyof typeof t.admin.tshirtSides] ?? p}
+        />
       )}
 
       {/* Notes */}

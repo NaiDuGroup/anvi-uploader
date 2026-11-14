@@ -144,8 +144,8 @@ export function maskRaster(v: { maps: FabricMaps; size: number }): Raster {
 }
 
 export interface ApparelPhotoPrint {
-  /** Where the transfer sits (garment cm). */
-  box: Pick<ApparelPrintBox, "x" | "y" | "w" | "h">;
+  /** Where the transfer sits (garment cm); `rotateDeg`: turned around its centre (a sleeve print). */
+  box: Pick<ApparelPrintBox, "x" | "y" | "w" | "h" | "rotateDeg">;
   /** The transfer as printed (transparent). */
   art: Raster;
 }
@@ -153,12 +153,37 @@ export interface ApparelPhotoPrint {
 /** The view's photo with the prints on it (asset size). Pure pixels; ~10–60 ms for a chest print. */
 export function composeApparelPhoto(v: ApparelPhotoView, prints: readonly ApparelPhotoPrint[]): Raster {
   const out: Raster = { width: v.photo.width, height: v.photo.height, data: new Uint8ClampedArray(v.photo.data) };
-  for (const p of prints) {
+  for (const p0 of prints) {
+    const p: ApparelPhotoPrint = p0.box.rotateDeg ? turnedPrint(p0) : p0;
     const box: Rect = printBoxToPhotoPx(v.cal, p.box, v.scale);
     printOnPhoto(out, withPhotoGrain(v.maps, v.photo, box), p.art, box, { bow: v.cal.bow, wrap: v.cal.wrap });
   }
   return out;
 }
+
+/** A turned print as an upright one: the art turned on a transparent canvas, the box grown to its bounds (same centre). */
+export function turnedPrint(p: ApparelPhotoPrint): ApparelPhotoPrint {
+  const deg: number = p.box.rotateDeg ?? 0;
+  const a: number = (deg * Math.PI) / 180;
+  const cos: number = Math.abs(Math.cos(a));
+  const sin: number = Math.abs(Math.sin(a));
+  const src: HTMLCanvasElement = rasterCanvas(p.art);
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.ceil(src.width * cos + src.height * sin));
+  c.height = Math.max(1, Math.ceil(src.width * sin + src.height * cos));
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return { box: { ...p.box, rotateDeg: 0 }, art: p.art };
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate(a);
+  ctx.drawImage(src, -src.width / 2, -src.height / 2);
+  const d = ctx.getImageData(0, 0, c.width, c.height);
+  const w: number = p.box.w * cos + p.box.h * sin;
+  const h: number = p.box.w * sin + p.box.h * cos;
+  const cx: number = p.box.x + p.box.w / 2;
+  const cy: number = p.box.y + p.box.h / 2;
+  return { box: { x: cx - w / 2, y: cy - h / 2, w, h }, art: { width: d.width, height: d.height, data: d.data } };
+}
+
 
 /** Where the photo lies in garment cm (the backdrop of the editor canvas), and the garment's bounds. */
 export function photoGarmentCm(v: ApparelPhotoView): { image: Rect; garment: Rect } {

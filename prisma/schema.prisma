@@ -955,6 +955,9 @@ model OrderLine {
   garmentStockMovements    GarmentStockMovement[]
   dtfConsumableMovements   DtfConsumableMovement[]
 
+  /// Client designer (/tshirt): editable layers per side + mockup keys, to reopen the design.
+  designerData             Json?                     @map("designer_data")
+
   @@index([orderId, sortOrder])
   @@index([mugProductId])
   @@index([notebookProductId])

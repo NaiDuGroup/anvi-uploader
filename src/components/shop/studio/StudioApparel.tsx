@@ -46,7 +46,7 @@ import {
   type ApparelZoneFile,
   type ApparelZoneId,
 } from "@/lib/studio/apparel";
-import { APPAREL_REFERENCE, apparelCanvasBackdrop, apparelPrintBox, apparelViews, canvasBackdropOf, type ApparelView } from "@/lib/studio/apparelMockup";
+import { APPAREL_REFERENCE, apparelCanvasBackdrop, apparelPhotoViews, apparelPrintBox, apparelViews, apparelZoneView, canvasBackdropOf, type ApparelView } from "@/lib/studio/apparelMockup";
 import { evaluateApparelQuality, hasOpaqueEdges, removeFlatBackground } from "@/lib/studio/apparelQuality";
 import { STUDIO_PHOTO_MAX_BYTES, STUDIO_PHOTO_TYPES } from "@/lib/studio/assets";
 import type { StudioCartProgress } from "@/lib/studio/cartProgress";
@@ -461,7 +461,7 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
   const fileInput = useRef<HTMLInputElement>(null);
   const surface = api.doc.surfaces.find((s) => s.id === api.spec.id);
   const empty: boolean = !surface || !apparelSurfacePrints(surface);
-  const zoneName = (id: ApparelZoneId) => (id === "back" ? t("zoneBack") : t("zoneFront"));
+  const zoneName = (id: ApparelZoneId) => apparelZoneName(t, id);
   // The «empty zone» card goes into the canvas area itself (not under the tabs, where it covered the
   // print zone on the garment): the top-left corner (by the shoulder) on a desktop, the bottom on a phone.
   const [canvasArea, setCanvasArea] = useState<HTMLElement | null>(null);
@@ -491,7 +491,7 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
   return (
     <div ref={rootRef} className="flex flex-col items-start gap-2 md:items-center" data-apparel-zone-bar>
       {garment.zones.length > 1 || garment.zones[0]?.formats === "fixed" ? (
-        <div role="tablist" aria-label={t("zones")} className="flex gap-1 rounded-xl bg-white p-1 shadow-[0_2px_10px_rgba(20,33,61,0.14)]">
+        <div role="tablist" aria-label={t("zones")} className="flex flex-wrap justify-center gap-1 rounded-xl bg-white p-1 shadow-[0_2px_10px_rgba(20,33,61,0.14)]">
           {garment.zones.map((z) => {
             const f = apparelFormatOf(product, z, sel.formats);
             const on: boolean = api.spec.id === z.id;
@@ -745,7 +745,8 @@ function ApparelOtherSide({
   composites: ApparelComposites;
 }) {
   const t = studioApparelT(api.lang);
-  const other: ApparelView = api.spec.id === "back" ? "front" : "back";
+  // A sleeve: the front beside it; front ↔ back.
+  const other: ApparelView = api.spec.id === "front" ? "back" : "front";
   return (
     <button
       type="button"
@@ -756,7 +757,7 @@ function ApparelOtherSide({
       <span className="overflow-hidden rounded-xl bg-[#f4f5f7]">
         <ApparelPicture api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} photos={photos} view={other} composite={photos.views[other] ? (composites.canvases[other] ?? photos.views[other]!.canvas) : undefined} maxSide={400} />
       </span>
-      <span className="text-xs font-bold">{other === "back" ? t("viewBack") : t("viewFront")}</span>
+      <span className="text-xs font-bold">{apparelViewName(t, other)}</span>
     </button>
   );
 }
@@ -935,7 +936,7 @@ function ApparelFormatsPicker({ api, product, garment, data, sel, onSel, compact
         return (
           <div key={z.id} className="flex flex-col gap-1.5" data-apparel-zone-formats={z.id}>
             <span className="text-sm font-bold">
-              {z.id === "back" ? t("zoneBack") : t("zoneFront")}
+              {apparelZoneName(t, z.id)}
               {placement ? <span className="ml-1 font-semibold text-(--muted)">· {t(garment.shape === "body" ? "place_body" : (`place_${placement}` as "place_front"))}</span> : null}
               {!printed ? <span className="ml-1 text-xs font-semibold text-(--muted2)">({t("zoneEmpty")})</span> : null}
             </span>
@@ -1160,7 +1161,7 @@ function useApparelQuality(api: StudioEditorApi, garment: ApparelGarmentConfig):
       ...(photoColorAt ? { photoColorAt } : {}),
       used,
       opaqueImage: (l) => imageOpaque({ renderAssets }, l),
-      zoneName: (id) => (id === "back" ? studioApparelT(api.lang)("zoneBack") : studioApparelT(api.lang)("zoneFront")),
+      zoneName: (id) => apparelZoneName(studioApparelT(api.lang), id as ApparelZoneId),
     });
     const c = studioQualityCounts(items);
     items.sort((a, b) => (a.level === b.level ? 0 : a.level === "red" ? -1 : 1));
@@ -1293,7 +1294,10 @@ function ApparelVerify({
   const [saving, setSaving] = useState<StudioCartProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const svgs = useRef<Partial<Record<ApparelView, SVGSVGElement | null>>>({});
-  const views: ApparelView[] = apparelViews(garment.shape).filter((v) => v === "front" || used.includes("back"));
+  // Front always; the back and the sides when something is printed there.
+  const views: ApparelView[] = (photos.status === "ready" ? apparelPhotoViews(garment.shape) : apparelViews(garment.shape)).filter(
+    (v) => v === "front" || used.some((z) => apparelZoneView(z) === v),
+  );
   // The photos with the design (every view: the 3D turn needs the back too).
   const { urls, version } = usePrintUrlsAt(api);
   const prints = mockupPrints(api, product, garment, sel, urls);
@@ -1329,7 +1333,7 @@ function ApparelVerify({
         ex.release();
       }
       // The garment pictures (cart image = the first printed view; the back as the second picture).
-      const firstView: ApparelView = used[0] === "back" ? "back" : "front";
+      const firstView: ApparelView = used[0] ? apparelZoneView(used[0]) : "front";
       // Photo garments: composed again from the final prints (never a stale composite).
       const photoViews = photos.status === "ready" ? await composeApparelViews(photos.views, prints) : {};
       const picture = async (v: ApparelView, side: number): Promise<string | null> =>
@@ -1434,7 +1438,7 @@ function ApparelVerify({
                   className={`mx-auto block h-auto w-full ${views.length > 1 ? "" : "max-w-[520px]"}`}
                 />
               )}
-              <figcaption className="text-center text-xs font-bold text-(--muted)">{v === "back" ? t("viewBack") : t("viewFront")}</figcaption>
+              <figcaption className="text-center text-xs font-bold text-(--muted)">{apparelViewName(t, v)}</figcaption>
             </figure>
           ))}
         </div>
@@ -1449,7 +1453,7 @@ function ApparelVerify({
             const f = apparelFormatOf(product, garment.zones.find((x) => x.id === z)!, sel.formats);
             return f ? (
               <li key={z} data-apparel-file={z}>
-                {t("fileOf", { zone: z === "back" ? t("zoneBack") : t("zoneFront"), w: f.widthCm, h: f.heightCm })}
+                {t("fileOf", { zone: apparelZoneName(t, z), w: f.widthCm, h: f.heightCm })}
               </li>
             ) : null;
           })}
@@ -1516,4 +1520,14 @@ function ApparelVerify({
       </div>
     </div>
   );
+}
+
+/** A zone's name in the Studio's language. */
+function apparelZoneName(t: ReturnType<typeof studioApparelT>, id: ApparelZoneId): string {
+  return id === "back" ? t("zoneBack") : id === "sleeve_left" ? t("zoneSleeveLeft") : id === "sleeve_right" ? t("zoneSleeveRight") : t("zoneFront");
+}
+
+/** A view's name (the sides are the wearer's left / right). */
+function apparelViewName(t: ReturnType<typeof studioApparelT>, v: ApparelView): string {
+  return v === "back" ? t("viewBack") : v === "left" ? t("viewLeft") : v === "right" ? t("viewRight") : t("viewFront");
 }

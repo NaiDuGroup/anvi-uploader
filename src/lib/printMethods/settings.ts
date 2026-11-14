@@ -65,11 +65,16 @@ const DTF_DEF: PrintMethodSettingsDef<DtfSettings> = {
     { key: "runDiscount2Pct", unit: SettingsFieldUnit.Percent },
     { key: "runDiscount3MinQty", unit: SettingsFieldUnit.Pieces },
     { key: "runDiscount3Pct", unit: SettingsFieldUnit.Percent },
+    { key: "runDiscount4MinQty", unit: SettingsFieldUnit.Pieces },
+    { key: "runDiscount4Pct", unit: SettingsFieldUnit.Percent },
     { key: "runDiscountRoundToMdl", unit: SettingsFieldUnit.Mdl },
     { key: "minimumPrintOnlyRetailMdl", unit: SettingsFieldUnit.Mdl },
     { key: "minimumPrintOnlyDealerMdl", unit: SettingsFieldUnit.Mdl },
     { key: "pressFeePerZoneMdl", unit: SettingsFieldUnit.Mdl },
     { key: "minimumLineTotalMdl", unit: SettingsFieldUnit.Mdl },
+    { key: "sleeveMaxCm", unit: SettingsFieldUnit.Cm },
+    { key: "sleevePriceRetailMdl", unit: SettingsFieldUnit.Mdl },
+    { key: "sleevePriceDealerMdl", unit: SettingsFieldUnit.Mdl },
   ],
 };
 

@@ -41,8 +41,13 @@ async function hd(url: string): Promise<Buffer> {
   return buf;
 }
 
-async function raster(buf: Buffer, px: number): Promise<Raster> {
-  const { data, info } = await sharp(buf).resize(px, px, { fit: "fill", kernel: "lanczos3" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+/** The supplier photo as used: mirrored for the views that show the other side. */
+function photoOf(buf: Buffer, mirror: boolean | undefined): sharp.Sharp {
+  return mirror ? sharp(buf).flop() : sharp(buf);
+}
+
+async function raster(buf: Buffer, px: number, mirror?: boolean): Promise<Raster> {
+  const { data, info } = await photoOf(buf, mirror).resize(px, px, { fit: "fill", kernel: "lanczos3" }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   return { width: info.width, height: info.height, data: new Uint8ClampedArray(data.buffer, data.byteOffset, data.length) };
 }
 
@@ -66,17 +71,17 @@ async function main(): Promise<void> {
     let bytes = 0;
     for (const c of cal.colours) {
       const out: string = path.join(ROOT, "public", apparelPhotoAsset(cal, c));
-      await sharp(await hd(photoUrl(cal, c)))
+      await photoOf(await hd(photoUrl(cal, c)), cal.mirror)
         .resize(APPAREL_ASSET_PX, APPAREL_ASSET_PX, { fit: "fill", kernel: "lanczos3" })
         .webp({ quality: 82, effort: 6 })
         .toFile(out);
       bytes += fs.statSync(out).size;
     }
-    const white: Raster = await raster(await hd(photoUrl(cal, cal.shadeColour)), APPAREL_ASSET_PX);
+    const white: Raster = await raster(await hd(photoUrl(cal, cal.shadeColour)), APPAREL_ASSET_PX, cal.mirror);
     // The cut-out: the dark photo's garment, plus whatever is dark on the white one (the cap's
     // sandwich trim is white on every colour but white: the black photo alone would cut it away).
     const mask: Raster = maxMask(
-      garmentMask(await raster(await hd(photoUrl(cal, cal.maskColour)), APPAREL_ASSET_PX), scale),
+      garmentMask(await raster(await hd(photoUrl(cal, cal.maskColour)), APPAREL_ASSET_PX, cal.mirror), scale),
       garmentMask(white, scale),
     );
     const garment: Rect = maskBounds(mask, 0);

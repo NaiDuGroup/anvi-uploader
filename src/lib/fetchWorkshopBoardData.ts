@@ -54,6 +54,8 @@ const ORDER_LINE_SELECT = {
   sheetPaperId: true,
   businessCardLineData: true,
   dtfLineData: true,
+  /** T-shirt designer: the sides as the client saw them. */
+  designerData: true,
   uvLineData: true,
   sublimationLineData: true,
   shopLineData: true,

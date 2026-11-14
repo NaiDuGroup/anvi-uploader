@@ -37,7 +37,7 @@ function gridMask(mask: Raster, n: number): Uint8Array {
  * Texture of a composite: alpha = the cut-out, the garment colour bled out over
  * the background so mip-maps and the steep edge never pick up the white.
  */
-function textureCanvas(src: HTMLCanvasElement, mask: Raster): HTMLCanvasElement {
+export function textureCanvas(src: HTMLCanvasElement, mask: Raster): HTMLCanvasElement {
   const n: number = TEX_PX;
   const c = document.createElement("canvas");
   c.width = n;
@@ -211,13 +211,26 @@ function CameraRig({ target, controls, onSide }: { target: { a: number; n: numbe
   return null;
 }
 
-export function ApparelRotate3D({ front, back, views, lang }: { front: HTMLCanvasElement; back: HTMLCanvasElement; views: ApparelPhotoViews; lang: ShopLang }) {
+export function ApparelRotate3D({
+  front,
+  back,
+  views,
+  lang,
+  full = false,
+}: {
+  front: HTMLCanvasElement;
+  back: HTMLCanvasElement;
+  views: ApparelPhotoViews;
+  lang: ShopLang;
+  /** All the way round (no ±55° limit) and no Front / 3/4 / Back buttons: just drag to turn. */
+  full?: boolean;
+}) {
   const t = studioApparelT(lang);
   const [built, setBuilt] = useState<Built | null>(null);
   const [target, setTarget] = useState<{ a: number; n: number } | null>(null);
   const controls = useRef<OrbitControlsImpl | null>(null);
   const [side, setSide] = useState<TurnSide>("front");
-  const range = sideRange(side);
+  const range = sideRange(full ? "free" : side);
   useEffect(() => {
     // After the dialog painted: building takes a moment on a phone.
     const h = window.setTimeout(() => setBuilt(build(front, back, views)), 30);
@@ -251,6 +264,7 @@ export function ApparelRotate3D({ front, back, views, lang }: { front: HTMLCanva
         )}
         <span className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold text-(--muted2)">{t("rotateHint")}</span>
       </div>
+      {full ? null : (
       <div className="flex justify-center gap-2 border-t border-(--line2) p-2">
         {(
           [
@@ -264,6 +278,7 @@ export function ApparelRotate3D({ front, back, views, lang }: { front: HTMLCanva
           </button>
         ))}
       </div>
+      )}
     </div>
   );
 }

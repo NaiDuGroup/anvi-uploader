@@ -971,6 +971,8 @@ function minPrice(values: (number | null)[]): number | null {
 export interface CatalogDtfPricing {
   printDiscount: ShopPrintDiscount | null;
   pressFeeMdl: number;
+  /** Sleeve print (T-shirts): largest side and its flat retail price per piece. */
+  sleeve?: { maxCm: number; price: number } | null;
 }
 
 const NO_DTF_PRICING: CatalogDtfPricing = { printDiscount: null, pressFeeMdl: 0 };
@@ -1170,6 +1172,7 @@ export function mapShopProduct(
       fixedZone: config.garment === "cap" ? CAP_LOGO_ZONE : null,
       printDiscount: printed ? dtfPricing.printDiscount : null,
       pressFeeMdl: dtfPricing.pressFeeMdl,
+      ...(config.garment === "tshirt" && dtfPricing.sleeve ? { sleeve: dtfPricing.sleeve } : {}),
     },
     editorHref: null,
     printAreaCm: null,

@@ -5,6 +5,8 @@ import type { PhotoViewKey, Rect } from "./photoMockup";
 export const APPAREL_PHOTO_ASSETS: Record<PhotoViewKey, { maps: Rect; garment: Rect; bytes: number }> = {
   "tshirt-front": { maps: {"x":75,"y":0,"w":1050,"h":1200}, garment: {"x":79,"y":0,"w":1042,"h":1200}, bytes: 259771 },
   "tshirt-back": { maps: {"x":93,"y":0,"w":1016,"h":1200}, garment: {"x":97,"y":0,"w":1008,"h":1200}, bytes: 248309 },
+  "tshirt-left": { maps: {"x":361,"y":0,"w":478,"h":1200}, garment: {"x":365,"y":1,"w":470,"h":1199}, bytes: 215669 },
+  "tshirt-right": { maps: {"x":361,"y":0,"w":478,"h":1200}, garment: {"x":365,"y":1,"w":470,"h":1199}, bytes: 215417 },
   "polo-front": { maps: {"x":90,"y":0,"w":1020,"h":1200}, garment: {"x":94,"y":0,"w":1012,"h":1200}, bytes: 272902 },
   "polo-back": { maps: {"x":117,"y":0,"w":966,"h":1200}, garment: {"x":121,"y":0,"w":958,"h":1200}, bytes: 278235 },
   "cap-front": { maps: {"x":29,"y":128,"w":1144,"h":950}, garment: {"x":33,"y":132,"w":1136,"h":942}, bytes: 865487 },

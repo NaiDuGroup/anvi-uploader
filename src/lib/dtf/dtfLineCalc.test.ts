@@ -334,3 +334,35 @@ describe("defaultPriceTiers", () => {
     expect(tierPriceForQuantity([], 5)).toBeNull();
   });
 });
+
+describe("sleeve prints", () => {
+  it("a left / right sleeve up to 10×10 costs the flat sleeve price, no run discount", () => {
+    const zones = resolveDtfZones(
+      [
+        zone("a4"),
+        { id: "sl", placement: "sleeve_left", presetId: null, widthCm: 8, heightCm: 10 },
+        { id: "sr", placement: "sleeve_right", presetId: null, widthCm: 5, heightCm: 5 },
+      ],
+      PRESETS,
+      ctx({ quantity: 12 }),
+    );
+    expect(zones.map((z) => z.unitListPriceMdl)).toEqual([zones[0]!.unitListPriceMdl, 50, 50]);
+    expect(zones[1]!.runDiscountPct).toBe(0);
+    expect(zones[1]!.presetLabel).toBe("Mânecă 10×10");
+  });
+  it("dealers pay the dealer sleeve price; a bigger sleeve print takes its format", () => {
+    const dealer = resolveDtfZones(
+      [{ id: "sl", placement: "sleeve_left", presetId: null, widthCm: 10, heightCm: 10 }],
+      PRESETS,
+      ctx({ customerType: "dealer", settings: { ...DEFAULT_DTF_SETTINGS, sleevePriceDealerMdl: 30 } }),
+    );
+    expect(dealer[0]!.unitListPriceMdl).toBe(30);
+    const big = resolveDtfZones(
+      [{ id: "sl", placement: "sleeve_left", presetId: null, widthCm: 10, heightCm: 14 }],
+      PRESETS,
+      ctx(),
+    );
+    expect(big[0]!.unitListPriceMdl).toBe(100);
+    expect(big[0]!.presetLabel).toBe("A6");
+  });
+});

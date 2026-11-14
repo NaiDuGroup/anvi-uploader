@@ -38,9 +38,10 @@ import {
   Pencil,
   Link2,
   Loader2,
+  Shirt,
 } from "lucide-react";
 
-type ProductRoute = "/mug" | "/notebook" | "/pen";
+type ProductRoute = "/mug" | "/notebook" | "/pen" | "/tshirt";
 
 type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
 
@@ -680,7 +681,7 @@ export default function HomePageClient({
         {step === 1 && (
           <div className="space-y-4">
             {/* Product type picker */}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 sm:gap-3">
               <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-gold bg-gold-light p-3 sm:p-4 cursor-default">
                 <Printer className="w-6 h-6 sm:w-7 sm:h-7 text-gold" />
                 <span className="text-xs sm:text-sm font-semibold text-gold-text text-center">{t.mug.productPaperPrint}</span>
@@ -709,6 +710,15 @@ export default function HomePageClient({
                 label={t.pen.productPen}
                 loadingLabel={t.common.loading}
                 isLoading={isNavPending && navTarget === "/pen"}
+                disabled={isNavPending}
+                onSelect={navigateToProduct}
+              />
+              <ProductNavCard
+                target="/tshirt"
+                icon={Shirt}
+                label={t.tshirt.productTshirt}
+                loadingLabel={t.common.loading}
+                isLoading={isNavPending && navTarget === "/tshirt"}
                 disabled={isNavPending}
                 onSelect={navigateToProduct}
               />

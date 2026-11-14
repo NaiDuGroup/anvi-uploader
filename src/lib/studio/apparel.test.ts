@@ -166,13 +166,15 @@ describe("apparel zones and surfaces", () => {
 
   it("draws one transparent surface per zone at the format size, px = cm × 300 / 2.54", () => {
     const specs = apparelSurfaceSpecs(SHIRT, tee, {});
-    // Defaults: A4 front and back.
+    // Defaults: A4 front and back, the 10 × 10 sleeves.
     expect(specs.map((s) => [s.id, s.widthMm, s.heightMm, s.pxW, s.pxH, s.dpi, s.background, s.bleedMm, s.safeMm])).toEqual([
       ["front", 210, 300, 2480, 3543, 300, null, 0, 0],
       ["back", 210, 300, 2480, 3543, 300, null, 0, 0],
+      ["sleeve_left", 100, 100, 1181, 1181, 300, null, 0, 0],
+      ["sleeve_right", 100, 100, 1181, 1181, 300, null, 0, 0],
     ]);
     const logo = apparelSurfaceSpecs(SHIRT, tee, { front: LOGO, back: A5 });
-    expect(logo.map((s) => [s.pxW, s.pxH])).toEqual([
+    expect(logo.slice(0, 2).map((s) => [s.pxW, s.pxH])).toEqual([
       [cmToPx(10, 300), cmToPx(10, 300)],
       [cmToPx(15, 300), cmToPx(21, 300)],
     ]);
@@ -189,7 +191,7 @@ describe("apparel zones and surfaces", () => {
 
   it("reads the formats of a draft back from its surface sizes", () => {
     const specs = apparelSurfaceSpecs(SHIRT, tee, { front: LOGO, back: A5 });
-    expect(apparelFormatsOfDoc(SHIRT, tee, docWith(specs, {}))).toEqual({ front: LOGO, back: A5 });
+    expect(apparelFormatsOfDoc(SHIRT, tee, docWith(specs, {}))).toEqual({ front: LOGO, back: A5, sleeve_left: null, sleeve_right: null });
   });
 
   it("prices / prints only zones with something on them", () => {
@@ -500,5 +502,52 @@ describe("apparel mockup scale", () => {
     expect(small.fit.w).toBeLessThan(small.w * 0.7);
     expect(small.fit.x).toBeLessThanOrEqual(0);
     expect(small.fit.x + small.fit.w).toBeGreaterThanOrEqual(100);
+  });
+});
+
+// ─── Sleeves (T-shirt) ───────────────────────────────────────────────────
+
+describe("apparel sleeves", () => {
+  const sleeveL = tee.zones.find((z) => z.id === "sleeve_left")!;
+  it("the T-shirt has both sleeves, the polo and the cap none", () => {
+    expect(tee.zones.map((z) => z.id)).toEqual(["front", "back", "sleeve_left", "sleeve_right"]);
+    expect(polo.zones.some((z) => z.id.startsWith("sleeve"))).toBe(false);
+    expect(cap.zones.some((z) => z.id.startsWith("sleeve"))).toBe(false);
+  });
+
+  it("a sleeve offers one square format from the DTF settings (fallback 10 × 10, 50 lei)", () => {
+    expect(apparelZoneFormats(SHIRT, sleeveL)).toEqual([{ presetId: null, label: "10×10 cm", widthCm: 10, heightCm: 10, price: 50 }]);
+    const custom: ShopProduct = { ...SHIRT, dtf: { ...SHIRT.dtf!, sleeve: { maxCm: 8, price: 60 } } };
+    expect(apparelZoneFormats(custom, sleeveL)[0]).toMatchObject({ widthCm: 8, heightCm: 8, price: 60 });
+  });
+
+  it("sleeve zones go on the cart line with their placement and size, and come back on re-edit", () => {
+    const line = apparelQuoteLine(SHIRT, { colorKey: "CA6502-01", formats: { front: LOGO }, sizes: { M: 2 } }, ["front", "sleeve_left", "sleeve_right"])!;
+    expect(line.zones.map((z) => [z.id, z.placement, z.presetId, z.widthCm, z.heightCm])).toEqual([
+      ["front", "chest_left", LOGO, 10, 10],
+      ["sleeve_left", "sleeve_left", null, 10, 10],
+      ["sleeve_right", "sleeve_right", null, 10, 10],
+    ]);
+    expect(apparelSelectionOfQuote(SHIRT, line)?.formats).toEqual({ front: LOGO, sleeve_left: null, sleeve_right: null });
+  });
+
+  it("each printed sleeve adds the flat sleeve price per piece", () => {
+    const sel = { colorKey: "CA6502-01", formats: { front: A4 }, sizes: { M: 2 } };
+    const base = apparelEstimate(apparelQuoteLine(SHIRT, sel, ["front"]), PRICING)!;
+    const one = apparelEstimate(apparelQuoteLine(SHIRT, sel, ["front", "sleeve_left"]), PRICING)!;
+    const two = apparelEstimate(apparelQuoteLine(SHIRT, sel, ["front", "sleeve_left", "sleeve_right"]), PRICING)!;
+    const sleeveUnit = DEFAULT_DTF_SETTINGS.sleevePriceRetailMdl + DEFAULT_DTF_SETTINGS.pressFeePerZoneMdl;
+    expect(one.total - base.total).toBeCloseTo(sleeveUnit * 2, 2);
+    expect(two.total - base.total).toBeCloseTo(sleeveUnit * 4, 2);
+    expect(apparelZoneDelta(SHIRT, sel, ["front"], "sleeve_left", PRICING)).toBeCloseTo(sleeveUnit, 2);
+  });
+
+  it("a sleeve print sits on the side view, centred on the sleeve", () => {
+    expect(apparelPrintBox("tshirt", "sleeve_left", "sleeve_left", 10, 10)).toMatchObject({ view: "left", x: -5, w: 10, h: 10 });
+    expect(apparelPrintBox("tshirt", "sleeve_right", "sleeve_right", 10, 10).view).toBe("right");
+  });
+
+  it("drafts keep the sleeve picks", () => {
+    expect(parseApparelDraftState({ colorKey: "CA6502-01", formats: { sleeve_left: null, sleeve_right: null }, sizes: { M: 1 } })?.formats).toEqual({ sleeve_left: null, sleeve_right: null });
   });
 });

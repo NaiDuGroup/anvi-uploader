@@ -76,6 +76,8 @@ export const printMethodsRo: PrintMethodsDictionary = {
       runDiscount2Pct: { label: "Reducere 2" },
       runDiscount3MinQty: { label: "Reducere tiraj 3: de la" },
       runDiscount3Pct: { label: "Reducere 3" },
+      runDiscount4MinQty: { label: "Reducere tiraj 4: de la" },
+      runDiscount4Pct: { label: "Reducere 4" },
       runDiscountRoundToMdl: {
         label: "Rotunjire preț redus la",
         hint: "De ex. 5 lei: 167,40 → 165. Dealerii nu au reducere — au prețul lor pe format.",
@@ -87,6 +89,12 @@ export const printMethodsRo: PrintMethodsDictionary = {
       minimumPrintOnlyDealerMdl: { label: "Minim «doar imprimare», dealer" },
       pressFeePerZoneMdl: { label: "Taxă de presare per zonă" },
       minimumLineTotalMdl: { label: "Suma minimă a liniei" },
+      sleeveMaxCm: {
+        label: "Imprimare pe mânecă: mărime maximă",
+        hint: "Latura cea mai mare a imprimării pe mâneca stângă / dreaptă care are prețul de mânecă.",
+      },
+      sleevePriceRetailMdl: { label: "Preț imprimare pe mânecă, retail", hint: "Per mânecă, per bucată; fără reducere de tiraj." },
+      sleevePriceDealerMdl: { label: "Preț imprimare pe mânecă, dealer" },
     },
     uv: {
       retailPricePerSqmMdl: {

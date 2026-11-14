@@ -76,6 +76,8 @@ export const printMethodsEn: PrintMethodsDictionary = {
       runDiscount2Pct: { label: "Discount 2" },
       runDiscount3MinQty: { label: "Run discount 3: from" },
       runDiscount3Pct: { label: "Discount 3" },
+      runDiscount4MinQty: { label: "Run discount 4: from" },
+      runDiscount4Pct: { label: "Discount 4" },
       runDiscountRoundToMdl: {
         label: "Round discounted price to",
         hint: "E.g. 5 MDL: 167.40 → 165. Dealers get no discount — they have their own format price.",
@@ -87,6 +89,12 @@ export const printMethodsEn: PrintMethodsDictionary = {
       minimumPrintOnlyDealerMdl: { label: "Print-only minimum, dealer" },
       pressFeePerZoneMdl: { label: "Press fee per zone" },
       minimumLineTotalMdl: { label: "Minimum line total" },
+      sleeveMaxCm: {
+        label: "Sleeve print: largest size",
+        hint: "Longest side of a left / right sleeve print that takes the sleeve price.",
+      },
+      sleevePriceRetailMdl: { label: "Sleeve print price, retail", hint: "Per sleeve, per piece; no run-size discount." },
+      sleevePriceDealerMdl: { label: "Sleeve print price, dealer" },
     },
     uv: {
       retailPricePerSqmMdl: {

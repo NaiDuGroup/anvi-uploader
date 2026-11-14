@@ -1,4 +1,5 @@
 import type { ShopDtfPlacement } from "@/lib/storefront/types";
+import type { PhotoView } from "./photoMockup";
 import type { ApparelShape, ApparelZoneId } from "./apparel";
 
 /**
@@ -11,7 +12,8 @@ import type { ApparelShape, ApparelZoneId } from "./apparel";
  * for tops, at the top of the crown for the cap. Pure.
  */
 
-export type ApparelView = "front" | "back";
+/** A garment view: front, back, and the sides (a T-shirt's sleeves: the wearer's left / right). */
+export type ApparelView = PhotoView;
 
 /** The size the mockup is drawn at (flat garment measurements, cm). */
 export interface ApparelReference {
@@ -37,6 +39,23 @@ export function apparelViews(shape: ApparelShape): ApparelView[] {
   return shape === "cap" || shape === "body" ? ["front"] : ["front", "back"];
 }
 
+/** Views with a supplier photo to show (a T-shirt also shows its sides, for the sleeve prints). */
+export function apparelPhotoViews(shape: ApparelShape): ApparelView[] {
+  return shape === "tshirt" ? ["front", "back", "left", "right"] : apparelViews(shape);
+}
+
+/** The view a zone is seen on. */
+export function apparelZoneView(zone: ApparelZoneId): ApparelView {
+  return zone === "sleeve_left" ? "left" : zone === "sleeve_right" ? "right" : zone === "back" ? "back" : "front";
+}
+
+/**
+ * Sleeve print on the side photo: centred on the sleeve (x = 0), its middle
+ * this far below the HPS level (cm, the photo's scale): the usual press
+ * position, well under the shoulder seam (photo y ≈ 420 px of 2000).
+ */
+export const SLEEVE_PRINT_MIDDLE_CM = 22;
+
 /** viewBox of a view (cm): x, y, width, height. */
 export function apparelViewBox(shape: ApparelShape): [number, number, number, number] {
   if (shape === "cap") return [-14.5, -2, 29, 22.5];
@@ -51,6 +70,12 @@ export interface ApparelPrintBox {
   y: number;
   w: number;
   h: number;
+  /**
+   * Turned with the garment around the box centre (degrees, clockwise on
+   * screen): a sleeve print follows the sleeve. x / y / w / h are then the
+   * unturned box (its centre is where it sits).
+   */
+  rotateDeg?: number;
 }
 
 /** Cap: bottom of the logo below the top of the crown (cm); the peak seam is at ~12 cm in the middle. */
@@ -75,6 +100,10 @@ export function apparelPrintBox(shape: ApparelShape, zone: ApparelZoneId, placem
   if (shape === "cap") return { view: "front", x: -w / 2, y: CAP_LOGO_BOTTOM_CM - h, w, h };
   // Bodysuit: centred, its top 3 cm under the neckline (y = 0 there).
   if (shape === "body") return { view: "front", x: -w / 2, y: BODY_PRINT_TOP_CM, w, h };
+  // T-shirt sleeve: seen from its side (the side photo), centred on the sleeve.
+  if (zone === "sleeve_left" || zone === "sleeve_right") {
+    return { view: apparelZoneView(zone), x: -w / 2, y: SLEEVE_PRINT_MIDDLE_CM - h / 2, w, h };
+  }
   const neck = NECK[shape];
   if (zone === "back") return { view: "back", x: -w / 2, y: neck.back + (shape === "polo" ? 6.5 : 7.5), w, h };
   if (placement === "chest_left") {

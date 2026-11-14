@@ -119,11 +119,27 @@ export const ApparelMockup = forwardRef<SVGSVGElement, {
   const line: string = dark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.2)";
   const mine = prints.filter((p) => p.box.view === view && p.src);
   const printImages = mine.map((p) => (
-    <image key={p.zone} href={p.src!} x={p.box.x} y={p.box.y} width={p.box.w} height={p.box.h} preserveAspectRatio="none" data-apparel-print={p.zone} />
+    <image
+      key={p.zone}
+      href={p.src!}
+      x={p.box.x}
+      y={p.box.y}
+      width={p.box.w}
+      height={p.box.h}
+      preserveAspectRatio="none"
+      transform={p.box.rotateDeg ? `rotate(${p.box.rotateDeg} ${p.box.x + p.box.w / 2} ${p.box.y + p.box.h / 2})` : undefined}
+      data-apparel-print={p.zone}
+    />
   ));
   const outlineRect =
     outline && outline.view === view ? (
-      <rect x={outline.x} y={outline.y} width={outline.w} height={outline.h} fill="none" stroke={dark ? "rgba(255,255,255,0.7)" : "rgba(20,33,61,0.55)"} strokeWidth={0.22} strokeDasharray="0.8 0.5" data-apparel-outline />
+      <rect
+        x={outline.x}
+        y={outline.y}
+        width={outline.w}
+        height={outline.h}
+        transform={outline.rotateDeg ? `rotate(${outline.rotateDeg} ${outline.x + outline.w / 2} ${outline.y + outline.h / 2})` : undefined}
+        fill="none" stroke={dark ? "rgba(255,255,255,0.7)" : "rgba(20,33,61,0.55)"} strokeWidth={0.22} strokeDasharray="0.8 0.5" data-apparel-outline />
     ) : null;
 
   const defs = (

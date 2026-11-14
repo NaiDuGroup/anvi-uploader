@@ -34,6 +34,8 @@ export const dtfSettingsSchema = z.object({
   runDiscount2Pct: pct,
   runDiscount3MinQty: pieces,
   runDiscount3Pct: pct,
+  runDiscount4MinQty: pieces,
+  runDiscount4Pct: pct,
   /** Discounted prices are rounded to this step (MDL, 0 = to the bani). */
   runDiscountRoundToMdl: mdl,
   /** Pressing fee added per print zone on every piece (MDL). */
@@ -44,6 +46,12 @@ export const dtfSettingsSchema = z.object({
   minimumPrintOnlyDealerMdl: mdl,
   /** Every DTF line's total is raised to at least this (MDL, 0 = off). */
   minimumLineTotalMdl: mdl,
+  /** Sleeve print (left / right sleeve): largest side (cm) that takes the sleeve price. */
+  sleeveMaxCm: z.number().positive().max(60),
+  /** Sleeve print price per piece, retail (MDL): flat, no run-size discount. */
+  sleevePriceRetailMdl: mdl,
+  /** Sleeve print price per piece, dealer (MDL). */
+  sleevePriceDealerMdl: mdl,
 });
 
 export type DtfSettings = z.infer<typeof dtfSettingsSchema>;
@@ -67,11 +75,16 @@ export const DEFAULT_DTF_SETTINGS: DtfSettings = {
   runDiscount2Pct: 14,
   runDiscount3MinQty: 50,
   runDiscount3Pct: 29,
+  runDiscount4MinQty: 0,
+  runDiscount4Pct: 0,
   runDiscountRoundToMdl: 5,
   pressFeePerZoneMdl: 0,
   minimumPrintOnlyRetailMdl: 100,
   minimumPrintOnlyDealerMdl: 40,
   minimumLineTotalMdl: 0,
+  sleeveMaxCm: 10,
+  sleevePriceRetailMdl: 50,
+  sleevePriceDealerMdl: 50,
 };
 
 /** Tolerant read of the stored JSON: unknown or invalid keys fall back to defaults. */
@@ -93,6 +106,8 @@ export function dtfRunDiscountPct(
     | "runDiscount2Pct"
     | "runDiscount3MinQty"
     | "runDiscount3Pct"
+    | "runDiscount4MinQty"
+    | "runDiscount4Pct"
   >,
   quantity: number,
 ): number {
@@ -100,6 +115,7 @@ export function dtfRunDiscountPct(
     [settings.runDiscount1MinQty, settings.runDiscount1Pct],
     [settings.runDiscount2MinQty, settings.runDiscount2Pct],
     [settings.runDiscount3MinQty, settings.runDiscount3Pct],
+    [settings.runDiscount4MinQty, settings.runDiscount4Pct],
   ];
   let pctOff = 0;
   let bestMin = 0;

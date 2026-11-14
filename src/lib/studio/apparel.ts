@@ -33,10 +33,18 @@ import type { StudioSurfaceSpec } from "./surfaces";
  */
 
 export type ApparelShape = "tshirt" | "polo" | "cap" | "body";
-export type ApparelZoneId = "front" | "back";
+export type ApparelZoneId = "front" | "back" | "sleeve_left" | "sleeve_right";
+export const APPAREL_ZONE_IDS: readonly ApparelZoneId[] = ["front", "back", "sleeve_left", "sleeve_right"];
+export function isApparelSleeve(zone: string): zone is "sleeve_left" | "sleeve_right" {
+  return zone === "sleeve_left" || zone === "sleeve_right";
+}
 
-/** Which price-list formats a zone offers: every one, the logo class (longest side ≤ 10 cm), or the item's fixed logo. */
-export type ApparelFormatRule = "all" | "logo" | "fixed";
+/**
+ * Which price-list formats a zone offers: every one, the logo class (longest
+ * side ≤ 10 cm), the item's fixed logo, or the sleeve square (DTF settings:
+ * up to 10 × 10 cm at its own flat price).
+ */
+export type ApparelFormatRule = "all" | "logo" | "fixed" | "sleeve";
 
 export interface ApparelZoneConfig {
   id: ApparelZoneId;
@@ -66,6 +74,8 @@ export const APPAREL_GARMENTS: readonly ApparelGarmentConfig[] = [
     zones: [
       { id: "front", formats: "all", defaultLabel: "A4" },
       { id: "back", formats: "all", defaultLabel: "A4" },
+      { id: "sleeve_left", formats: "sleeve" },
+      { id: "sleeve_right", formats: "sleeve" },
     ],
   },
   {
@@ -98,6 +108,8 @@ export const APPAREL_LOGO_MAX_CM = 10;
 export const APPAREL_DPI = 300;
 /** The cap's logo when the product carries none (as `CAP_LOGO_ZONE`). */
 const CAP_FALLBACK = { widthCm: 9, heightCm: 5 };
+/** Sleeve print when the catalog carries no DTF sleeve settings. */
+export const APPAREL_SLEEVE_FALLBACK = { maxCm: 10, price: 50 };
 
 /** One print size a zone offers. `presetId` null = the cap's fixed logo (included in the price). */
 export interface ApparelFormat {
@@ -113,6 +125,10 @@ export interface ApparelFormat {
 export function apparelZoneFormats(product: Pick<ShopProduct, "dtf">, zone: ApparelZoneConfig): ApparelFormat[] {
   const dtf = product.dtf;
   if (!dtf) return [];
+  if (zone.formats === "sleeve") {
+    const sl = dtf.sleeve ?? APPAREL_SLEEVE_FALLBACK;
+    return [{ presetId: null, label: `${fmtCm(sl.maxCm)}×${fmtCm(sl.maxCm)} cm`, widthCm: sl.maxCm, heightCm: sl.maxCm, price: sl.price }];
+  }
   if (zone.formats === "fixed") {
     const z = dtf.fixedZone ?? CAP_FALLBACK;
     return [{ presetId: null, label: `Logo ${fmtCm(z.widthCm)}×${fmtCm(z.heightCm)}`, widthCm: z.widthCm, heightCm: z.heightCm, price: 0 }];
@@ -200,6 +216,7 @@ export function apparelFormatsOfDoc(product: Pick<ShopProduct, "dtf">, garment: 
 export function apparelPlacement(shape: ApparelShape, zone: ApparelZoneId, format: Pick<ApparelFormat, "widthCm" | "heightCm">): ShopDtfPlacement {
   if (shape === "cap" || shape === "body") return "other";
   if (zone === "back") return "back";
+  if (isApparelSleeve(zone)) return zone;
   if (shape === "polo") return "chest_left";
   return frontPlacementFor(format);
 }
@@ -340,7 +357,7 @@ export function apparelSelectionOfQuote(
   const sizes: ApparelSizes = {};
   for (const s of quote.sizes) sizes[s.size] = (sizes[s.size] ?? 0) + s.quantity;
   const formats: ApparelFormats = {};
-  for (const z of quote.zones) if (z.id === "front" || z.id === "back") formats[z.id] = z.presetId;
+  for (const z of quote.zones) if ((APPAREL_ZONE_IDS as readonly string[]).includes(z.id)) formats[z.id as ApparelZoneId] = z.presetId;
   return { colorKey: color.key, formats, sizes };
 }
 
@@ -450,6 +467,7 @@ export function apparelNextStep(line: Extract<ShopQuoteLine, { kind: "dtf" }> | 
     [st.runDiscount1MinQty, st.runDiscount1Pct],
     [st.runDiscount2MinQty, st.runDiscount2Pct],
     [st.runDiscount3MinQty, st.runDiscount3Pct],
+    [st.runDiscount4MinQty, st.runDiscount4Pct],
   ] as const) {
     if (m > 0 && p > 0) bounds.add(m);
   }
@@ -544,7 +562,7 @@ export function parseApparelDraftState(v: unknown): ApparelDraftState | null {
   if (typeof o.colorKey !== "string" || o.colorKey.length > 80) return null;
   const formats: ApparelFormats = {};
   if (o.formats && typeof o.formats === "object") {
-    for (const z of ["front", "back"] as const) {
+    for (const z of APPAREL_ZONE_IDS) {
       const f = (o.formats as Record<string, unknown>)[z];
       if (f === null || (typeof f === "string" && f.length <= 80)) formats[z] = f;
     }

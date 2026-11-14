@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apparelViews, type ApparelView } from "@/lib/studio/apparelMockup";
+import { apparelPhotoViews, type ApparelView } from "@/lib/studio/apparelMockup";
 import type { ApparelShape } from "@/lib/studio/apparel";
 import type { Raster, Rect } from "@/lib/studio/photoMockup";
 import { composeApparelPhoto, cutOut, loadApparelPhotoView, loadRaster, rasterCanvas, type ApparelPhotoPrint, type ApparelPhotoView } from "./apparelPhoto";
@@ -22,7 +22,7 @@ export function useApparelPhotoViews(shape: ApparelShape, colour: { key: string;
   useEffect(() => {
     if (!colour || !id) return;
     let live = true;
-    void Promise.all(apparelViews(shape).map(async (v) => [v, await loadApparelPhotoView(shape, v, colour)] as const)).then((pairs) => {
+    void Promise.all(apparelPhotoViews(shape).map(async (v) => [v, await loadApparelPhotoView(shape, v, colour)] as const)).then((pairs) => {
       if (!live) return;
       const views: ApparelPhotoViews = {};
       for (const [v, pv] of pairs) if (pv) views[v] = pv;

@@ -104,6 +104,8 @@ const ORDER_LINE_LIST_SELECT = {
   sheetPaperId: true,
   businessCardLineData: true,
   dtfLineData: true,
+  /** T-shirt designer: the sides as the client saw them (`TshirtClientViews`). */
+  designerData: true,
   uvLineData: true,
   sublimationLineData: true,
   /** Storefront cart-line snapshot (photo / document print options per file). */

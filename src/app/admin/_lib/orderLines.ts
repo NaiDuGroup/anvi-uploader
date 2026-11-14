@@ -21,6 +21,8 @@ export type AdminOrderLineGroup = {
   largeFormatLineData?: unknown;
   businessCardLineData?: unknown;
   dtfLineData?: unknown;
+  /** T-shirt designer data: the sides as the client saw them. */
+  designerData?: unknown;
   uvLineData?: unknown;
   sublimationLineData?: unknown;
   /** Storefront line snapshot (`ShopPrintLineSummary` reads photo / document print options). */

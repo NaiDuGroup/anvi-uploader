@@ -76,6 +76,8 @@ export const printMethodsRu: PrintMethodsDictionary = {
       runDiscount2Pct: { label: "Скидка 2" },
       runDiscount3MinQty: { label: "Скидка за тираж 3: от" },
       runDiscount3Pct: { label: "Скидка 3" },
+      runDiscount4MinQty: { label: "Скидка за тираж 4: от" },
+      runDiscount4Pct: { label: "Скидка 4" },
       runDiscountRoundToMdl: {
         label: "Округлять цену со скидкой до",
         hint: "Например 5 лей: 167,40 → 165. Дилерам скидки нет — у них своя цена формата.",
@@ -87,6 +89,12 @@ export const printMethodsRu: PrintMethodsDictionary = {
       minimumPrintOnlyDealerMdl: { label: "Минимум «только печать», дилер" },
       pressFeePerZoneMdl: { label: "Доплата за прессовку зоны" },
       minimumLineTotalMdl: { label: "Минимальная сумма строки" },
+      sleeveMaxCm: {
+        label: "Печать на рукаве: наибольший размер",
+        hint: "Наибольшая сторона печати на левом / правом рукаве, которая считается по цене рукава.",
+      },
+      sleevePriceRetailMdl: { label: "Цена печати на рукаве, розница", hint: "За рукав, за штуку; без скидки за тираж." },
+      sleevePriceDealerMdl: { label: "Цена печати на рукаве, дилер" },
     },
     uv: {
       retailPricePerSqmMdl: {

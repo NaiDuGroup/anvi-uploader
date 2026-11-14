@@ -214,6 +214,8 @@ export type LineFacts =
 export interface WorkshopBoardLine {
   /** Unique: `{orderId}::{orderLineId}` */
   uid: string;
+  /** T-shirt designer: each side's photo as the client saw it (served by `/api/tshirt-mockup`). */
+  clientViews?: { placement: string; key: string }[];
   orderId: string;
   orderLineId: string;
   orderNumber: number;

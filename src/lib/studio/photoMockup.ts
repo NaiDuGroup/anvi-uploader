@@ -33,7 +33,8 @@ export interface Rect {
   h: number;
 }
 
-export type PhotoView = "front" | "back";
+/** Garment views with a photo: front, back and the two sides (a T-shirt's sleeves, the wearer's left / right). */
+export type PhotoView = "front" | "back" | "left" | "right";
 
 /**
  * One supplier photo view, calibrated once by hand (all colours share it).
@@ -66,6 +67,8 @@ export interface PhotoViewCalibration {
   wrap?: number;
   /** Strength of the print bending with the folds, px at `sizePx`. */
   reliefPx?: number;
+  /** The supplier photo mirrored (the other side of the garment: the supplier shows one side only). */
+  mirror?: boolean;
 }
 
 /** Calibrations of the prototype (measured on the HD photos, size L / one size). */
@@ -91,6 +94,35 @@ export const PHOTO_VIEWS: Record<string, PhotoViewCalibration> = {
     centreXPx: 1000,
     originYPx: -10,
     pxPerCm: 18.3,
+    shadeColour: "01",
+    maskColour: "02",
+    colours: ["01", "02"],
+    reliefPx: 5,
+  },
+  // Sides (sleeve prints): the supplier's side photo shows the wearer's left side; the right is it mirrored.
+  // x = 0 on the middle of the sleeve, y = 0 level with the HPS, the same scale as the front.
+  "tshirt-left": {
+    model: "CA6502",
+    view: "left",
+    photo: "https://static.gorfactory.es/images/models/6502/views/hd/p_6502_{c}_7_1.jpg",
+    sizePx: 2000,
+    centreXPx: 1090,
+    originYPx: 10,
+    pxPerCm: 18.6,
+    shadeColour: "01",
+    maskColour: "02",
+    colours: ["01", "02"],
+    reliefPx: 5,
+  },
+  "tshirt-right": {
+    model: "CA6502",
+    view: "right",
+    photo: "https://static.gorfactory.es/images/models/6502/views/hd/p_6502_{c}_7_1.jpg",
+    mirror: true,
+    sizePx: 2000,
+    centreXPx: 910,
+    originYPx: 10,
+    pxPerCm: 18.6,
     shadeColour: "01",
     maskColour: "02",
     colours: ["01", "02"],
@@ -154,7 +186,7 @@ export const PHOTO_VIEWS: Record<string, PhotoViewCalibration> = {
 };
 
 /** Views with photos. */
-export const PHOTO_VIEW_KEYS = ["tshirt-front", "tshirt-back", "polo-front", "polo-back", "cap-front", "body-front"] as const;
+export const PHOTO_VIEW_KEYS = ["tshirt-front", "tshirt-back", "tshirt-left", "tshirt-right", "polo-front", "polo-back", "cap-front", "body-front"] as const;
 export type PhotoViewKey = (typeof PHOTO_VIEW_KEYS)[number];
 
 /** The photo view of a garment shape's side (null: no photo, the drawing is used). */

@@ -59,7 +59,7 @@ export interface ShopUvNorms {
 }
 
 /** `other` = a non-garment item (bag, toy): the place is in `placementNote`, as the studio wizard saves it. */
-export type ShopDtfPlacement = "front" | "chest_left" | "chest_center" | "back" | "other";
+export type ShopDtfPlacement = "front" | "chest_left" | "chest_center" | "back" | "sleeve_left" | "sleeve_right" | "other";
 
 export interface ShopDtfZoneLine {
   id: string;
@@ -238,6 +238,8 @@ export interface ShopDtfConfig {
   printDiscount: ShopPrintDiscount | null;
   /** Heat-press fee per print zone and piece (retail). */
   pressFeeMdl: number;
+  /** T-shirt sleeve print: largest side (cm) and its flat price per piece (retail, DTF settings). */
+  sleeve?: { maxCm: number; price: number } | null;
 }
 
 export interface ShopProduct {

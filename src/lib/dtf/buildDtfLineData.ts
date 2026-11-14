@@ -114,7 +114,7 @@ function priceBoundaries(input: DtfLineInput, ctx: DtfPricingContext): number[] 
     }
   }
   const st = ctx.settings;
-  for (const minQty of [st.runDiscount1MinQty, st.runDiscount2MinQty, st.runDiscount3MinQty]) {
+  for (const minQty of [st.runDiscount1MinQty, st.runDiscount2MinQty, st.runDiscount3MinQty, st.runDiscount4MinQty]) {
     if (minQty > 0) out.add(minQty);
   }
   return [...out].sort((a, b) => a - b);

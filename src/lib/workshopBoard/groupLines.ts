@@ -49,6 +49,16 @@ import { lineStatusForOrderStatus } from "@/lib/orderLineProductionStatus";
 import { boardLineStatus } from "@/lib/orderStatusFromLines";
 import { layoutAttentionRank } from "@/lib/layoutIssue";
 
+/** T-shirt designer orders: each side's photo as the client saw it (`designerData.sides[].mockupKey`). */
+function tshirtClientViewKeys(designerData: unknown): { placement: string; key: string }[] | undefined {
+  const d = designerData as { tool?: string; sides?: { placement?: string; mockupKey?: string | null }[] } | null;
+  if (!d || d.tool !== "tshirt" || !Array.isArray(d.sides)) return undefined;
+  const out = d.sides
+    .filter((x) => typeof x?.mockupKey === "string" && x.mockupKey && typeof x.placement === "string")
+    .map((x) => ({ placement: x.placement!, key: x.mockupKey! }));
+  return out.length ? out : undefined;
+}
+
 // ─── Raw input shape (from server enriched orders) ────────────────────────────
 
 export interface RawOrderLine {
@@ -63,6 +73,8 @@ export interface RawOrderLine {
   largeFormatLineData: unknown;
   businessCardLineData?: unknown;
   dtfLineData?: unknown;
+  /** T-shirt designer data: the sides as the client saw them (`clientViews`). */
+  designerData?: unknown;
   uvLineData?: unknown;
   sublimationLineData?: unknown;
   /** Storefront cart line (`OrderLine.shopLineData`): names a print-shop paper product. */
@@ -674,6 +686,7 @@ export function groupLines(
         productType: pt,
         facts,
         files: rawLine.files,
+        clientViews: tshirtClientViewKeys(rawLine.designerData),
         notes: order.notes,
         giftSet: giftSetBoardBadge(rawLine.setData, rawLine.giftSetFlags),
         createdByName: order.createdByName,

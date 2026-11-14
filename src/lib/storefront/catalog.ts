@@ -28,6 +28,7 @@ export function shopDtfPricing(settings: DtfSettings): CatalogDtfPricing {
       [settings.runDiscount1MinQty, settings.runDiscount1Pct],
       [settings.runDiscount2MinQty, settings.runDiscount2Pct],
       [settings.runDiscount3MinQty, settings.runDiscount3Pct],
+      [settings.runDiscount4MinQty, settings.runDiscount4Pct],
     ] as const
   )
     .filter(([minQty, pct]) => minQty > 0 && pct > 0)
@@ -36,6 +37,7 @@ export function shopDtfPricing(settings: DtfSettings): CatalogDtfPricing {
   return {
     printDiscount: steps.length ? { steps, roundTo: settings.runDiscountRoundToMdl } : null,
     pressFeeMdl: settings.pressFeePerZoneMdl,
+    sleeve: { maxCm: settings.sleeveMaxCm, price: settings.sleevePriceRetailMdl },
   };
 }
 
