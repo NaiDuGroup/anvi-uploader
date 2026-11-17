@@ -324,6 +324,7 @@ import {
   type TypeHintTarget,
 } from "@/lib/orderTypeHint/orderTypeHint";
 import { PostcardFinishingFields, PostcardPurposeFields } from "@/app/admin/_components/PostcardRowFields";
+import { isRegularSheetPaper } from "@/lib/businessCard/a3NativePaper";
 import {
   POSTCARD_DEFAULTS,
   POSTCARD_FOLDED_PRESET_ID,
@@ -808,7 +809,19 @@ let wizardStickerSettings: StickerSheetSettings = STICKER_SHEET_DEFAULTS;
 let wizardPostcardSettings: PostcardSettings = POSTCARD_DEFAULTS;
 
 /** Postcard rows get a draft; a row leaving postcards drops it. */
-function withPostcardDraft(a: SlotAssign): SlotAssign {
+function withPostcardDraft(
+  a0: SlotAssign,
+  /** A3+-only papers (postcards only): a row leaving postcards goes back to the default paper. */
+  a3OnlyPaperIds?: ReadonlySet<string>,
+  bcDefaultPaperId?: string | null,
+): SlotAssign {
+  const a: SlotAssign =
+    a0.productType !== "postcard" &&
+    isSheetProductType(a0.productType) &&
+    a0.bcSheetPaperId != null &&
+    a3OnlyPaperIds?.has(a0.bcSheetPaperId)
+      ? { ...a0, bcSheetPaperId: bcDefaultPaperId ?? null }
+      : a0;
   if (a.productType === "postcard") return a.postcard ? a : { ...a, postcard: defaultPostcardDraft() };
   return a.postcard == null ? a : { ...a, postcard: null };
 }
@@ -1536,7 +1549,7 @@ function bcSlotLayout(
     return layout.cardsPerSheet > 0 ? { paper, trim, layout } : null;
   }
   if (a.productType === "postcard") {
-    const { layout } = postcardSlotLayout(a, trim);
+    const { layout } = postcardSlotLayout(a, trim, paper);
     return layout.cardsPerSheet > 0 ? { paper, trim, layout } : null;
   }
   const layout = computeBusinessCardSheetLayout({
@@ -1555,9 +1568,12 @@ function bcSlotLayout(
 function postcardSlotLayout(
   a: SlotAssign,
   trim: { trimWidthCm: number; trimHeightCm: number },
+  /** The row's paper: an A3+-only paper always prints on A3+. */
+  paper: Pick<AdminSheetPaperJson, "a3Native"> | null | undefined,
 ): { format: PostcardSheetFormat; layout: BusinessCardSheetLayout } {
   const d = a.postcard ?? defaultPostcardDraft();
   return resolvePostcardLayout({
+    a3NativePaper: paper?.a3Native === true,
     format: d.format,
     trimWidthCm: trim.trimWidthCm,
     trimHeightCm: trim.trimHeightCm,
@@ -1568,10 +1584,14 @@ function postcardSlotLayout(
 }
 
 /** Sheet a postcard row prints on (for the format toggle); the requested one until the size is known. */
-function postcardEffectiveFormat(a: SlotAssign): PostcardSheetFormat {
+function postcardEffectiveFormat(
+  a: SlotAssign,
+  paper: Pick<AdminSheetPaperJson, "a3Native"> | null | undefined,
+): PostcardSheetFormat {
   const d = a.postcard ?? defaultPostcardDraft();
+  if (paper?.a3Native) return "A3+";
   const trim = bcAssignTrimSize(a);
-  return trim ? postcardSlotLayout(a, trim).format : d.format;
+  return trim ? postcardSlotLayout(a, trim, paper).format : d.format;
 }
 
 /**
@@ -1756,7 +1776,7 @@ function bcSlotPricing(
     (a.productType !== "postcard" ||
       (st.postcardKey != null &&
         a.postcard != null &&
-        st.postcardKey === postcardPricingKey({ ...a.postcard, format: postcardSlotLayout(a, geo.trim).format })))
+        st.postcardKey === postcardPricingKey({ ...a.postcard, format: postcardSlotLayout(a, geo.trim, paper).format })))
   ) {
     return {
       layout,
@@ -1813,6 +1833,8 @@ function bcSlotPricing(
         costPerSheet: paper.costPerSheet,
         retailPricePerSheet: paper.retailPricePerSheet,
         dealerPricePerSheet: paper.dealerPricePerSheet,
+        retailPriceTwoSidesPerSheet: paper.retailPriceTwoSidesPerSheet,
+        dealerPriceTwoSidesPerSheet: paper.dealerPriceTwoSidesPerSheet,
       },
       avgPaperCostPerSheet: paper.avgPurchaseCostPerSheet,
       presetId: a.bcPresetId as Parameters<typeof buildPostcardLineData>[0]["presetId"],
@@ -2628,9 +2650,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   customerTypeRef.current = customer.customerType;
 
   const bcDefaultSheetPaperIdRef = useRef<string | null>(
-    bootstrap.sheetPapers.find((p) => !isStickerSheetPaper(p))?.id ?? null,
+    bootstrap.sheetPapers.find((p) => isRegularSheetPaper(p))?.id ?? null,
   );
-  bcDefaultSheetPaperIdRef.current = bootstrap.sheetPapers.find((p) => !isStickerSheetPaper(p))?.id ?? null;
+  bcDefaultSheetPaperIdRef.current = bootstrap.sheetPapers.find((p) => isRegularSheetPaper(p))?.id ?? null;
   wizardStickerSettings = bootstrap.stickerSheetSettings ?? STICKER_SHEET_DEFAULTS;
   wizardPostcardSettings = bootstrap.postcardSettings ?? POSTCARD_DEFAULTS;
   const dtfCatalogRef = useRef<DtfCatalogJson>(dtfCatalog);
@@ -2713,8 +2735,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const printEconomics: WizardBootstrapData["printEconomics"] | null =
     bootstrap.printEconomics;
 
-  /** Business cards / flyers choose among the ordinary papers; stickers use the self-adhesive one. */
+  /**
+   * Business cards / flyers choose among the ordinary papers; postcards also among
+   * the A3+-only ones (textured, 32×45); stickers use the self-adhesive one.
+   */
   const bcPaperItems = useMemo(
+    () => bootstrap.sheetPapers.filter((p) => isRegularSheetPaper(p)),
+    [bootstrap.sheetPapers],
+  );
+  const postcardPaperItems = useMemo(
     () => bootstrap.sheetPapers.filter((p) => !isStickerSheetPaper(p)),
     [bootstrap.sheetPapers],
   );
@@ -2723,6 +2752,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     [bootstrap.sheetPapers],
   );
   const stickerPaperId: string | null = stickerPaperItems[0]?.id ?? null;
+  const a3OnlyPaperIds = useMemo(
+    () => new Set(bootstrap.sheetPapers.filter((p) => p.a3Native).map((p) => p.id)),
+    [bootstrap.sheetPapers],
+  );
   const bcDefaultSheetPaperId = bcPaperItems[0]?.id ?? null;
 
   const [submitting, setSubmitting] = useState(false);
@@ -4049,7 +4082,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         }),
         stickerPaperId,
         bcDefaultSheetPaperId,
-      ));
+      ), a3OnlyPaperIds, bcDefaultSheetPaperId);
       // Keep the run on whole sheets when the sheet capacity changes. Custom
       // width/height are left out: refitting on every keystroke would jump the
       // run through the half-typed sizes; it is rounded on blur and submit.
@@ -5777,7 +5810,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           }),
           stickerPaperId,
           bcDefaultSheetPaperId,
-        ));
+        ), a3OnlyPaperIds, bcDefaultSheetPaperId);
         const converted: SlotAssign = convertPickedDesignerItem(
           next[id],
           withSublimationDraft(
@@ -7456,7 +7489,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 <AdminBusinessCardRowFields
                                   productType={a.productType}
                                   assign={a}
-                                  papers={bcPaperItems}
+                                  papers={a.productType === "postcard" ? postcardPaperItems : bcPaperItems}
                                   pricing={bcSlotPricing(
                                     a,
                                     bcPaperById,
@@ -7531,7 +7564,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     a.productType === "postcard" && a.postcard ? (
                                       <PostcardFinishingFields
                                         draft={a.postcard}
-                                        effectiveFormat={postcardEffectiveFormat(a)}
+                                        effectiveFormat={postcardEffectiveFormat(
+                                          a,
+                                          a.bcSheetPaperId ? bcPaperById.get(a.bcSheetPaperId) : null,
+                                        )}
                                         layout={bcSlotLayout(a, bcPaperById)?.layout ?? null}
                                         pricing={bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdlEffective)}
                                         paper={a.bcSheetPaperId ? (bcPaperById.get(a.bcSheetPaperId) ?? null) : null}

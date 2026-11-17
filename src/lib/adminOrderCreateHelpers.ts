@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { Prisma as PrismaNs } from "@prisma/client";
 import type { AdminOrderLineInput, CreateAdminOrderInput, PostcardLineInput, ProductType, StickerLineInput } from "@/lib/validations";
+import { isA3NativePaper } from "@/lib/businessCard/a3NativePaper";
 import { buildPostcardLineData, parsePostcardSettings, type PostcardPresetId } from "@/lib/postcard/postcard";
 import {
   buildStickerSheetLineData,
@@ -548,7 +549,8 @@ export async function resolveSheetProductLine(input: {
   sheetsUsed: number;
 }> {
   const paper = await findSheetPaperPricing(prisma, input.sheetPaperId);
-  if (!paper || !paper.isActive) {
+  // A3+-only paper (textured, 32×45) is printed only as postcards on whole A3+ sheets.
+  if (!paper || !paper.isActive || isA3NativePaper(paper)) {
     throw new AdminOrderResolveError("bc_paper_not_found");
   }
   const config = sheetProductConfig(input.productType);
@@ -693,7 +695,8 @@ export async function resolveStickerSheetLine(input: {
   sheetsUsed: number;
 }> {
   const paper = await findSheetPaperPricing(prisma, input.sheetPaperId);
-  if (!paper || !paper.isActive) {
+  // A3+-only paper (textured, 32×45) is printed only as postcards on whole A3+ sheets.
+  if (!paper || !paper.isActive || isA3NativePaper(paper)) {
     throw new AdminOrderResolveError("bc_paper_not_found");
   }
   const acct = await getOrCreateAccountingSettings();

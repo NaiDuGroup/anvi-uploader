@@ -12,5 +12,7 @@ export function sheetPaperToSnapshot(paper: SheetPaperPricing): SheetPaperSnapsh
     costPerSheet: paper.catalogCostPerSheet,
     retailPricePerSheet: paper.retailPricePerSheet,
     dealerPricePerSheet: paper.dealerPricePerSheet,
+    retailPriceTwoSidesPerSheet: paper.retailPriceTwoSidesPerSheet ?? null,
+    dealerPriceTwoSidesPerSheet: paper.dealerPriceTwoSidesPerSheet ?? null,
   };
 }

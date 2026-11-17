@@ -154,18 +154,24 @@ export function PostcardFinishingFields({
 
   const set = (patch: Partial<PostcardDraft>) => onChange({ ...draft, ...patch });
   const spec = POSTCARD_SHEET_FORMAT_SPECS[effectiveFormat];
+  // A3+-only paper (textured, 32×45): always A3+, stock counted in A3+ sheets.
+  const a3Only = paper?.a3Native === true;
   const a4Sheets = pricing ? pricing.sheetsUsed * spec.a4Equivalent : 0;
+  const paperSheetsNeeded = a3Only ? (pricing?.sheetsUsed ?? 0) : a4Sheets;
   const pc = pricing?.postcard ?? null;
   const perPiece =
     pricing && pricing.quantity > 0 ? (Math.round((pricing.totalSellPriceMdl / pricing.quantity) * 100) / 100).toFixed(2) : null;
-  const stockShort = paper != null && pricing != null && paper.stockSheets < a4Sheets;
+  const stockShort = paper != null && pricing != null && paper.stockSheets < paperSheetsNeeded;
   const unpriced = pc != null && !(pc.printRatePerPassMdl > 0);
   const marginMm = draft.figuredCut && !draft.wholeSheet ? settings.figuredCutMarginMm : 0;
 
   const lines: [string, number][] = pc
     ? ([
-        [p.printLine(pc.passes, pc.printRatePerPassMdl), pc.breakdown.printMdl],
-        [p.laminationLine(pc.paperSheetsUsed), pc.breakdown.laminationMdl],
+        [
+          pc.a3NativePaper ? p.printLineA3(pc.passes, pc.printRatePerPassMdl) : p.printLine(pc.passes, pc.printRatePerPassMdl),
+          pc.breakdown.printMdl,
+        ],
+        [p.laminationLine(a4Sheets), pc.breakdown.laminationMdl],
         [p.figuredCutLine, pc.breakdown.figuredCutMdl],
         [p.creaseLine, pc.breakdown.creaseMdl],
         [p.cornersLine, pc.breakdown.cornersMdl],
@@ -178,13 +184,15 @@ export function PostcardFinishingFields({
       <div>
         <Label>{p.sheetLabel}</Label>
         <Toggle
-          value={draft.wholeSheet ? draft.format : effectiveFormat}
-          options={POSTCARD_SHEET_FORMATS.map(
+          value={a3Only ? "A3+" : draft.wholeSheet ? draft.format : effectiveFormat}
+          options={POSTCARD_SHEET_FORMATS.filter((f) => !a3Only || f === "A3+").map(
             (f) => [f, `${f} ${POSTCARD_SHEET_FORMAT_SPECS[f].widthCm * 10}×${POSTCARD_SHEET_FORMAT_SPECS[f].heightCm * 10}`] as const,
           )}
           onChange={(format) => set({ format })}
         />
-        {!draft.wholeSheet && effectiveFormat !== draft.format ? (
+        {a3Only ? (
+          <p className="mt-0.5 text-[10px] font-medium text-amber-800">{p.a3OnlyHint}</p>
+        ) : !draft.wholeSheet && effectiveFormat !== draft.format ? (
           <p className="mt-0.5 text-[10px] font-medium text-amber-800">{p.sheetAutoA3}</p>
         ) : null}
       </div>
@@ -244,7 +252,9 @@ export function PostcardFinishingFields({
           {layout && layout.cardsPerSheet > 0 ? (
             <p className="font-medium">
               {draft.wholeSheet
-                ? p.wholeSheetsSummary(pricing?.sheetsUsed ?? 0, effectiveFormat, a4Sheets)
+                ? a3Only
+                  ? p.runSheets(pricing?.sheetsUsed ?? 0, effectiveFormat)
+                  : p.wholeSheetsSummary(pricing?.sheetsUsed ?? 0, effectiveFormat, a4Sheets)
                 : p.perSheetSummary(layout.cardsPerSheet, pricing?.sheetsUsed ?? 0, effectiveFormat)}
             </p>
           ) : (
@@ -275,6 +285,9 @@ export function PostcardFinishingFields({
                       <span className="shrink-0">{Math.round(v * 100) / 100} {cur}</span>
                     </p>
                   ))}
+                  {pc?.twoSidesRateFallback && !dealerView ? (
+                    <p className="text-[10px] font-medium text-amber-800">{p.twoSidesFallback}</p>
+                  ) : null}
                   <p className="font-semibold tabular-nums">
                     {t.admin.newOrderPage.lfTotal}: {pricing.totalSellPriceMdl} {cur}
                     {perPiece != null && !draft.wholeSheet ? (
@@ -285,7 +298,8 @@ export function PostcardFinishingFields({
               )}
               {paper && !hideStock ? (
                 <p className={cn("text-[10px]", stockShort ? "font-medium text-red-700" : "text-gray-500")}>
-                  {t.admin.sheetPaperCatalogColStockSheets}: {paper.stockSheets.toFixed(0)} A4+ · {p.stockNeed(a4Sheets)}
+                  {t.admin.sheetPaperCatalogColStockSheets}: {paper.stockSheets.toFixed(0)} {a3Only ? "A3+" : "A4+"} ·{" "}
+                  {a3Only ? p.stockNeedA3(paperSheetsNeeded) : p.stockNeed(a4Sheets)}
                 </p>
               ) : null}
             </>

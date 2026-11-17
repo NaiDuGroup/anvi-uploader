@@ -21,6 +21,9 @@ export interface SheetPaperSnapshot {
   costPerSheet: number;
   retailPricePerSheet: number;
   dealerPricePerSheet: number;
+  /** A3+-only papers: price per A3+ sheet printed on both sides; null / absent = one-side × 2. */
+  retailPriceTwoSidesPerSheet?: number | null;
+  dealerPriceTwoSidesPerSheet?: number | null;
 }
 
 /** Frozen imposition geometry, so the workshop PDF is reproducible later. */

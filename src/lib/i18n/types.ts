@@ -369,6 +369,11 @@ export interface TranslationDictionary {
       doesNotFit: string;
       stockNeed: (a4Sheets: number) => string;
       runSheets: (sheets: number, format: string) => string;
+      /** A3+-only paper (textured, 32×45): always A3+, priced per sheet. */
+      a3OnlyHint: string;
+      printLineA3: (sheets: number, rate: number) => string;
+      twoSidesFallback: string;
+      stockNeedA3: (sheets: number) => string;
     };
     stickerSheet: {
       shapeLabel: string;
@@ -1029,6 +1034,11 @@ export interface TranslationDictionary {
     sheetPaperCatalogCostPerSheet: string;
     sheetPaperCatalogCostHint: string;
     sheetPaperCatalogPriceHint: string;
+    /** A3+-only paper (sheet ≥ 32×45): price per whole A3+ sheet, both sides. */
+    sheetPaperCatalogRetailTwoSides: string;
+    sheetPaperCatalogDealerTwoSides: string;
+    sheetPaperCatalogA3NativeHint: string;
+    sheetPaperCatalogA3NativeBadge: string;
     /** Cards that fit one sheet at the studio standard size. */
     sheetPaperCatalogCardsPerSheet: (n: number) => string;
     sheetPaperCatalogModalAddTitle: string;

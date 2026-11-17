@@ -1,5 +1,6 @@
 import { AdminOrderResolveError, resolveSheetProductLine } from "@/lib/adminOrderCreateHelpers";
 import { prisma } from "@/lib/prisma";
+import { isA3NativePaper } from "@/lib/businessCard/a3NativePaper";
 import { psFormat, psProduct, type PsFormat, type PsProduct } from "@/lib/storefront/printShop/config";
 import { psLinePrice, type PsPrice, type PsQuoteLine } from "@/lib/storefront/printShop/pricing";
 import { psFinishingRu } from "@/lib/storefront/printShop/text";
@@ -38,7 +39,7 @@ function paperGsm(p: ShopPaperRow): number | null {
 
 /** First active paper of a weight (by sort order), or null. */
 export function pickShopPaperByGsm(papers: readonly ShopPaperRow[], gsm: number): ShopPaperRow | null {
-  return papers.find((p) => paperGsm(p) === gsm) ?? null;
+  return papers.find((p) => paperGsm(p) === gsm && !isA3NativePaper(p)) ?? null;
 }
 
 function lineParts(line: PsQuoteLine): { p: PsProduct; f: PsFormat; price: PsPrice } {
@@ -65,7 +66,7 @@ export async function resolveShopPrintSheetLine(line: PsQuoteLine) {
   const papers = await prisma.sheetPaper.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, gsm: true },
+    select: { id: true, name: true, gsm: true, sheetWidthCm: true, sheetHeightCm: true },
   });
   const paper = pickShopPaperByGsm(papers, line.paper);
   if (!paper) throw new AdminOrderResolveError("bc_paper_not_found");

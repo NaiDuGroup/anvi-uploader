@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getMaybeCustomerUser } from "@/lib/auth";
 import { businessCardPerCardRateMdl } from "@/lib/businessCard/businessCardLinePricing";
 import type { BusinessCardCustomerType } from "@/lib/businessCard/types";
-import { isStickerSheetPaper } from "@/lib/stickerSheet/stickerSheet";
+import { isRegularSheetPaper } from "@/lib/businessCard/a3NativePaper";
 
 /**
  * Customer-facing sheet paper catalog for business cards and flyers. Returns only active
@@ -34,8 +34,9 @@ export async function GET() {
     },
   });
 
-  // Sticker paper is for staff «Наклейки на листе» lines, not cabinet cards / flyers.
-  const items = rows.filter((r) => !isStickerSheetPaper(r)).map((r) => ({
+  // Sticker paper is for staff «Наклейки на листе» lines and A3+-only paper for postcards,
+  // not cabinet cards / flyers.
+  const items = rows.filter((r) => isRegularSheetPaper(r)).map((r) => ({
     id: r.id,
     name: r.name,
     gsm: r.gsm,

@@ -15,6 +15,9 @@ import {
 import { sheetLinePaperSheets, sheetLineTonerClicks } from "@/lib/stickerSheet/stickerSheet";
 import { keepStoredSheetLinePricing } from "@/lib/businessCard/keepStoredSheetLinePricing";
 import type { SheetPaperSnapshot } from "@/lib/businessCard/types";
+import { isA3NativePaper, isRegularSheetPaper } from "@/lib/businessCard/a3NativePaper";
+import { pickShopPaperByGsm } from "@/lib/shop/printShopLine";
+import { pickShopBusinessCardPaper } from "@/lib/shop/businessCardShop";
 
 const paper = (gsm: number): SheetPaperSnapshot => {
   const retail = gsm <= 150 ? 10 : gsm >= 350 ? 14 : 12;
@@ -189,5 +192,110 @@ describe("postcard stock, toner, labels", () => {
     expect(keepStoredSheetLinePricing(line({ preset: "pc_a6", qty: 100, o: { purpose: "invitation" } }), prev).totalSellPriceMdl).toBe(999);
     expect(keepStoredSheetLinePricing(line({ preset: "pc_a6", qty: 100, o: { lamination: "gloss" } }), prev).totalSellPriceMdl).toBe(675);
     expect(samePostcardPricing(opts(), opts({ purpose: "voucher" }))).toBe(true);
+  });
+});
+
+describe("A3+-only paper (textured, 32×45)", () => {
+  const gesso: SheetPaperSnapshot = {
+    id: "gesso",
+    name: "Tintoretto Gesso 300g белая текстурная",
+    gsm: 300,
+    sheetWidthCm: 32,
+    sheetHeightCm: 45,
+    costPerSheet: 20,
+    retailPricePerSheet: 36,
+    dealerPricePerSheet: 30,
+    retailPriceTwoSidesPerSheet: 42,
+    dealerPriceTwoSidesPerSheet: null,
+  };
+  const build = (o: { qty: number; sides?: "one" | "two"; options?: Partial<PostcardOptions>; dealer?: boolean; paper?: SheetPaperSnapshot }) => {
+    const built = buildPostcardLineData({
+      paperSnapshot: o.paper ?? gesso,
+      avgPaperCostPerSheet: null,
+      presetId: "pc_a5",
+      ...size("pc_a5"),
+      sides: o.sides ?? "one",
+      quantity: o.qty,
+      options: opts(o.options),
+      customerType: o.dealer ? "dealer" : "retail",
+    });
+    if (!built.ok) throw new Error(built.code);
+    return built.data;
+  };
+
+  it("detects A3+-only papers by sheet size, never sticker paper", () => {
+    expect(isA3NativePaper(gesso)).toBe(true);
+    expect(isA3NativePaper({ ...gesso, sheetWidthCm: 45, sheetHeightCm: 32 })).toBe(true);
+    expect(isA3NativePaper(paper(300))).toBe(false);
+    expect(isA3NativePaper({ name: "A3+ самоклейка Fedrigoni", sheetWidthCm: 32, sheetHeightCm: 45 })).toBe(false);
+    expect(isRegularSheetPaper(gesso)).toBe(false);
+    expect(isRegularSheetPaper(paper(300))).toBe(true);
+  });
+
+  it("forces A3+ even when A4+ is requested", () => {
+    const d = build({ qty: 8, options: { format: "A4+" } });
+    expect(d.postcard!.format).toBe("A3+");
+    expect(d.postcard!.sheetWidthCm).toBe(32);
+    expect(d.cardsPerSheet).toBe(4); // A5 + bleed: 2 × 2 on 32 × 45
+    expect(d.sheetsUsed).toBe(2);
+    expect(resolvePostcardLayout({ a3NativePaper: true, format: "A4+", ...size("pc_a6"), wholeSheet: false, figuredCut: false }).format).toBe("A3+");
+  });
+
+  it("one side: 36 lei per A3+ sheet, flat (no tier step)", () => {
+    const d = build({ qty: 8 });
+    expect(d.postcard!.printRatePerPassMdl).toBe(36);
+    expect(d.postcard!.breakdown.printMdl).toBe(72);
+    expect(d.totalSellPriceMdl).toBe(72);
+    const big = build({ qty: 400 }); // 100 sheets — no retail tier step
+    expect(big.postcard!.printRatePerPassMdl).toBe(36);
+    expect(big.totalSellPriceMdl).toBe(3600);
+  });
+
+  it("two sides: 42 lei per A3+ sheet, not doubled", () => {
+    const d = build({ qty: 8, sides: "two" });
+    expect(d.postcard!.printRatePerPassMdl).toBe(42);
+    expect(d.totalSellPriceMdl).toBe(84);
+    expect(d.postcard!.twoSidesRateFallback).toBeUndefined();
+  });
+
+  it("two sides without a two-side price: one side × 2, flagged", () => {
+    const d = build({ qty: 8, sides: "two", dealer: true });
+    expect(d.postcard!.printRatePerPassMdl).toBe(60);
+    expect(d.postcard!.twoSidesRateFallback).toBe(true);
+  });
+
+  it("writes off 1 paper sheet per A3+ sheet; finishing still counts 2 A4+; toner 2 clicks per side", () => {
+    const d = build({ qty: 8, sides: "two", options: { lamination: "gloss" } });
+    expect(d.sheetsUsed).toBe(2);
+    expect(d.postcard!.paperSheetsUsed).toBe(2);
+    expect(sheetLinePaperSheets(d)).toBe(2);
+    expect(d.paperCostMdl).toBe(40); // 2 sheets × 20
+    expect(d.postcard!.breakdown.laminationMdl).toBe(60); // 4 A4+ × 15
+    expect(sheetLineTonerClicks(d)).toBe(8);
+    expect(d.postcard!.a3NativePaper).toBe(true);
+  });
+
+  it("whole sheets on A3+-only paper", () => {
+    const d = build({ qty: 5, options: { wholeSheet: true, format: "A4+" } });
+    expect(d.postcard!.format).toBe("A3+");
+    expect(d.sheetsUsed).toBe(5);
+    expect(d.postcard!.paperSheetsUsed).toBe(5);
+    expect(d.totalSellPriceMdl).toBe(180);
+  });
+
+  it("ordinary A4+ paper on A3+ is unchanged (2 A4+ per sheet)", () => {
+    const d = build({ qty: 8, paper: paper(300), options: { format: "A3+" } });
+    expect(d.postcard!.paperSheetsUsed).toBe(4);
+    expect(d.postcard!.a3NativePaper).toBeUndefined();
+  });
+
+  it("is excluded from the shop paper pickers (business cards, flyers)", () => {
+    const rows = [
+      { id: "gesso", name: gesso.name, gsm: 300, sheetWidthCm: 32, sheetHeightCm: 45 },
+      { id: "a4", name: "A4+ 300gr", gsm: 300, sheetWidthCm: 22.5, sheetHeightCm: 32 },
+      { id: "gesso350", name: "Textured 350", gsm: 350, sheetWidthCm: 45, sheetHeightCm: 32 },
+    ];
+    expect(pickShopPaperByGsm(rows, 300)?.id).toBe("a4");
+    expect(pickShopBusinessCardPaper(rows)).toBeNull();
   });
 });

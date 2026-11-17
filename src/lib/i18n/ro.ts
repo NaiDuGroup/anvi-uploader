@@ -328,6 +328,10 @@ export const ro: TranslationDictionary = {
       doesNotFit: "Produsul nu încape pe foaie",
       stockNeed: (a4Sheets) => `necesar ${a4Sheets} A4+`,
       runSheets: (sheets, format) => `${sheets} foi ${format} întregi`,
+      a3OnlyHint: "Hârtie doar pentru A3+ — tipar pe foaia întreagă 32×45, preț pe foaie",
+      printLineA3: (sheets, rate) => `Tipar: ${sheets} foi A3+ × ${rate} lei`,
+      twoSidesFallback: "Prețul pentru 2 fețe nu e setat — o față × 2",
+      stockNeedA3: (sheets) => `necesar ${sheets} A3+`,
     },
     stickerSheet: {
       shapeLabel: "Formă",
@@ -926,6 +930,11 @@ export const ro: TranslationDictionary = {
     sheetPaperCatalogCostHint:
       "Se folosește până la prima intrare; după aceea se calculează costul mediu ponderat.",
     sheetPaperCatalogPriceHint: "Preț pentru o singură față tipărită a foii.",
+    sheetPaperCatalogRetailTwoSides: "Preț client, 2 fețe",
+    sheetPaperCatalogDealerTwoSides: "Preț dealer, 2 fețe",
+    sheetPaperCatalogA3NativeHint:
+      "Foaie de la 32×45 — hârtie doar pentru A3+ (de ex. texturată): doar felicitări, tipar mereu pe foaia A3+ întreagă, din stoc 1 foaie pe foaie. Prețurile de mai sus — pe foaie A3+ cu o față; «2 fețe» — pe foaie cu două fețe (gol = o față × 2).",
+    sheetPaperCatalogA3NativeBadge: "doar A3+",
     sheetPaperCatalogCardsPerSheet: (n) => `${n} cărți pe foaie`,
     sheetPaperCatalogModalAddTitle: "Hârtie nouă",
     sheetPaperCatalogModalEditTitle: "Editează hârtia",

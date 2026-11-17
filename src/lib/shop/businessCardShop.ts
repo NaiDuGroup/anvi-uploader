@@ -1,5 +1,6 @@
 import { AdminOrderResolveError, resolveSheetProductLine } from "@/lib/adminOrderCreateHelpers";
 import { prisma } from "@/lib/prisma";
+import { isA3NativePaper } from "@/lib/businessCard/a3NativePaper";
 import type { PublicBusinessCardLineInput } from "@/lib/publicQuote/publicQuoteSchema";
 import {
   SHOP_BC_PAPER_GSM,
@@ -20,6 +21,9 @@ export interface ShopPaperRow {
   id: string;
   name: string;
   gsm: number | null;
+  /** Sheet size: A3+-only papers (`isA3NativePaper`) are never picked for the shop. */
+  sheetWidthCm?: number | { toString(): string } | null;
+  sheetHeightCm?: number | { toString(): string } | null;
 }
 
 /** Paper weight of a sheet paper: `gsm`, else the «350gr» in its name. */
@@ -31,14 +35,14 @@ function paperGsm(p: ShopPaperRow): number | null {
 
 /** The default business-card paper among the active ones (first by sort order); null when none weighs 350 g. */
 export function pickShopBusinessCardPaper(papers: readonly ShopPaperRow[]): ShopPaperRow | null {
-  return papers.find((p) => paperGsm(p) === SHOP_BC_PAPER_GSM) ?? null;
+  return papers.find((p) => paperGsm(p) === SHOP_BC_PAPER_GSM && !isA3NativePaper(p)) ?? null;
 }
 
 async function findShopBusinessCardPaper(): Promise<ShopPaperRow | null> {
   const papers = await prisma.sheetPaper.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    select: { id: true, name: true, gsm: true },
+    select: { id: true, name: true, gsm: true, sheetWidthCm: true, sheetHeightCm: true },
   });
   return pickShopBusinessCardPaper(papers);
 }

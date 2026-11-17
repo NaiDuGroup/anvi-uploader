@@ -29,6 +29,9 @@ const createBody = z.object({
   costPerSheet: z.number().int().min(0).max(99_999_999).default(0),
   retailPricePerSheet: z.number().int().min(0).max(99_999_999).default(0),
   dealerPricePerSheet: z.number().int().min(0).max(99_999_999).default(0),
+  /** A3+-only papers: price per A3+ sheet, both sides; null = one side × 2. */
+  retailPriceTwoSidesPerSheet: z.number().int().min(0).max(99_999_999).nullable().optional(),
+  dealerPriceTwoSidesPerSheet: z.number().int().min(0).max(99_999_999).nullable().optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
 });
@@ -69,6 +72,8 @@ export async function POST(request: NextRequest) {
           costPerSheet: LEGACY_COST_COLUMN_PLACEHOLDER,
           retailPricePerSheet: body.retailPricePerSheet,
           dealerPricePerSheet: body.dealerPricePerSheet,
+          retailPriceTwoSidesPerSheet: body.retailPriceTwoSidesPerSheet ?? null,
+          dealerPriceTwoSidesPerSheet: body.dealerPriceTwoSidesPerSheet ?? null,
           isActive: body.isActive ?? true,
           sortOrder: body.sortOrder ?? 0,
         },

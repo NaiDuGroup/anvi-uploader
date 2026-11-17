@@ -34,6 +34,9 @@ const patchBody = z.object({
   costPerSheet: z.number().int().min(0).max(99_999_999).optional(),
   retailPricePerSheet: z.number().int().min(0).max(99_999_999).optional(),
   dealerPricePerSheet: z.number().int().min(0).max(99_999_999).optional(),
+  /** A3+-only papers: price per A3+ sheet, both sides; null = one side × 2. */
+  retailPriceTwoSidesPerSheet: z.number().int().min(0).max(99_999_999).nullable().optional(),
+  dealerPriceTwoSidesPerSheet: z.number().int().min(0).max(99_999_999).nullable().optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
 });
@@ -67,6 +70,12 @@ export async function PATCH(
             : {}),
           ...(body.dealerPricePerSheet !== undefined
             ? { dealerPricePerSheet: body.dealerPricePerSheet }
+            : {}),
+          ...(body.retailPriceTwoSidesPerSheet !== undefined
+            ? { retailPriceTwoSidesPerSheet: body.retailPriceTwoSidesPerSheet }
+            : {}),
+          ...(body.dealerPriceTwoSidesPerSheet !== undefined
+            ? { dealerPriceTwoSidesPerSheet: body.dealerPriceTwoSidesPerSheet }
             : {}),
           ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
           ...(body.sortOrder !== undefined ? { sortOrder: body.sortOrder } : {}),

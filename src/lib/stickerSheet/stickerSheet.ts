@@ -289,7 +289,7 @@ export function stickerSheetSummaryRu(info: StickerSheetLineInfo): string {
 export function sheetLinePaperSheets(data: {
   sheetsUsed: number;
   stickerSheet?: { paperSheetsUsed?: number } | null;
-  /** Postcards: A4+ sheets (an A3+ sheet = 2). */
+  /** Postcards: A4+ sheets (an A3+ sheet = 2); on A3+-only paper, A3+ sheets. */
   postcard?: { paperSheetsUsed?: number } | null;
 }): number {
   const p = data.stickerSheet?.paperSheetsUsed ?? data.postcard?.paperSheetsUsed;

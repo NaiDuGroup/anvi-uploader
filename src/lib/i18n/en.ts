@@ -328,6 +328,10 @@ export const en: TranslationDictionary = {
       doesNotFit: "The item does not fit the sheet",
       stockNeed: (a4Sheets) => `needs ${a4Sheets} A4+`,
       runSheets: (sheets, format) => `${sheets} whole ${format} sheets`,
+      a3OnlyHint: "A3+-only paper — printed on a whole 32×45 sheet, priced per sheet",
+      printLineA3: (sheets, rate) => `Print: ${sheets} A3+ sheets × ${rate} MDL`,
+      twoSidesFallback: "No 2-sided price set — one side × 2",
+      stockNeedA3: (sheets) => `needs ${sheets} A3+`,
     },
     stickerSheet: {
       shapeLabel: "Shape",
@@ -925,6 +929,11 @@ export const en: TranslationDictionary = {
     sheetPaperCatalogCostHint:
       "Used until the first receipt; after that the weighted average takes over.",
     sheetPaperCatalogPriceHint: "Price for a single printed side of the sheet.",
+    sheetPaperCatalogRetailTwoSides: "Retail price, 2 sides",
+    sheetPaperCatalogDealerTwoSides: "Dealer price, 2 sides",
+    sheetPaperCatalogA3NativeHint:
+      "Sheet from 32×45 — A3+-only paper (e.g. textured): postcards only, always printed on a whole A3+ sheet, 1 sheet from stock per sheet. Prices above are per A3+ sheet, one side; «2 sides» is per sheet printed on both sides (empty = one side × 2).",
+    sheetPaperCatalogA3NativeBadge: "A3+ only",
     sheetPaperCatalogCardsPerSheet: (n) => `${n} cards per sheet`,
     sheetPaperCatalogModalAddTitle: "New paper",
     sheetPaperCatalogModalEditTitle: "Edit paper",

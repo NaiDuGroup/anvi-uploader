@@ -328,6 +328,10 @@ export const ru: TranslationDictionary = {
       doesNotFit: "Изделие не помещается на лист",
       stockNeed: (a4Sheets) => `нужно ${a4Sheets} A4+`,
       runSheets: (sheets, format) => `${sheets} л. ${format} целиком`,
+      a3OnlyHint: "Бумага только для A3+ — печать на целом листе 32×45, цена за лист",
+      printLineA3: (sheets, rate) => `Печать: ${sheets} л. A3+ × ${rate} лей`,
+      twoSidesFallback: "Цена за 2 стороны не задана — считаем одну сторону × 2",
+      stockNeedA3: (sheets) => `нужно ${sheets} A3+`,
     },
     stickerSheet: {
       shapeLabel: "Форма",
@@ -932,6 +936,11 @@ export const ru: TranslationDictionary = {
     sheetPaperCatalogCostHint:
       "Используется, пока нет ни одного прихода; дальше считается средневзвешенная.",
     sheetPaperCatalogPriceHint: "Цена за одну запечатанную сторону листа.",
+    sheetPaperCatalogRetailTwoSides: "Цена клиенту, 2 стороны",
+    sheetPaperCatalogDealerTwoSides: "Цена дилеру, 2 стороны",
+    sheetPaperCatalogA3NativeHint:
+      "Лист от 32×45 — бумага только для A3+ (например, текстурная): только открытки, печать всегда на целом листе A3+, со склада 1 лист за лист. Цены выше — за лист A3+ с одной стороны; «2 стороны» — за лист с двух сторон (пусто = одна сторона × 2).",
+    sheetPaperCatalogA3NativeBadge: "только A3+",
     sheetPaperCatalogCardsPerSheet: (n) => `${n} визиток на лист`,
     sheetPaperCatalogModalAddTitle: "Новая бумага",
     sheetPaperCatalogModalEditTitle: "Изменить бумагу",

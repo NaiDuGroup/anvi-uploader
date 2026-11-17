@@ -22,6 +22,13 @@
  *  - line minimum 30 lei retail / 20 dealer when the studio cuts; «лист
  *    целиком» (the client cuts) — no cutting, no minimum;
  *  - whole-lei line totals.
+ *
+ * A3+-only papers ({@link isA3NativePaper}: stocked as whole 32 × 45 sheets,
+ * e.g. textured «Tintoretto Gesso 300g», added 2026-11-17): always A3+, priced
+ * per A3+ sheet — `retail/dealer_price_per_sheet` for one side,
+ * `*_price_two_sides_per_sheet` for both (null → one side × 2), no retail tier
+ * step — and 1 paper sheet written off per A3+ sheet. Finishing still counts
+ * an A3+ sheet as 2 A4+; toner 2 clicks per side as any A3+.
  */
 
 import { computeBusinessCardSheetLayout, sheetsForQuantity, type BusinessCardSheetLayout } from "@/lib/businessCard/businessCardSheetLayout";
@@ -33,6 +40,7 @@ import {
 } from "@/lib/businessCard/types";
 import type { BusinessCardSides } from "@/lib/businessCard/businessCardConstants";
 import type { StickerSheetPreviewData } from "@/lib/stickerSheet/stickerSheet";
+import { isA3NativePaper } from "@/lib/businessCard/a3NativePaper";
 
 export const POSTCARD_PRODUCT_TYPE = "postcard" as const;
 
@@ -285,10 +293,17 @@ export function computePostcardLayout(input: {
  * The sheet the line is printed on: the requested one, or A3+ when the item
  * does not fit A4+ (an A3 diploma). A whole sheet is exactly the chosen one.
  */
-export function resolvePostcardLayout(input: Parameters<typeof computePostcardLayout>[0]): {
+export function resolvePostcardLayout(
+  raw: Parameters<typeof computePostcardLayout>[0] & {
+    /** A3+-only paper ({@link isA3NativePaper}): the sheet is always A3+. */
+    a3NativePaper?: boolean;
+  },
+): {
   format: PostcardSheetFormat;
   layout: BusinessCardSheetLayout;
 } {
+  const { a3NativePaper, ...rest } = raw;
+  const input = a3NativePaper ? { ...rest, format: "A3+" as const } : rest;
   const layout = computePostcardLayout(input);
   if (layout.cardsPerSheet > 0 || input.wholeSheet || input.format === "A3+") {
     return { format: input.format, layout };
@@ -307,12 +322,18 @@ export interface PostcardPricingBreakdown {
 }
 
 export interface PostcardPricing {
-  /** A4+ sheets (A3+ = 2) — what the paper stock and per-sheet finishing count. */
+  /** A4+ sheets (A3+ = 2) — what per-sheet finishing (lamination, figured cut) counts. */
   a4Sheets: number;
-  /** A4+ passes: a4Sheets × sides. */
+  /** Paper sheets written off: `a4Sheets`, or the A3+ sheets for an A3+-only paper. */
+  paperSheetsUsed: number;
+  /** A4+ passes: a4Sheets × sides; A3+-only paper: printed A3+ sheets (sides are in the rate). */
   passes: number;
-  /** Print rate per A4+ pass (MDL). */
+  /** Print rate per A4+ pass (MDL); A3+-only paper: per A3+ sheet for the line's sides. */
   printRatePerPassMdl: number;
+  /** Printed on an A3+-only paper: priced per A3+ sheet. */
+  a3NativePaper: boolean;
+  /** A3+-only paper, both sides, no two-side price set: the rate is one side × 2. */
+  twoSidesRateFallback: boolean;
   /** Retail step the line fell into (min passes); null for dealers. */
   tierMinPasses: number | null;
   breakdown: PostcardPricingBreakdown;
@@ -321,7 +342,13 @@ export interface PostcardPricing {
 }
 
 export function computePostcardPricing(input: {
-  paper: Pick<SheetPaperSnapshot, "retailPricePerSheet" | "dealerPricePerSheet">;
+  paper: Pick<SheetPaperSnapshot, "retailPricePerSheet" | "dealerPricePerSheet"> &
+    Partial<
+      Pick<
+        SheetPaperSnapshot,
+        "name" | "sheetWidthCm" | "sheetHeightCm" | "retailPriceTwoSidesPerSheet" | "dealerPriceTwoSidesPerSheet"
+      >
+    >;
   /** Printed sheets of `format`. */
   sheets: number;
   format: PostcardSheetFormat;
@@ -334,13 +361,28 @@ export function computePostcardPricing(input: {
   const s = input.settings ?? POSTCARD_DEFAULTS;
   const o = normalizePostcardOptions(input.options);
   const dealer = input.customerType === "dealer";
-  const a4Sheets = Math.max(0, Math.ceil(input.sheets)) * POSTCARD_SHEET_FORMAT_SPECS[input.format].a4Equivalent;
-  const passes = a4Sheets * (input.sides === "two" ? 2 : 1);
+  const native = isA3NativePaper(input.paper);
+  const format: PostcardSheetFormat = native ? "A3+" : input.format;
+  const sheets = Math.max(0, Math.ceil(input.sheets));
+  const a4Sheets = sheets * POSTCARD_SHEET_FORMAT_SPECS[format].a4Equivalent;
+  const paperSheetsUsed = native ? sheets : a4Sheets;
+  const passes = native ? sheets : a4Sheets * (input.sides === "two" ? 2 : 1);
   const qty = Math.max(0, input.quantity);
 
   let rate: number;
   let tierMinPasses: number | null = null;
-  if (dealer) {
+  let twoSidesRateFallback = false;
+  if (native) {
+    // Flat per A3+ sheet: one side, or the two-side price (unset → one side × 2).
+    const one = Math.max(0, dealer ? input.paper.dealerPricePerSheet : input.paper.retailPricePerSheet);
+    const twoRaw = dealer ? input.paper.dealerPriceTwoSidesPerSheet : input.paper.retailPriceTwoSidesPerSheet;
+    if (input.sides === "two") {
+      twoSidesRateFallback = !(typeof twoRaw === "number" && twoRaw > 0);
+      rate = one > 0 ? (twoSidesRateFallback ? one * 2 : (twoRaw as number)) : 0;
+    } else {
+      rate = one;
+    }
+  } else if (dealer) {
     rate = Math.max(0, input.paper.dealerPricePerSheet);
   } else {
     const step = [...s.retailTierSteps].reverse().find((t) => passes >= t.minPasses) ?? s.retailTierSteps[0]!;
@@ -364,8 +406,11 @@ export function computePostcardPricing(input: {
   const r2 = (n: number) => Math.round(n * 100) / 100;
   return {
     a4Sheets,
+    paperSheetsUsed,
     passes,
     printRatePerPassMdl: r2(rate),
+    a3NativePaper: native,
+    twoSidesRateFallback,
     tierMinPasses,
     breakdown: {
       printMdl: r2(printMdl),
@@ -387,10 +432,16 @@ export interface PostcardLineInfo extends PostcardOptions {
   /** Mark margin / gap (mm) of a figured-cut grid; 0 for the guillotine grid. */
   marginMm: number;
   gapMm: number;
-  /** A4+ sheets of the paper written off (A3+ = 2). */
+  /** Paper sheets written off: A4+ sheets (A3+ = 2), or A3+ sheets of an A3+-only paper. */
   paperSheetsUsed: number;
+  /** A4+ passes; A3+-only paper: printed A3+ sheets. */
   passes: number;
+  /** Per A4+ pass; A3+-only paper: per A3+ sheet for the line's sides. */
   printRatePerPassMdl: number;
+  /** Printed on an A3+-only paper (priced and written off per A3+ sheet). Absent on older lines. */
+  a3NativePaper?: boolean;
+  /** A3+-only paper, two sides, priced as one side × 2 (no two-side price set). */
+  twoSidesRateFallback?: boolean;
   tierMinPasses: number | null;
   breakdown: PostcardPricingBreakdown;
 }
@@ -433,7 +484,9 @@ export function buildPostcardLineData(
   if (!Number.isInteger(input.quantity) || input.quantity < 1) return { ok: false, code: "bc_quantity_invalid" };
   if (input.quantity > POSTCARD_MAX_QUANTITY) return { ok: false, code: "bc_quantity_max" };
 
+  const a3NativePaper = isA3NativePaper(input.paperSnapshot);
   const { format, layout } = resolvePostcardLayout({
+    a3NativePaper,
     format: options.format,
     trimWidthCm: input.trimWidthCm,
     trimHeightCm: input.trimHeightCm,
@@ -458,7 +511,7 @@ export function buildPostcardLineData(
   const avg = input.avgPaperCostPerSheet;
   const costPerSheet =
     typeof avg === "number" && Number.isFinite(avg) && avg > 0 ? avg : Math.max(0, input.paperSnapshot.costPerSheet);
-  const paperCostMdl = Math.round(pricing.a4Sheets * costPerSheet * 100) / 100;
+  const paperCostMdl = Math.round(pricing.paperSheetsUsed * costPerSheet * 100) / 100;
   const trimW = options.wholeSheet ? spec.widthCm : input.trimWidthCm;
   const trimH = options.wholeSheet ? spec.heightCm : input.trimHeightCm;
   const bleedCm = options.wholeSheet ? 0 : POSTCARD_BLEED_CM;
@@ -503,9 +556,12 @@ export function buildPostcardLineData(
       sheetHeightCm: spec.heightCm,
       marginMm: options.figuredCut ? settings.figuredCutMarginMm : 0,
       gapMm: options.figuredCut ? settings.figuredCutGapMm : 0,
-      paperSheetsUsed: pricing.a4Sheets,
+      paperSheetsUsed: pricing.paperSheetsUsed,
       passes: pricing.passes,
       printRatePerPassMdl: pricing.printRatePerPassMdl,
+      ...(pricing.a3NativePaper
+        ? { a3NativePaper: true, ...(pricing.twoSidesRateFallback ? { twoSidesRateFallback: true } : {}) }
+        : {}),
       tierMinPasses: pricing.tierMinPasses,
       breakdown: pricing.breakdown,
     },

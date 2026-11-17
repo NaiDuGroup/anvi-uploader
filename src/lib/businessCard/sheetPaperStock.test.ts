@@ -22,6 +22,8 @@ function row(avg: string | null, hint: string): SheetPaperRow {
     sheetHeightCm: d("32"),
     retailPricePerSheet: 12,
     dealerPricePerSheet: 9,
+    retailPriceTwoSidesPerSheet: null,
+    dealerPriceTwoSidesPerSheet: null,
     isActive: true,
     sortOrder: 0,
     createdAt: new Date("2026-01-01"),
@@ -56,6 +58,8 @@ describe("sheet paper price identity (variant vs legacy columns)", () => {
         costPerSheet: hint,
         retailPricePerSheet: 12,
         dealerPricePerSheet: 9,
+        retailPriceTwoSidesPerSheet: null,
+        dealerPriceTwoSidesPerSheet: null,
       });
       for (const customerType of ["retail", "dealer"] as const) {
         for (const sides of ["one", "two"] as const) {

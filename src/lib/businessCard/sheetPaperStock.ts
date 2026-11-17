@@ -18,6 +18,8 @@ export const SHEET_PAPER_PRICING_SELECT = {
   sheetHeightCm: true,
   retailPricePerSheet: true,
   dealerPricePerSheet: true,
+  retailPriceTwoSidesPerSheet: true,
+  dealerPriceTwoSidesPerSheet: true,
   isActive: true,
   sortOrder: true,
   createdAt: true,

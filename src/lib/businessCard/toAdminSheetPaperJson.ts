@@ -4,6 +4,7 @@ import {
   BUSINESS_CARD_WIDTH_CM,
 } from "./businessCardConstants";
 import { computeBusinessCardSheetLayout } from "./businessCardSheetLayout";
+import { isA3NativePaper } from "./a3NativePaper";
 
 export interface AdminSheetPaperJson {
   id: string;
@@ -24,6 +25,11 @@ export interface AdminSheetPaperJson {
   costPerSheet: number;
   retailPricePerSheet: number;
   dealerPricePerSheet: number;
+  /** A3+-only papers: price per A3+ sheet printed on both sides; null = one-side × 2. */
+  retailPriceTwoSidesPerSheet: number | null;
+  dealerPriceTwoSidesPerSheet: number | null;
+  /** Printed only on whole A3+ sheets (≥ 32×45, not sticker paper) — see `isA3NativePaper`. */
+  a3Native: boolean;
   /** How many standard 9.4 × 5.4 cards this sheet holds — the key operator fact. */
   standardCardsPerSheet: number;
   isActive: boolean;
@@ -56,6 +62,9 @@ export function toAdminSheetPaperJson(paper: SheetPaperPricing): AdminSheetPaper
     costPerSheet: paper.catalogCostPerSheet,
     retailPricePerSheet: paper.retailPricePerSheet,
     dealerPricePerSheet: paper.dealerPricePerSheet,
+    retailPriceTwoSidesPerSheet: paper.retailPriceTwoSidesPerSheet ?? null,
+    dealerPriceTwoSidesPerSheet: paper.dealerPriceTwoSidesPerSheet ?? null,
+    a3Native: isA3NativePaper({ name: paper.name, sheetWidthCm, sheetHeightCm }),
     standardCardsPerSheet: layout.cardsPerSheet,
     isActive: paper.isActive,
     sortOrder: paper.sortOrder,

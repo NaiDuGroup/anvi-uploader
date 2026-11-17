@@ -7,6 +7,7 @@ import {
 } from "@/lib/orderProcurement";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
+import { sheetLinePaperSheets } from "@/lib/stickerSheet/stickerSheet";
 import { returnLfStandStockForOrder } from "@/lib/largeFormat/lfStandStock";
 import { returnGiftSetBoxStockForOrder } from "@/lib/giftSet/giftSetStock";
 import { SHEET_PRODUCT_TYPES } from "@/lib/sheetProduct/sheetProductConfig";
@@ -224,7 +225,9 @@ function lineQuantity(kind: MaterialKind, line: BacklogLine): number {
     const lm: number | undefined = parseLargeFormatLineData(line.largeFormatLineData)?.calculatedLinearMeters;
     return typeof lm === "number" && lm > 0 ? lm : 0;
   }
-  const sheets: number | undefined = parseBusinessCardLineData(line.businessCardLineData)?.sheetsUsed;
+  // Paper sheets the line takes (A3+ postcards / stickers: their paper units), as at write-off.
+  const data = parseBusinessCardLineData(line.businessCardLineData);
+  const sheets: number | undefined = data ? sheetLinePaperSheets(data) : undefined;
   return typeof sheets === "number" && sheets > 0 ? sheets : 0;
 }
 

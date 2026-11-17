@@ -543,32 +543,36 @@ model LfRollStockMovement {
 /// Sheet paper catalog + weighted-average stock, counted in sheets.
 /// Used by business cards and flyers (A4+ 22.5 × 32 imposition).
 model SheetPaper {
-  id                      String                    @id @default(uuid())
+  id                          String                    @id @default(uuid())
   /// Unified stock variant holding this paper's balance and cost (prices stay here).
-  stockVariantId          String?                   @unique @map("stock_variant_id")
-  name                    String
+  stockVariantId              String?                   @unique @map("stock_variant_id")
+  name                        String
   /// Paper weight (g/m²), e.g. 105 … 350; null for papers added before it was tracked.
-  gsm                     Int?
-  sheetWidthCm            Decimal                   @map("sheet_width_cm") @db.Decimal(8, 2)
-  sheetHeightCm           Decimal                   @map("sheet_height_cm") @db.Decimal(8, 2)
+  gsm                         Int?
+  sheetWidthCm                Decimal                   @map("sheet_width_cm") @db.Decimal(8, 2)
+  sheetHeightCm               Decimal                   @map("sheet_height_cm") @db.Decimal(8, 2)
   /// Current stock balance (sheets).
-  stockSheets             Decimal                   @default(0) @map("stock_sheets") @db.Decimal(14, 2)
+  stockSheets                 Decimal                   @default(0) @map("stock_sheets") @db.Decimal(14, 2)
   /// Weighted-average purchase cost (MDL per sheet). Null until first receipt; COGS falls back to `costPerSheet`.
-  avgPurchaseCostPerSheet Decimal?                  @map("avg_purchase_cost_per_sheet") @db.Decimal(14, 4)
+  avgPurchaseCostPerSheet     Decimal?                  @map("avg_purchase_cost_per_sheet") @db.Decimal(14, 4)
   /// Catalog purchase hint (MDL per sheet); used when `avgPurchaseCostPerSheet` is null.
-  costPerSheet            Int                       @map("cost_per_sheet")
+  costPerSheet                Int                       @map("cost_per_sheet")
   /// Sell rate per printed sheet side (MDL, retail).
-  retailPricePerSheet     Int                       @map("retail_price_per_sheet")
+  retailPricePerSheet         Int                       @map("retail_price_per_sheet")
   /// Sell rate per printed sheet side (MDL, dealer).
-  dealerPricePerSheet     Int                       @map("dealer_price_per_sheet")
-  isActive                Boolean                   @default(true) @map("is_active")
-  sortOrder               Int                       @default(0) @map("sort_order")
-  createdAt               DateTime                  @default(now()) @map("created_at")
-  updatedAt               DateTime                  @updatedAt @map("updated_at")
-  orderLines              OrderLine[]
-  receipts                SheetPaperStockReceipt[]
-  stockMovements          SheetPaperStockMovement[]
-  stockVariant            StockVariant?             @relation("sheetPaperStock", fields: [stockVariantId], references: [id], onDelete: SetNull)
+  dealerPricePerSheet         Int                       @map("dealer_price_per_sheet")
+  /// A3+-only papers (sheet ≥ 32×45, e.g. textured): retail price per A3+ sheet printed on both sides; null = one-side × 2.
+  retailPriceTwoSidesPerSheet Int?                      @map("retail_price_two_sides_per_sheet")
+  /// A3+-only papers: dealer price per A3+ sheet printed on both sides; null = one-side × 2.
+  dealerPriceTwoSidesPerSheet Int?                      @map("dealer_price_two_sides_per_sheet")
+  isActive                    Boolean                   @default(true) @map("is_active")
+  sortOrder                   Int                       @default(0) @map("sort_order")
+  createdAt                   DateTime                  @default(now()) @map("created_at")
+  updatedAt                   DateTime                  @updatedAt @map("updated_at")
+  orderLines                  OrderLine[]
+  receipts                    SheetPaperStockReceipt[]
+  stockMovements              SheetPaperStockMovement[]
+  stockVariant                StockVariant?             @relation("sheetPaperStock", fields: [stockVariantId], references: [id], onDelete: SetNull)
 
   @@index([isActive])
   @@index([sortOrder])

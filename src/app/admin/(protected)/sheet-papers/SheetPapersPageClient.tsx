@@ -20,6 +20,7 @@ import ProvisionalPriceToggle, {
 } from "@/app/admin/_components/purchasing/ProvisionalPriceToggle";
 import { useSheetPapers } from "@/lib/swr";
 import type { AdminSheetPaperJson } from "@/lib/businessCard/toAdminSheetPaperJson";
+import { isA3NativePaper } from "@/lib/businessCard/a3NativePaper";
 import {
   AdminTableIconActions,
   adminTableOutlineIconButtonClass,
@@ -206,7 +207,9 @@ export default function SheetPapersPageClient() {
                   <td className="px-3 py-2.5">
                     <p className="font-medium text-gray-900">{sheetPaperDisplayName(r)}</p>
                     <p className="text-[11px] text-gray-500">
-                      {lf.sheetPaperCatalogCardsPerSheet(r.standardCardsPerSheet)}
+                      {r.a3Native
+                        ? lf.sheetPaperCatalogA3NativeBadge
+                        : lf.sheetPaperCatalogCardsPerSheet(r.standardCardsPerSheet)}
                     </p>
                   </td>
                   <td className="px-3 py-2.5 tabular-nums text-gray-700">
@@ -222,9 +225,21 @@ export default function SheetPapersPageClient() {
                   </td>
                   <td className="px-3 py-2.5 tabular-nums font-medium text-gray-900">
                     {r.retailPricePerSheet}
+                    {r.a3Native ? (
+                      <span className="font-normal text-gray-500">
+                        {" / "}
+                        {r.retailPriceTwoSidesPerSheet ?? `${r.retailPricePerSheet * 2}*`}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2.5 tabular-nums font-medium text-gray-900">
                     {r.dealerPricePerSheet}
+                    {r.a3Native ? (
+                      <span className="font-normal text-gray-500">
+                        {" / "}
+                        {r.dealerPriceTwoSidesPerSheet ?? `${r.dealerPricePerSheet * 2}*`}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2.5">
                     {r.isActive ? (
@@ -508,7 +523,18 @@ function SheetPaperModal({
   const [dealerStr, setDealerStr] = useState(
     String(initial?.dealerPricePerSheet ?? 0),
   );
+  const [retailTwoStr, setRetailTwoStr] = useState(
+    initial?.retailPriceTwoSidesPerSheet != null ? String(initial.retailPriceTwoSidesPerSheet) : "",
+  );
+  const [dealerTwoStr, setDealerTwoStr] = useState(
+    initial?.dealerPriceTwoSidesPerSheet != null ? String(initial.dealerPriceTwoSidesPerSheet) : "",
+  );
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
+  const a3Native: boolean = isA3NativePaper({
+    name,
+    sheetWidthCm: Number.parseFloat(widthStr.replace(",", ".")),
+    sheetHeightCm: Number.parseFloat(heightStr.replace(",", ".")),
+  });
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -519,6 +545,10 @@ function SheetPaperModal({
     const retail = Number.parseInt(retailStr, 10);
     const dealer = Number.parseInt(dealerStr, 10);
     const gsm: number | null = gsmStr.trim() === "" ? null : Number.parseInt(gsmStr, 10);
+    // Two-side prices only for A3+-only paper; empty = one side × 2.
+    const optInt = (v: string): number | null => (v.trim() === "" ? null : Number.parseInt(v, 10));
+    const retailTwo: number | null = a3Native ? optInt(retailTwoStr) : null;
+    const dealerTwo: number | null = a3Native ? optInt(dealerTwoStr) : null;
     const gsmValid =
       gsm == null ||
       (Number.isInteger(gsm) && gsm >= SHEET_PAPER_GSM_MIN && gsm <= SHEET_PAPER_GSM_MAX);
@@ -529,7 +559,9 @@ function SheetPaperModal({
       !(height > 0) ||
       !Number.isFinite(cost) ||
       !Number.isFinite(retail) ||
-      !Number.isFinite(dealer)
+      !Number.isFinite(dealer) ||
+      (retailTwo != null && !(retailTwo >= 0)) ||
+      (dealerTwo != null && !(dealerTwo >= 0))
     ) {
       setFailed(true);
       return;
@@ -551,6 +583,8 @@ function SheetPaperModal({
             costPerSheet: cost,
             retailPricePerSheet: retail,
             dealerPricePerSheet: dealer,
+            retailPriceTwoSidesPerSheet: retailTwo,
+            dealerPriceTwoSidesPerSheet: dealerTwo,
             isActive,
           }),
         },
@@ -678,8 +712,34 @@ function SheetPaperModal({
             disabled={saving}
           />
         </label>
+        {a3Native ? (
+          <>
+            <label className="block text-xs font-medium text-gray-600">
+              {lf.sheetPaperCatalogRetailTwoSides}
+              <Input
+                className="mt-1 h-9"
+                inputMode="numeric"
+                placeholder={retailStr.trim() !== "" ? `${(Number.parseInt(retailStr, 10) || 0) * 2}` : "—"}
+                value={retailTwoStr}
+                onChange={(e) => setRetailTwoStr(e.target.value.replace(/\D/g, ""))}
+                disabled={saving}
+              />
+            </label>
+            <label className="block text-xs font-medium text-gray-600">
+              {lf.sheetPaperCatalogDealerTwoSides}
+              <Input
+                className="mt-1 h-9"
+                inputMode="numeric"
+                placeholder={dealerStr.trim() !== "" ? `${(Number.parseInt(dealerStr, 10) || 0) * 2}` : "—"}
+                value={dealerTwoStr}
+                onChange={(e) => setDealerTwoStr(e.target.value.replace(/\D/g, ""))}
+                disabled={saving}
+              />
+            </label>
+          </>
+        ) : null}
         <p className="text-[11px] text-gray-500 sm:col-span-2">
-          {lf.sheetPaperCatalogPriceHint}
+          {a3Native ? lf.sheetPaperCatalogA3NativeHint : lf.sheetPaperCatalogPriceHint}
         </p>
         <label className="flex items-center gap-2 text-xs font-medium text-gray-600 sm:col-span-2">
           <input
