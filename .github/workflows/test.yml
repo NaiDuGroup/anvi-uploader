@@ -19,7 +19,8 @@ jobs:
       - run: npm run test
 
   integration-e2e:
-    runs-on: ubuntu-latest
+    # ubuntu-latest is 26.04 now; Playwright 1.58 cannot install Chromium there.
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16-alpine
