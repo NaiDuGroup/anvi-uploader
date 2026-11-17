@@ -5778,7 +5778,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           stickerPaperId,
           bcDefaultSheetPaperId,
         ));
-        next[id] = convertPickedDesignerItem(
+        const converted: SlotAssign = convertPickedDesignerItem(
           next[id],
           withSublimationDraft(
             withUvDraft(
@@ -5794,6 +5794,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           ),
           designerCatalogs,
         );
+        // A bare print method («DTF-печать», «UV-печать», «Сублимация») means the
+        // client's own item, as «Печать на изделии клиента» in the line menu — not
+        // the first stock item (T-shirts).
+        next[id] =
+          converted.productType === "dtf_apparel" && converted.dtf
+            ? { ...converted, dtf: withDtfGarment(converted.dtf, dtfCatalog, "client", null) }
+            : converted.productType === "uv_print" && converted.uv
+              ? { ...converted, uv: withUvItem(converted.uv, uvCatalog, "client", null) }
+              : converted.productType === "sublimation_print" && converted.sublimation
+                ? {
+                    ...converted,
+                    sublimation: withSublimationSource(converted.sublimation, sublimationCatalog, "client"),
+                  }
+                : converted;
       }
       return next;
     });
