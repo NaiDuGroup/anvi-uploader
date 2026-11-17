@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveCompanyLogoBuffer } from "@/lib/companyLogo";
-import { DEFAULT_COMPANY_PROFILE } from "@/lib/invoice/companyProfile";
+import { COMPANY_PROFILE_ORDER, DEFAULT_COMPANY_PROFILE } from "@/lib/invoice/companyProfile";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ function guessMimeFromKeyOrPath(logoPath: string): string {
 export async function GET(request: NextRequest) {
   const profile =
     (await prisma.companyProfile.findFirst({
-      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      orderBy: COMPANY_PROFILE_ORDER,
     })) ??
     (await prisma.companyProfile.create({
       data: { ...DEFAULT_COMPANY_PROFILE },

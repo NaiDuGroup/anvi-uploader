@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { COMPANY_PROFILE_ORDER } from "@/lib/invoice/companyProfile";
 import { resolveDealerUrgencyOffer, type DealerUrgencyOffer } from "@/lib/dealerUrgency";
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -8,7 +9,7 @@ type Db = Prisma.TransactionClient | typeof prisma;
 /** Global «Доплата за срочность (дилеры)» (singleton company profile; no row = 0). */
 export async function getGlobalDealerUrgencyFeeMdl(db: Db = prisma): Promise<number> {
   const row = await db.companyProfile.findFirst({
-    orderBy: { createdAt: "asc" },
+    orderBy: COMPANY_PROFILE_ORDER,
     select: { dealerUrgencyFeeMdl: true },
   });
   return row ? Number(row.dealerUrgencyFeeMdl.toString()) : 0;

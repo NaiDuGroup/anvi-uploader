@@ -176,7 +176,7 @@ describe.skipIf(!isLocalDb)("integration: dealer «Срочно» surcharge", ()
     superadmin = await makeStaff("superadmin");
     workshop = await makeStaff("workshop");
     const profile =
-      (await prisma.companyProfile.findFirst({ orderBy: { createdAt: "asc" } })) ??
+      (await prisma.companyProfile.findFirst({ orderBy: [{ createdAt: "asc" }, { id: "asc" }] })) ??
       (await prisma.companyProfile.create({
         data: { name: "IT", fiscalCode: "1", address: "a", iban: "i", bankName: "b", bic: "c" },
       }));

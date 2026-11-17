@@ -1,5 +1,5 @@
 import { cache } from "react";
-import type { CompanyProfile } from "@prisma/client";
+import type { CompanyProfile, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { resolveStudioInfo, type StudioInfo } from "@/lib/studioInfo/studioInfo";
 
@@ -26,6 +26,15 @@ export const DEFAULT_COMPANY_PROFILE = {
 } as const;
 
 /**
+ * Which row is «the» company profile: the oldest, ties broken by id. Two rows
+ * can share `created_at` (concurrent first requests on an empty table both
+ * create one, as in CI); ordering by `createdAt` alone then picks either row,
+ * and after an UPDATE Postgres may return the other one, so a setting saved to
+ * one row is read from the other. Every singleton read must use this order.
+ */
+export const COMPANY_PROFILE_ORDER = [{ createdAt: "asc" }, { id: "asc" }] satisfies Prisma.CompanyProfileOrderByWithRelationInput[];
+
+/**
  * Returns the singleton CompanyProfile, creating it with sensible defaults
  * if no row exists yet. Safe to call from any API route.
  *
@@ -36,7 +45,7 @@ export const DEFAULT_COMPANY_PROFILE = {
  */
 export const getOrCreateCompanyProfile = cache(async (): Promise<CompanyProfile> => {
   const existing = await prisma.companyProfile.findFirst({
-    orderBy: { createdAt: "asc" },
+    orderBy: COMPANY_PROFILE_ORDER,
   });
   if (existing) return existing;
   return prisma.companyProfile.create({
@@ -66,7 +75,7 @@ export async function getShowPublicCabinetLoginCta(): Promise<boolean> {
     const rows = await prisma.$queryRaw<Array<{ show_public_cabinet_login_cta: unknown }>>`
       SELECT show_public_cabinet_login_cta
       FROM company_profiles
-      ORDER BY created_at ASC
+      ORDER BY created_at ASC, id ASC
       LIMIT 1
     `;
     const v = coercePgBool(rows[0]?.show_public_cabinet_login_cta);

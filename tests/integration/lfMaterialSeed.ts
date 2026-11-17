@@ -78,7 +78,9 @@ export async function createTestLfMaterial(
       });
     }
     return { id: row.id, variantId, name };
-  });
+    // Seed only (a handful of small inserts, no app logic). The default 5 s interactive
+    // timeout once expired on a stalled CI runner (11 s) and skipped a whole file.
+  }, { maxWait: 10_000, timeout: 30_000 });
 }
 
 /** Balance of the roll's variant (m). */
@@ -88,7 +90,8 @@ export async function rollStock(variantId: string): Promise<number> {
 }
 
 /** Removes the roll, its orders, ledger and stock item. */
-export async function cleanupTestLfMaterial(m: TestLfMaterial): Promise<void> {
+export async function cleanupTestLfMaterial(m: TestLfMaterial | undefined): Promise<void> {
+  if (!m) return; // beforeAll failed before the roll was created
   const v = await prisma.stockVariant.findUnique({ where: { id: m.variantId }, select: { itemId: true } });
   await prisma.order.deleteMany({
     where: {

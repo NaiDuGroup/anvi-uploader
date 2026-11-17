@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { COMPANY_PROFILE_ORDER } from "@/lib/invoice/companyProfile";
 import { keepUpload, uploadedFileProblem } from "@/lib/corporate/requests";
 import type { CorporateStoredFile } from "@/lib/corporate/requestRules";
 import { resolveStudioInfo } from "@/lib/studioInfo/studioInfo";
@@ -21,7 +22,7 @@ import {
 /** The «from X lei» price, null when not set (or the profile can't be read). Never throws. */
 export async function getDesignerHelpPrice(): Promise<number | null> {
   try {
-    const p = await prisma.companyProfile.findFirst({ select: { studioInfo: true } });
+    const p = await prisma.companyProfile.findFirst({ orderBy: COMPANY_PROFILE_ORDER, select: { studioInfo: true } });
     return parseDesignerPrice(resolveStudioInfo(p?.studioInfo).designerHelpPriceLei);
   } catch (e) {
     console.error("[designer-help] price read failed:", e);
