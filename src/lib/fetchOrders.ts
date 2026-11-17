@@ -4,6 +4,7 @@ import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
 import { uniqueByInvoice } from "@/lib/invoice/invoiceLinks";
 import { fillDtfGarmentNames } from "@/lib/dtf/dtfGarmentNames";
 import { prisma } from "./prisma";
+import { orderSearchSql } from "./orderSearchSql";
 import {
   DEFAULT_ORDER_PAGE_SIZE,
   normalizeOrderPageLimit,
@@ -190,12 +191,7 @@ export async function fetchOrdersData(
 
   // Workshop has studio-admin parity — no is_workshop-only list filter.
   const workshopFilter = Prisma.sql``;
-  const searchIsNumeric = /^\d+$/.test(search);
-  const searchFilter = search
-    ? searchIsNumeric
-      ? Prisma.sql`AND (phone LIKE ${"%" + search + "%"} OR order_number = ${parseInt(search, 10)})`
-      : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
-    : Prisma.sql``;
+  const searchFilter = orderSearchSql(search);
   const onlyMineFilter = onlyMine
     ? Prisma.sql`AND created_by = ${user.id}`
     : Prisma.sql``;

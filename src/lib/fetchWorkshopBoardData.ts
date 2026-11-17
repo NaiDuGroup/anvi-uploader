@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { chisinauDayEndExclusive, chisinauDayStart } from "@/lib/chisinauDay";
 import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
 import { prisma } from "./prisma";
+import { orderSearchSql } from "./orderSearchSql";
 import { fillDtfGarmentNames } from "./dtf/dtfGarmentNames";
 import { getStaffUsersMap } from "./staffUsersCache";
 import { buildActorNameResolver } from "./resolveActorNames";
@@ -136,12 +137,7 @@ export async function fetchWorkshopBoardData(
       ) as OrderStatus[])
     : [];
 
-  const searchIsNumeric = /^\d+$/.test(search);
-  const searchFilter = search
-    ? searchIsNumeric
-      ? Prisma.sql`AND (phone LIKE ${"%" + search + "%"} OR order_number = ${parseInt(search, 10)})`
-      : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
-    : Prisma.sql``;
+  const searchFilter = orderSearchSql(search);
 
   // Days are Chișinău calendar days, not UTC ones.
   const dateFromStart = chisinauDayStart(dateFrom);

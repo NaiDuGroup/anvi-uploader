@@ -12,6 +12,7 @@ import {
 import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
 import { parseListPage } from "@/lib/listPagination";
 import { computeInvoiceTotals } from "@/lib/invoice/invoiceTotals";
+import { phoneSearchDigitVariants } from "@/lib/phoneNormalize";
 import {
   INVOICE_INCLUDE,
   toSerializableInvoice,
@@ -64,6 +65,8 @@ export async function GET(request: NextRequest) {
               { companyName: { contains: search, mode: "insensitive" } },
               { personName: { contains: search, mode: "insensitive" } },
               { phone: { contains: search, mode: "insensitive" } },
+              // «+373 68 900999» finds «+373 68 900 999»: compare digits only.
+              ...phoneSearchDigitVariants(search).map((d) => ({ phoneNormalized: { contains: d } })),
             ],
           },
         },

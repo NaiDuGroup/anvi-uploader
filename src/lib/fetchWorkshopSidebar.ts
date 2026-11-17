@@ -3,6 +3,7 @@ import { chisinauDayEndExclusive, chisinauDayStart } from "@/lib/chisinauDay";
 import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
 import { uniqueByInvoice } from "@/lib/invoice/invoiceLinks";
 import { prisma } from "./prisma";
+import { orderSearchSql } from "./orderSearchSql";
 import { getStaffUsersMap } from "./staffUsersCache";
 import { LAYOUT_ISSUE_LINE_SELECT } from "./layoutIssue";
 import { buildActorNameResolver } from "./resolveActorNames";
@@ -152,12 +153,7 @@ export async function fetchWorkshopSidebarData(
     return { workshopOrders: [] };
   }
 
-  const searchIsNumeric = /^\d+$/.test(search);
-  const searchFilter = search
-    ? searchIsNumeric
-      ? Prisma.sql`AND (phone LIKE ${"%" + search + "%"} OR order_number = ${parseInt(search, 10)})`
-      : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
-    : Prisma.sql``;
+  const searchFilter = orderSearchSql(search);
   const onlyMineFilter = onlyMine
     ? Prisma.sql`AND created_by = ${user.id}`
     : Prisma.sql``;
