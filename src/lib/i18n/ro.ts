@@ -1,4 +1,5 @@
 import type { TranslationDictionary } from "./types";
+import { roStockQty } from "./stockQty";
 import { roFilesCount } from "./filesCount";
 import { dtfRo } from "./dtf/ro";
 import { uvRo } from "./uv/ro";
@@ -495,6 +496,8 @@ export const ro: TranslationDictionary = {
       blockLfSize: "indicați lățimea și înălțimea",
       blockLfDoesNotFit: "dimensiunea nu încape pe rolă",
       blockLfPrice: "prețul nu a putut fi calculat",
+      blockLfSheetNoPrice: "prețul pe coală nu este setat — introduceți manual prețul rândului",
+      blockLfSheetNoPriceDealer: "prețul acestui material nu este încă setat — contactați studioul",
       blockBcBack: "încărcați macheta versoului",
       blockBcPaper: "alegeți hârtia",
       blockBcBleed: "macheta nu are margini de tăiere — corectați dimensiunea",
@@ -868,7 +871,8 @@ export const ro: TranslationDictionary = {
       colStockSheets: "Stoc (coli)",
       colAvgPerSheet: "Cost mediu/coală",
       colPricePerSheet: "Preț/coală",
-      sheetsShort: "coli",
+      sheetsShort: "coală",
+      sheetsQty: (n) => roStockQty(n, "sheet"),
       receiptTitle: "Intrare coli",
       receiptQtySheets: "Cantitate (coli)",
       receiptAvgHint: "cu TVA; media pe coală se recalculează",
@@ -879,7 +883,7 @@ export const ro: TranslationDictionary = {
       sheetsCalc: (label) => `Coli (calcul): ${label}`,
       doesNotFit: (sizeCm) => `Nu încape pe coala ${sizeCm}`,
       pricePerSheetLine: (priceMdl) => `Preț pe coală: ${priceMdl} MDL`,
-      notPriced: "Prețul pe coală nu este setat (fără preț și adaos)",
+      notPriced: "Prețul pe coală nu este setat — introduceți manual prețul rândului",
       procurementDetail: (requested, stock) => `Coli: necesar ${requested}, în stoc erau ${stock}`,
     },
     lfMaterialCatalogColPrintableWidthM: "Lățime imprimabilă (m)",
@@ -1745,6 +1749,7 @@ export const ro: TranslationDictionary = {
       lfSheetDoesNotFit: (sizeCm) => `Nu încape pe coala ${sizeCm}`,
       lfPerSheet: "coală",
       lfSheetDoesNotFitAny: "Această dimensiune nu încape pe coală. Micșorați dimensiunea.",
+      lfSheetNoPrice: "Prețul acestui material nu este încă setat. Contactați studioul.",
       lfSheetPreviewTitle: "Așezare pe coală (coala 1)",
       lfSheetPreviewEmpty: "Indicați dimensiunea pentru a vedea așezarea pe coală.",
       lfPreviewTitle: "Aranjare pe rolă",
@@ -2657,6 +2662,7 @@ export const ro: TranslationDictionary = {
       return count > 0 && (tail === 0 || tail >= 20) ? `${count} de poziții` : `${count} poziții`;
     },
     units: { pcs: "buc", m: "m", ml: "ml", g: "g", sheet: "coli" },
+    qty: roStockQty,
     unitNames: { pcs: "Bucăți", m: "Metri", ml: "Mililitri", g: "Grame", sheet: "Coli" },
     kinds: { product: "Produse", material: "Material", consumable: "Consumabil" },
     movementKinds: {

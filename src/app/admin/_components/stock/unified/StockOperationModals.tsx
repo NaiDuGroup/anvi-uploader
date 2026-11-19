@@ -10,7 +10,6 @@ import { formatAmountInput, parseAmountMdl, sanitizeMoneyInput } from "@/lib/mon
 import { unitAllowsFractions, type StockUnit } from "@/lib/stock/unified/kinds";
 import type { StockVariantJson } from "@/lib/stock/unified/adminTypes";
 import {
-  formatQuantity,
   parseQuantityInput,
   sanitizeQuantityInput,
 } from "@/lib/stock/unified/quantity";
@@ -42,7 +41,7 @@ function VariantSubtitle({ variant, itemName, unit }: Pick<VariantContext, "vari
         <span>
           {s.currentStock}:{" "}
           <span className="tabular-nums text-gray-900">
-            {formatQuantity(variant.stockQuantity)} {s.units[unit]}
+            {s.qty(variant.stockQuantity, unit)}
           </span>
         </span>
         <span>
@@ -261,7 +260,7 @@ export function StockInventoryModal({ variant, itemName, unit, onClose, onSaved 
         </label>
         {delta != null ? (
           <p className={delta === 0 ? "text-sm text-gray-500" : delta > 0 ? "text-sm text-emerald-700" : "text-sm text-red-600"}>
-            {delta === 0 ? s.inventoryNoChange : s.inventoryDelta(`${delta > 0 ? "+" : ""}${formatQuantity(delta)} ${s.units[unit]}`)}
+            {delta === 0 ? s.inventoryNoChange : s.inventoryDelta(`${delta > 0 ? "+" : ""}${s.qty(delta, unit)}`)}
           </p>
         ) : null}
         <label className={fieldLabelCls}>
@@ -336,7 +335,7 @@ export function StockWriteOffModal({ variant, itemName, unit, onClose, onSaved }
         </label>
         {tooMany ? (
           <p className="text-sm text-red-600">
-            {s.errorInsufficientStock(`${formatQuantity(variant.stockQuantity)} ${s.units[unit]}`)}
+            {s.errorInsufficientStock(s.qty(variant.stockQuantity, unit))}
           </p>
         ) : null}
         <label className={fieldLabelCls}>

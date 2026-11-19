@@ -90,7 +90,13 @@ import { sheetPaperToSnapshot } from "@/lib/businessCard/toSheetPaperSnapshot";
 import { findSheetPaperPricing } from "@/lib/businessCard/sheetPaperStock";
 import { findLfPricingMaterial, type LfPricingMaterial } from "@/lib/largeFormat/lfMaterialStock";
 import { takeMaterialLineStock } from "@/lib/stock/unified/materialOrderStock";
-import { computeLfSheetLine, lfLineStockQuantity, lfMaterialSheetSpec } from "@/lib/largeFormat/lfSheet";
+import {
+  computeLfSheetLine,
+  LF_SHEET_NO_PRICE_CODE,
+  lfLineStockQuantity,
+  lfMaterialSheetSpec,
+  lfSheetLineUnpriced,
+} from "@/lib/largeFormat/lfSheet";
 import {
   BUSINESS_CARD_LAYOUT_ALGORITHM_VERSION,
   type BusinessCardCustomerType,
@@ -368,6 +374,8 @@ export async function resolveAdminOrderLineProducts(
       quantity: line.quantity!,
       customerType: line.customerType!,
       lfSizePresetId: line.lfSizePresetId ?? null,
+      // Staff «ручная цена» prices a sheet material that has no price per sheet.
+      allowUnpriced: line.manualLineTotalMdl != null,
     });
     largeFormatExtras = {
       largeFormatMaterialId: res.largeFormatMaterialId,
@@ -822,6 +830,11 @@ export async function resolveLargeFormatLine(input: {
   quantity: number;
   customerType: LargeFormatCustomerType;
   lfSizePresetId?: string | null;
+  /**
+   * Sheet material without a price per sheet: let the line through (staff typed
+   * a manual line total). Otherwise it fails with `lf_sheet_no_price`.
+   */
+  allowUnpriced?: boolean;
 }): Promise<{
   largeFormatMaterialId: string;
   largeFormatLineData: LargeFormatLineData;
@@ -1085,6 +1098,7 @@ async function resolveLargeFormatSheetLine(
     quantity: number;
     customerType: LargeFormatCustomerType;
     lfSizePresetId?: string | null;
+    allowUnpriced?: boolean;
   },
 ): Promise<{
   largeFormatMaterialId: string;
@@ -1133,6 +1147,10 @@ async function resolveLargeFormatSheetLine(
     throw new AdminOrderResolveError(
       res.code === "quantity_too_large" ? "lf_pack_quantity_too_large" : "lf_sheet_does_not_fit",
     );
+  }
+  // No price per sheet and no purchase cost: never a 0 (or bare-minimum) line.
+  if (!input.allowUnpriced && lfSheetLineUnpriced(res, presetSnapshot?.unitPriceMdl ?? null)) {
+    throw new AdminOrderResolveError(LF_SHEET_NO_PRICE_CODE);
   }
   const econ = res.economics;
   const snap: LargeFormatMaterialSnapshot = {

@@ -19,6 +19,7 @@ import {
   LF_MATERIAL_LEGACY_KIND,
   lfMaterialStockAttributes,
   lfMaterialCategoryCode,
+  lfMaterialSkuPrefix,
 } from "@/lib/stock/unified/materials";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
@@ -208,7 +209,7 @@ export async function POST(request: NextRequest) {
         categoryCode: lfMaterialCategoryCode(materialForm),
         legacyKind: LF_MATERIAL_LEGACY_KIND,
         legacyId: created.id,
-        skuPrefix: "ROLL",
+        skuPrefix: lfMaterialSkuPrefix(materialForm),
         name: createDataBase.name,
         isActive: createDataBase.isActive,
         sortOrder: createDataBase.sortOrder,

@@ -562,6 +562,10 @@ export interface TranslationDictionary {
       blockLfSize: string;
       blockLfDoesNotFit: string;
       blockLfPrice: string;
+      /** Sheet material without a price per sheet (staff: type the line price). */
+      blockLfSheetNoPrice: string;
+      /** Same, dealer wizard (no manual price). */
+      blockLfSheetNoPriceDealer: string;
       blockBcPaper: string;
       blockBcBack: string;
       blockBcBleed: string;
@@ -977,7 +981,10 @@ export interface TranslationDictionary {
       colStockSheets: string;
       colAvgPerSheet: string;
       colPricePerSheet: string;
+      /** Unit after a per-sheet price: «MDL / лист». */
       sheetsShort: string;
+      /** «2 листа», «5 листов». */
+      sheetsQty: (n: number) => string;
       receiptTitle: string;
       receiptQtySheets: string;
       receiptAvgHint: string;
@@ -1925,6 +1932,8 @@ export interface TranslationDictionary {
       lfSheetDoesNotFit: (sizeCm: string) => string;
       lfPerSheet: string;
       lfSheetDoesNotFitAny: string;
+      /** Sheet material without a price yet. */
+      lfSheetNoPrice: string;
       lfSheetPreviewTitle: string;
       lfSheetPreviewEmpty: string;
       /** Roll-pack diagram heading + empty hint. */
@@ -2913,6 +2922,8 @@ export interface TranslationDictionary {
     hubItemCount: (count: number) => string;
     /** Short unit after numbers: «шт», «м»… */
     units: Record<"pcs" | "m" | "ml" | "g" | "sheet", string>;
+    /** Quantity with its unit, plural forms for sheets: «5 листов», «3 м». */
+    qty: (qty: number, unit: "pcs" | "m" | "ml" | "g" | "sheet") => string;
     /** Unit names for selects. */
     unitNames: Record<"pcs" | "m" | "ml" | "g" | "sheet", string>;
     kinds: Record<"product" | "material" | "consumable", string>;

@@ -263,6 +263,7 @@ import {
   lfSheetItemFits,
   lfSheetLayoutAsRollPreview,
   lfSheetPrintableCm,
+  lfSheetLineUnpriced,
   lfSheetsCountRu,
   lfSheetSizeCmLabel,
   type LfSheetLayoutPersisted,
@@ -1509,22 +1510,23 @@ function lfActivePresetForSlot(
   };
 }
 
-function lfComputedLineTotalMdl(
+/** The slot's wide-format price calculation, or null while material / size / copies are incomplete. */
+function lfSlotPricing(
   a: SlotAssign,
   lfById: Map<string, AdminLargeFormatMaterialJson>,
   lfItems: AdminLargeFormatMaterialJson[],
   lfPrintEconomics: Parameters<typeof lfPricingFromSlotInputs>[0]["printEconomics"],
   lfMinimumLineTotalMdl: number,
-): number {
-  if (a.productType !== "large_format_print") return 0;
-  if (!a.lfMaterialId && !a.lfSelectionValue) return 0;
+): { lf: ReturnType<typeof lfPricingFromSlotInputs>; w: number; h: number; q: number } | null {
+  if (a.productType !== "large_format_print") return null;
+  if (!a.lfMaterialId && !a.lfSelectionValue) return null;
   const m = lfAdminPreviewMaterial(a, lfItems);
-  if (!m) return 0;
+  if (!m) return null;
   const q = parseAdminCopiesInput(a.copiesStr);
-  if (q === null || q < 1) return 0;
+  if (q === null || q < 1) return null;
   const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
   const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
-  if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) return 0;
+  if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) return null;
   // Use billing roll id for preset lookup when family-resolved.
   const aForPreset = { ...a, lfMaterialId: m.id };
   const preset = lfActivePresetForSlot(aForPreset, lfById);
@@ -1538,8 +1540,19 @@ function lfComputedLineTotalMdl(
     printEconomics: lfPrintEconomics,
     lfMinimumLineTotalMdl,
   });
-  if (!lf.ok) return 0;
-  return lfLineTotalWithExtrasMdl(lf.pricing.totalSellPrice, { widthCm: w, heightCm: h, quantity: q }, a.lfExtras);
+  return { lf, w, h, q };
+}
+
+function lfComputedLineTotalMdl(
+  a: SlotAssign,
+  lfById: Map<string, AdminLargeFormatMaterialJson>,
+  lfItems: AdminLargeFormatMaterialJson[],
+  lfPrintEconomics: Parameters<typeof lfPricingFromSlotInputs>[0]["printEconomics"],
+  lfMinimumLineTotalMdl: number,
+): number {
+  const r = lfSlotPricing(a, lfById, lfItems, lfPrintEconomics, lfMinimumLineTotalMdl);
+  if (!r || !r.lf.ok) return 0;
+  return lfLineTotalWithExtrasMdl(r.lf.pricing.totalSellPrice, { widthCm: r.w, heightCm: r.h, quantity: r.q }, a.lfExtras);
 }
 
 /**
@@ -5034,6 +5047,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         lfMinimumLineTotalMdl: lfMinimumLineTotalMdlEffective,
       });
       if (!lfCheck.ok) return np.blockLfPrice;
+      // Sheet material without a price per sheet: never «0 MDL» — staff type the line price.
+      if (
+        lfCheck.sheet &&
+        lfSheetLineUnpriced(lfCheck.sheet, presetForCheck?.unitPriceMdl ?? null) &&
+        (dealerMode || parsedLinePriceMdl(a.linePriceStr) === null)
+      ) {
+        return dealerMode ? np.blockLfSheetNoPriceDealer : np.blockLfSheetNoPrice;
+      }
     }
     if (isSheetProductType(a.productType)) {
       if (!a.bcSheetPaperId) return np.blockBcPaper;
@@ -5957,9 +5978,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       else if (a?.productType === "mug") product = `${t.sublimation.productType} · ${t.mug.productMug}`;
       else if (a?.productType === "notebook") product = `${t.uv.productType} · ${t.notebook.productNotebook}`;
       else if (a?.productType === "pen") product = `${t.uv.productType} · ${t.admin.productTypePen}`;
-      else if (a?.productType === "large_format_print")
-        product = t.admin.productTypeLargeFormat;
-      else if (a?.productType === "business_card")
+      else if (a?.productType === "large_format_print") {
+        // Sheet material: «Широкий формат · 2 листа A1», as on step 1.
+        const lfSheet = lfSlotPricing(a, lfById, lfMaterialItems, null, 0);
+        product =
+          lfSheet?.lf.ok && lfSheet.lf.sheet
+            ? `${t.admin.productTypeLargeFormat} · ${lfSheet.lf.sheet.label}`
+            : t.admin.productTypeLargeFormat;
+      } else if (a?.productType === "business_card")
         product = t.admin.productTypeBusinessCard;
       else if (a?.productType === "flyer") product = t.admin.productTypeFlyer;
       else if (a?.productType === "sticker_sheet") product = t.admin.productTypeStickerSheet;

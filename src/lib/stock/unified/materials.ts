@@ -26,6 +26,11 @@ export const MATERIAL_CATEGORY_CODES: readonly string[] = [
   SHEET_PAPER_CATEGORY_CODE,
 ];
 
+/** SKU prefix of a wide-format material's stock variant: ROLL-… for rolls, SHEET-… for sheet materials. */
+export function lfMaterialSkuPrefix(materialForm: string | null | undefined): "ROLL" | "SHEET" {
+  return materialForm === "sheet" ? "SHEET" : "ROLL";
+}
+
 /** Stock category of a wide-format material by its form. */
 export function lfMaterialCategoryCode(materialForm: string | null | undefined): string {
   return materialForm === "sheet" ? LF_SHEET_MEDIA_CATEGORY_CODE : ROLL_MEDIA_CATEGORY_CODE;
@@ -126,7 +131,7 @@ export async function createMaterialStockVariant(
     legacyKind: typeof LF_MATERIAL_LEGACY_KIND | typeof SHEET_PAPER_LEGACY_KIND;
     /** Pricing row id (`LargeFormatMaterial.id` / `SheetPaper.id`). */
     legacyId: string;
-    skuPrefix: "ROLL" | "PAPER";
+    skuPrefix: "ROLL" | "SHEET" | "PAPER";
   } & MaterialStockItemFields,
 ): Promise<string> {
   const categoryId: string = await requireStockCategoryId(
@@ -311,7 +316,7 @@ export async function requireLfMaterialVariantId(tx: Tx, materialId: string): Pr
     categoryCode: lfMaterialCategoryCode(m.materialForm),
     legacyKind: LF_MATERIAL_LEGACY_KIND,
     legacyId: m.id,
-    skuPrefix: "ROLL",
+    skuPrefix: lfMaterialSkuPrefix(m.materialForm),
     name: m.name,
     isActive: m.isActive,
     sortOrder: m.sortOrder,
@@ -415,8 +420,9 @@ export async function switchLfMaterialStockForm(
     where: { id: m.stockVariantId },
     select: {
       itemId: true,
+      sku: true,
       stockQuantity: true,
-      item: { select: { category: { select: { code: true } } } },
+      item: { select: { sku: true, category: { select: { code: true } } } },
       _count: { select: { movements: true, receipts: true } },
     },
   });
@@ -431,6 +437,19 @@ export async function switchLfMaterialStockForm(
     targetCode,
     targetCode === LF_SHEET_MEDIA_CATEGORY_CODE ? LF_SHEET_MIGRATION : MATERIALS_MIGRATION,
   );
-  await tx.stockItem.update({ where: { id: v.itemId }, data: { categoryId } });
+  // Generated SKU follows the form (ROLL-… ↔ SHEET-…); a hand-made SKU stays as is.
+  const fromPrefix: string = nextForm === "sheet" ? "ROLL-" : "SHEET-";
+  const toPrefix: string = `${lfMaterialSkuPrefix(nextForm)}-`;
+  const swapPrefix = (sku: string): string | null =>
+    sku.startsWith(fromPrefix) ? `${toPrefix}${sku.slice(fromPrefix.length)}` : null;
+  const nextItemSku: string | null = swapPrefix(v.item.sku);
+  const nextVariantSku: string | null = swapPrefix(v.sku);
+  await tx.stockItem.update({
+    where: { id: v.itemId },
+    data: { categoryId, ...(nextItemSku ? { sku: nextItemSku } : {}) },
+  });
+  if (nextVariantSku) {
+    await tx.stockVariant.update({ where: { id: m.stockVariantId }, data: { sku: nextVariantSku } });
+  }
   return null;
 }

@@ -1,4 +1,5 @@
 import type { TranslationDictionary } from "./types";
+import { enStockQty } from "./stockQty";
 import { enFilesCount } from "./filesCount";
 import { dtfEn } from "./dtf/en";
 import { uvEn } from "./uv/en";
@@ -495,6 +496,8 @@ export const en: TranslationDictionary = {
       blockLfSize: "enter width and height",
       blockLfDoesNotFit: "the size does not fit the roll",
       blockLfPrice: "could not calculate the price",
+      blockLfSheetNoPrice: "no price per sheet — type the line price manually",
+      blockLfSheetNoPriceDealer: "this material has no price yet — contact the studio",
       blockBcBack: "upload the back artwork",
       blockBcPaper: "choose the paper",
       blockBcBleed: "artwork has no bleed — fix the size",
@@ -867,7 +870,8 @@ export const en: TranslationDictionary = {
       colStockSheets: "Stock (sheets)",
       colAvgPerSheet: "Avg cost/sheet",
       colPricePerSheet: "Price/sheet",
-      sheetsShort: "sh.",
+      sheetsShort: "sheet",
+      sheetsQty: (n) => enStockQty(n, "sheet"),
       receiptTitle: "Sheet receipt",
       receiptQtySheets: "Quantity (sheets)",
       receiptAvgHint: "VAT incl.; the average per sheet is recalculated",
@@ -878,7 +882,7 @@ export const en: TranslationDictionary = {
       sheetsCalc: (label) => `Sheets (calculated): ${label}`,
       doesNotFit: (sizeCm) => `Does not fit the ${sizeCm} sheet`,
       pricePerSheetLine: (priceMdl) => `Price per sheet: ${priceMdl} MDL`,
-      notPriced: "Price per sheet not set (no price and no markup)",
+      notPriced: "No price per sheet — type the line price manually",
       procurementDetail: (requested, stock) => `Sheets: needed ${requested}, in stock ${stock}`,
     },
     lfMaterialCatalogColPrintableWidthM: "Printable width (m)",
@@ -1742,6 +1746,7 @@ export const en: TranslationDictionary = {
       lfSheetDoesNotFit: (sizeCm) => `Does not fit the ${sizeCm} sheet`,
       lfPerSheet: "sheet",
       lfSheetDoesNotFitAny: "This size does not fit the sheet. Make it smaller.",
+      lfSheetNoPrice: "This material has no price yet. Please contact the studio.",
       lfSheetPreviewTitle: "Layout on the sheet (sheet 1)",
       lfSheetPreviewEmpty: "Enter a size to see the layout on the sheet.",
       lfPreviewTitle: "Roll layout",
@@ -2644,6 +2649,7 @@ export const en: TranslationDictionary = {
     hubCategoriesLink: "Categories",
     hubItemCount: (count) => (count === 1 ? "1 item" : `${count} items`),
     units: { pcs: "pcs", m: "m", ml: "ml", g: "g", sheet: "sheets" },
+    qty: enStockQty,
     unitNames: { pcs: "Pieces", m: "Meters", ml: "Milliliters", g: "Grams", sheet: "Sheets" },
     kinds: { product: "Products", material: "Material", consumable: "Consumable" },
     movementKinds: {

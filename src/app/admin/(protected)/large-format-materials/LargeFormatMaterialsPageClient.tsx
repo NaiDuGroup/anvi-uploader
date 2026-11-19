@@ -47,7 +47,13 @@ import {
   type MaterialArchiveAction,
 } from "@/app/admin/_components/stock/MaterialArchiveDialog";
 import { visibleMaterialRows } from "@/lib/stock/materialArchive";
-import { lfSheetSizeCmLabel, LF_ROLL_WIDTH_MAX_METERS, LF_SHEET_DEFAULT_MARGIN_MM } from "@/lib/largeFormat/lfSheet";
+import {
+  lfSheetSizeCmLabel,
+  LF_ROLL_WIDTH_MAX_METERS,
+  LF_SHEET_DEFAULT_HEIGHT_CM,
+  LF_SHEET_DEFAULT_MARGIN_MM,
+  LF_SHEET_DEFAULT_WIDTH_CM,
+} from "@/lib/largeFormat/lfSheet";
 
 type Row = AdminLargeFormatMaterialJson;
 
@@ -540,7 +546,8 @@ function LfRollReceiptModal({
   const lf = t.admin;
   /** Sheet material (VATMAN A1): whole sheets, average per sheet. */
   const sheet: boolean = isSheetRow(material);
-  const unitSuffix: string = sheet ? lf.lfSheet.sheetsShort : "m";
+  /** «+2 листа» / «−1.5 m»: sheets with plural forms, rolls in metres. */
+  const qtyLabel = (q: number): string => (sheet ? lf.lfSheet.sheetsQty(q) : `${q} m`);
   const [qtyStr, setQtyStr] = useState("");
   const [totalStr, setTotalStr] = useState("");
   const [purchasedAt, setPurchasedAt] = useState(() =>
@@ -791,7 +798,7 @@ function LfRollReceiptModal({
                     >
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <span className="text-sm font-semibold tabular-nums text-emerald-900">
-                          +{h.quantityLinearMeters} {unitSuffix}
+                          +{qtyLabel(h.quantityLinearMeters)}
                         </span>
                         <time
                           className="text-[11px] font-medium text-gray-500"
@@ -850,8 +857,8 @@ function LfRollReceiptModal({
                     });
                     const qtyDisp =
                       row.quantityLinearMeters > 0
-                        ? `+${row.quantityLinearMeters}`
-                        : String(row.quantityLinearMeters);
+                        ? `+${qtyLabel(row.quantityLinearMeters)}`
+                        : qtyLabel(row.quantityLinearMeters);
                     const outflow = row.quantityLinearMeters < 0;
                     return (
                       <li
@@ -868,7 +875,7 @@ function LfRollReceiptModal({
                               outflow ? "text-amber-900" : "text-gray-900",
                             )}
                           >
-                            {qtyDisp} {unitSuffix}
+                            {qtyDisp}
                           </span>
                           <time className="text-[11px] font-medium text-gray-500">{when}</time>
                         </div>
@@ -969,8 +976,8 @@ function LfMaterialModal({
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
   /** Рулон (metres) | Лист (whole sheets, e.g. VATMAN A1 61×86). */
   const [form, setForm] = useState<"roll" | "sheet">(initial?.materialForm === "sheet" ? "sheet" : "roll");
-  const [sheetW, setSheetW] = useState(initial?.sheetWidthCm != null ? String(initial.sheetWidthCm) : "");
-  const [sheetH, setSheetH] = useState(initial?.sheetHeightCm != null ? String(initial.sheetHeightCm) : "");
+  const [sheetW, setSheetW] = useState(String(initial?.sheetWidthCm ?? LF_SHEET_DEFAULT_WIDTH_CM));
+  const [sheetH, setSheetH] = useState(String(initial?.sheetHeightCm ?? LF_SHEET_DEFAULT_HEIGHT_CM));
   const [marginMm, setMarginMm] = useState(String(initial?.sheetMarginMm ?? LF_SHEET_DEFAULT_MARGIN_MM));
   const [sheetRetail, setSheetRetail] = useState(
     initial?.retailPricePerSheet != null ? String(initial.retailPricePerSheet) : "",

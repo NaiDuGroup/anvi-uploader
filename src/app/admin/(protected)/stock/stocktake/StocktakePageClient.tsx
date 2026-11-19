@@ -402,7 +402,7 @@ export default function StocktakePageClient({
           r.sku,
           name(r),
           r.label ?? "",
-          `${formatQuantity(r.stockQuantity)} ${s.units[rowUnit(r)]}`,
+          s.qty(r.stockQuantity, rowUnit(r)),
           counts[r.variantId]?.text ?? "",
         ];
         return `<tr>${cells.map((c, i) => `<td${i >= cells.length - 2 ? ' class="n"' : ""}>${escapeHtml(c)}</td>`).join("")}</tr>`;
@@ -674,10 +674,7 @@ export default function StocktakePageClient({
                       </div>
                     </td>
                     <td className="p-2 text-right tabular-nums text-gray-700">
-                      {formatQuantity(p?.expected ?? r.stockQuantity)}{" "}
-                      <span className="text-xs text-gray-400">
-                        {s.units[unit]}
-                      </span>
+                      {s.qty(p?.expected ?? r.stockQuantity, unit)}
                     </td>
                     <td className="p-2">
                       <div className="flex items-center justify-end gap-1">

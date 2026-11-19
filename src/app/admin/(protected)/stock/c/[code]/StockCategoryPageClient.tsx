@@ -347,7 +347,7 @@ export default function StockCategoryPageClient({ code }: { code: string }) {
                         <Metric
                           icon={<Package className={metricIconCls} aria-hidden />}
                           label={s.colStock}
-                          value={`${formatQuantity(item.totalStock)} ${s.units[unit]}`}
+                          value={s.qty(item.totalStock, unit)}
                         />
                         <Metric
                           icon={<CircleDollarSign className={metricIconCls} aria-hidden />}

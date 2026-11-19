@@ -585,6 +585,7 @@ export async function resolveLargeFormatLineGroup(
         quantity: input.quantity!,
         customerType: input.customerType!,
         lfSizePresetId: input.lfSizePresetId ?? null,
+        allowUnpriced: input.manualLineTotalMdl != null,
       });
       const data = withLfLineExtras(r.largeFormatLineData, input);
       out.push({ ...r, largeFormatLineData: data, totalSellPriceMdl: data.totalSellPrice });

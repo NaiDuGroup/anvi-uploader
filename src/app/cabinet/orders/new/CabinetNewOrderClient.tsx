@@ -2261,6 +2261,8 @@ function lfErrorMessage(
       return t.cabinet.newOrder.lfDoesNotFit;
     case "lf_sheet_does_not_fit":
       return t.cabinet.newOrder.lfSheetDoesNotFitAny;
+    case "lf_sheet_no_price":
+      return t.cabinet.newOrder.lfSheetNoPrice;
     case "lf_pack_quantity_too_large":
       return t.cabinet.newOrder.lfQuantityTooLarge;
     case "large_format_requires_login":

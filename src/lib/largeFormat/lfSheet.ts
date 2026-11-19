@@ -35,6 +35,9 @@ export function parseLfMaterialForm(raw: unknown): LfMaterialForm {
 
 /** Default non-printable edge of a sheet (mm per side). */
 export const LF_SHEET_DEFAULT_MARGIN_MM = 5;
+/** Default sheet size of a new sheet material: VATMAN A1, 61 × 86 cm. */
+export const LF_SHEET_DEFAULT_WIDTH_CM = 61;
+export const LF_SHEET_DEFAULT_HEIGHT_CM = 86;
 
 /** Gap between pieces on a sheet (cm): none, pieces are guillotine-cut. */
 export const LF_SHEET_PACK_GAP_CM = 0;
@@ -366,6 +369,19 @@ export function lfLineStockQuantity(data: {
 
 
 // ─── Whole line (server resolve + wizard preview) ────────────────────────────
+
+/** Server code: a sheet material with no price per sheet (no price, no purchase cost) and no size preset. */
+export const LF_SHEET_NO_PRICE_CODE = "lf_sheet_no_price";
+
+/**
+ * True when a sheet line has no real price: price per sheet 0 (no manual price,
+ * no cost to mark up) and no size preset. Such a line must not go in at 0 (or
+ * at the bare retail minimum): staff type the line price, else it is blocked.
+ */
+export function lfSheetLineUnpriced(res: { pricePerSheetMdl: number }, presetUnitPriceMdl?: number | null): boolean {
+  if (presetUnitPriceMdl != null && presetUnitPriceMdl > 0) return false;
+  return !(res.pricePerSheetMdl > 0);
+}
 
 export type LfSheetLineResult =
   | {

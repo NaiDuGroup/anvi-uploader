@@ -9,7 +9,7 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import { formatAmountInput, parseAmountMdl, round2, sanitizeMoneyInput } from "@/lib/money";
 import { unitAllowsFractions, type StockUnit } from "@/lib/stock/unified/kinds";
 import { localizedStockName, type StockItemJson } from "@/lib/stock/unified/adminTypes";
-import { formatQuantity, parseQuantityInput, sanitizeQuantityInput } from "@/lib/stock/unified/quantity";
+import { parseQuantityInput, sanitizeQuantityInput } from "@/lib/stock/unified/quantity";
 import { StockModalShell } from "../StockModalShell";
 import { todayIsoDate } from "../catalogStock";
 import { ColorSwatch, fieldLabelCls } from "./StockBits";
@@ -229,7 +229,7 @@ export function StockBulkReceiptModal({
                   </span>
                 </p>
                 <p className="text-[11px] text-gray-500">
-                  {s.currentStock}: {formatQuantity(r.stock)} {s.units[unit]}
+                  {s.currentStock}: {s.qty(r.stock, unit)}
                 </p>
               </div>
               <Input

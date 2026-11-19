@@ -1,4 +1,5 @@
 import type { TranslationDictionary } from "./types";
+import { ruStockQty } from "./stockQty";
 import { ruFilesCount } from "./filesCount";
 import { dtfRu } from "./dtf/ru";
 import { uvRu } from "./uv/ru";
@@ -499,6 +500,8 @@ export const ru: TranslationDictionary = {
       blockLfSize: "укажите ширину и высоту",
       blockLfDoesNotFit: "размер не помещается на рулон",
       blockLfPrice: "не удалось рассчитать цену",
+      blockLfSheetNoPrice: "цена за лист не задана — укажите цену строки вручную",
+      blockLfSheetNoPriceDealer: "цена этого материала ещё не задана — свяжитесь со студией",
       blockBcBack: "загрузите макет оборота",
       blockBcPaper: "выберите бумагу",
       blockBcBleed: "макет без вылетов — исправьте размер",
@@ -873,7 +876,8 @@ export const ru: TranslationDictionary = {
       colStockSheets: "Остаток (листы)",
       colAvgPerSheet: "Ср. закупка/лист",
       colPricePerSheet: "Цена/лист",
-      sheetsShort: "л.",
+      sheetsShort: "лист",
+      sheetsQty: (n) => ruStockQty(n, "sheet"),
       receiptTitle: "Приход листов",
       receiptQtySheets: "Количество (листов)",
       receiptAvgHint: "с НДС; средняя за лист пересчитается",
@@ -884,7 +888,7 @@ export const ru: TranslationDictionary = {
       sheetsCalc: (label) => `Листов (расчёт): ${label}`,
       doesNotFit: (sizeCm) => `Не помещается на лист ${sizeCm}`,
       pricePerSheetLine: (priceMdl) => `Цена за лист: ${priceMdl} MDL`,
-      notPriced: "Цена за лист не задана (нет цены и наценки)",
+      notPriced: "Цена за лист не задана — укажите цену строки вручную",
       procurementDetail: (requested, stock) => `Листы: нужно ${requested}, на складе было ${stock}`,
     },
     lfMaterialCatalogColPrintableWidthM: "Полезная ширина (м)",
@@ -1767,6 +1771,7 @@ export const ru: TranslationDictionary = {
       lfSheetDoesNotFit: (sizeCm) => `Не помещается на лист ${sizeCm}`,
       lfPerSheet: "лист",
       lfSheetDoesNotFitAny: "Этот размер не помещается на лист. Уменьшите размер.",
+      lfSheetNoPrice: "Цена на этот материал ещё не задана. Свяжитесь со студией.",
       lfSheetPreviewTitle: "Раскладка на листе (лист 1)",
       lfSheetPreviewEmpty: "Укажите размер, чтобы увидеть раскладку на листе.",
       lfPreviewTitle: "Раскрой по рулону",
@@ -2824,7 +2829,8 @@ export const ru: TranslationDictionary = {
       if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return `${count} позиции`;
       return `${count} позиций`;
     },
-    units: { pcs: "шт", m: "м", ml: "мл", g: "г", sheet: "лист." },
+    units: { pcs: "шт", m: "м", ml: "мл", g: "г", sheet: "листов" },
+    qty: ruStockQty,
     unitNames: { pcs: "Штуки", m: "Метры", ml: "Миллилитры", g: "Граммы", sheet: "Листы" },
     kinds: { product: "Продукция", material: "Материал", consumable: "Расходник" },
     movementKinds: {

@@ -9,6 +9,7 @@ import {
   lfSheetDoesNotFitRu,
   lfSheetFormatLabel,
   lfSheetItemFits,
+  lfSheetLineUnpriced,
   lfSheetPrintableCm,
   lfSheetsCountRu,
   packLfSheets,
@@ -235,5 +236,31 @@ describe("lfMaterialSheetSpec", () => {
     expect(lfMaterialSheetSpec({ materialForm: "roll", sheetWidthCm: 61, sheetHeightCm: 86 })).toBeNull();
     expect(lfMaterialSheetSpec({ materialForm: "sheet", sheetWidthCm: null, sheetHeightCm: 86 })).toBeNull();
     expect(lfMaterialSheetSpec({ materialForm: "sheet", sheetWidthCm: "61.00", sheetHeightCm: "86.00", sheetMarginMm: 5 })).toEqual(A1);
+  });
+});
+
+describe("lfSheetLineUnpriced", () => {
+  it("no price per sheet and no preset → unpriced", () => {
+    expect(lfSheetLineUnpriced({ pricePerSheetMdl: 0 })).toBe(true);
+    expect(lfSheetLineUnpriced({ pricePerSheetMdl: 0 }, null)).toBe(true);
+  });
+  it("a price per sheet or a size preset prices the line", () => {
+    expect(lfSheetLineUnpriced({ pricePerSheetMdl: 40 })).toBe(false);
+    expect(lfSheetLineUnpriced({ pricePerSheetMdl: 0 }, 150)).toBe(false);
+  });
+  it("no manual price, no cost: price per sheet resolves to 0 even with a markup", () => {
+    const res = computeLfSheetLine({
+      sheet: { sheetWidthCm: 61, sheetHeightCm: 86, marginMm: 5 },
+      material: { retailPricePerSheet: null, dealerPricePerSheet: null, avgCostPerSheet: null, catalogCostPerSheet: 0 },
+      production: { lfRetailMarkupMultiplier: 2, lfDealerMarkupMultiplier: 1.5, lfMinimumLineTotalMdl: 100, inkMlPerSqmLargeFormatRoll: 0 },
+      avgInkCostPerMlMdl: 0,
+      printWidthCm: 50,
+      printHeightCm: 70,
+      quantity: 2,
+      customerType: "retail",
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(lfSheetLineUnpriced(res)).toBe(true);
   });
 });

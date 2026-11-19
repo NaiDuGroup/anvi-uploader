@@ -12,7 +12,6 @@ import type {
   StockMovementsPage,
   StockVariantJson,
 } from "@/lib/stock/unified/adminTypes";
-import { formatQuantity } from "@/lib/stock/unified/quantity";
 import { StockModalShell } from "../StockModalShell";
 import { dateLocaleFor } from "../catalogStock";
 import { stockErrorMessage, stockFetch } from "./stockApi";
@@ -103,7 +102,7 @@ export function StockHistoryModal({
           <p className="mt-1 text-xs text-gray-500">
             {s.currentStock}:{" "}
             <span className="tabular-nums text-gray-900">
-              {formatQuantity(variant.stockQuantity)} {s.units[unit]}
+              {s.qty(variant.stockQuantity, unit)}
             </span>
           </p>
         </>
@@ -148,7 +147,7 @@ export function StockHistoryModal({
                     }
                   >
                     {m.delta > 0 ? "+" : ""}
-                    {formatQuantity(m.delta)} {s.units[unit]}
+                    {s.qty(m.delta, unit)}
                     {m.costMdl != null ? (
                       <span className="ml-2 text-xs text-gray-500">
                         {formatAmountInput(m.costMdl)} {t.admin.currency}
