@@ -171,8 +171,11 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
               sheets: {
                 count: sheetLayout.sheetsCount,
                 label: lfSheetsCountRu(sheetLayout.sheetsCount, sheetLayout),
-                sheetWidthCm: sheetLayout.sheetWidthCm,
-                sheetHeightCm: sheetLayout.sheetHeightCm,
+                // Sheet size / margin for the layout: the material's current spec
+                // (the PDF page size), else the one stored with the line.
+                sheetWidthCm: line.lfSheetSpec?.sheetWidthCm ?? sheetLayout.sheetWidthCm,
+                sheetHeightCm: line.lfSheetSpec?.sheetHeightCm ?? sheetLayout.sheetHeightCm,
+                marginMm: line.lfSheetSpec?.marginMm ?? sheetLayout.marginMm,
               },
             }
           : {}),

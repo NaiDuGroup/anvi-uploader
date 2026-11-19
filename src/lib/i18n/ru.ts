@@ -19,6 +19,14 @@ import { libraryRu } from "./library/ru";
 import { announcementsRu } from "./announcements/ru";
 import { ProductPickerGroup } from "../productPickerGroup";
 
+function ruSheets(n: number): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return "лист";
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "листа";
+  return "листов";
+}
+
 export const ru: TranslationDictionary = {
   common: {
     orderId: "ID заказа",
@@ -2308,6 +2316,13 @@ export const ru: TranslationDictionary = {
     layoutDeselectAll: "Снять",
     layoutNoLinesSelected: "Выберите хотя бы одну строку",
     layoutIncludeBorder: (cm: number) => `Белое поле ${cm} см с каждой стороны`,
+    sheetLayoutCta: "Раскладка",
+    layoutSheetInfo: (sizeLabel: string, marginMm: number, sheets: number) =>
+      `Лист ${sizeLabel} см · поле ${String(marginMm).replace(".", ",")} мм · ${sheets} ${ruSheets(sheets)}`,
+    layoutSheetCaption: (n: number) => `Лист ${n}`,
+    layoutSheetsTotal: (n: number) => `Листов: ${n}`,
+    layoutSheetsNaive: (n: number) => `Без объединения строк: ${n}`,
+    layoutSheetsSaved: (n: number) => `Экономия: ${n} ${ruSheets(n)}`,
     layoutRotateHint: "Нажмите на плитку, чтобы повернуть или вернуть",
     layoutResetPins: "Сбросить повороты",
     layoutRollPickerTitle: "Рулон для печати",

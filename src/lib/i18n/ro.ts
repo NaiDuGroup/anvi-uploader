@@ -2256,6 +2256,13 @@ export const ro: TranslationDictionary = {
     layoutDeselectAll: "Nimic",
     layoutNoLinesSelected: "Selectați cel puțin o linie",
     layoutIncludeBorder: (cm: number) => `Margine albă de ${cm} cm pe fiecare parte`,
+    sheetLayoutCta: "Așezare",
+    layoutSheetInfo: (sizeLabel: string, marginMm: number, sheets: number) =>
+      `Coală ${sizeLabel} cm · margine ${String(marginMm).replace(".", ",")} mm · ${sheets} ${sheets === 1 ? "coală" : "coli"}`,
+    layoutSheetCaption: (n: number) => `Coala ${n}`,
+    layoutSheetsTotal: (n: number) => `Coli: ${n}`,
+    layoutSheetsNaive: (n: number) => `Fără combinarea liniilor: ${n}`,
+    layoutSheetsSaved: (n: number) => `Economie: ${n} ${n === 1 ? "coală" : "coli"}`,
     layoutRotateHint: "Apăsați pe un dreptunghi pentru a roti sau anula",
     layoutResetPins: "Resetează rotirile",
     layoutRollPickerTitle: "Rola pentru tipar",

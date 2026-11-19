@@ -2247,6 +2247,13 @@ export const en: TranslationDictionary = {
     layoutDeselectAll: "None",
     layoutNoLinesSelected: "Select at least one line",
     layoutIncludeBorder: (cm: number) => `White border ${cm} cm on every side`,
+    sheetLayoutCta: "Layout",
+    layoutSheetInfo: (sizeLabel: string, marginMm: number, sheets: number) =>
+      `Sheet ${sizeLabel} cm · margin ${marginMm} mm · ${sheets} sheet${sheets === 1 ? "" : "s"}`,
+    layoutSheetCaption: (n: number) => `Sheet ${n}`,
+    layoutSheetsTotal: (n: number) => `Sheets: ${n}`,
+    layoutSheetsNaive: (n: number) => `Without combining lines: ${n}`,
+    layoutSheetsSaved: (n: number) => `Saved: ${n} sheet${n === 1 ? "" : "s"}`,
     layoutRotateHint: "Click a tile to rotate or undo",
     layoutResetPins: "Reset rotations",
     layoutRollPickerTitle: "Print roll",

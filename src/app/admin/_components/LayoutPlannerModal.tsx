@@ -31,7 +31,7 @@ import { buildRollLayoutPdfFileName } from "@/lib/largeFormat/rollLayoutPdfFileN
 
 // ─── Colour palette for tiles (cycled by order number) ────────────────────────
 
-const TILE_COLORS = [
+export const TILE_COLORS = [
   { fill: "#dbeafe", stroke: "#3b82f6", text: "#1e40af" },
   { fill: "#dcfce7", stroke: "#22c55e", text: "#15803d" },
   { fill: "#fef9c3", stroke: "#eab308", text: "#854d0e" },
@@ -49,7 +49,7 @@ const TILE_COLORS = [
  * list (not the filtered selection) so tile colours don't shift when lines are
  * unchecked in the selection panel.
  */
-function buildOrderColorMap(lines: WorkshopBoardLine[]): ReadonlyMap<number, number> {
+export function buildOrderColorMap(lines: WorkshopBoardLine[]): ReadonlyMap<number, number> {
   const orderNumbers = [...new Set(lines.map((l) => l.orderNumber))];
   return new Map(orderNumbers.map((n, i) => [n, i % TILE_COLORS.length]));
 }
@@ -69,7 +69,7 @@ function resolveTileFileId(line: WorkshopBoardLine, copy: number): string | null
   return files[0]!.id;
 }
 
-function buildTileFileEntries(
+export function buildTileFileEntries(
   lines: WorkshopBoardLine[],
   tiles: PreparedTile[],
 ): Array<{ tileId: string; fileId: string }> {
@@ -378,7 +378,7 @@ interface LineSelectionPanelProps {
   onDeselectAll: () => void;
 }
 
-function LineSelectionPanel({
+export function LineSelectionPanel({
   lines,
   selectedLineIds,
   orderColorMap,
@@ -1141,7 +1141,7 @@ export function LayoutPlannerModal({
 
 // ─── Small metric row ─────────────────────────────────────────────────────────
 
-function MetricRow({ label, highlight }: { label: string; highlight: boolean }) {
+export function MetricRow({ label, highlight }: { label: string; highlight: boolean }) {
   return (
     <p
       className={

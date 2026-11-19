@@ -32,7 +32,7 @@ export interface LfLineFacts {
   /** Banner finishing / roll-up set to do besides the print (Russian); omitted without extras. */
   extrasRu?: string;
   /** Sheet material (VATMAN A1): sheets used, e.g. «3 листа A1»; omitted for rolls. */
-  sheets?: { count: number; label: string; sheetWidthCm: number; sheetHeightCm: number };
+  sheets?: { count: number; label: string; sheetWidthCm: number; sheetHeightCm: number; marginMm: number };
 }
 
 export interface MugLineFacts {

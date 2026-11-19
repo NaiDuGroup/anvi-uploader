@@ -195,150 +195,204 @@ function drawRotatedContent(
 export async function buildRollLayoutPdfBuffer(
   input: RollLayoutPdfBuildInput,
 ): Promise<Uint8Array> {
+  return buildLayoutPdfPages({
+    ...input,
+    pages: [
+      {
+        widthCm: input.printableWidthCm,
+        heightCm: input.totalAlongCm,
+        placements: input.placements,
+      },
+    ],
+  });
+}
+
+/** One page of a layout PDF: its size and the pieces on it (top-left cm coordinates). */
+export interface LayoutPdfPage {
+  widthCm: number;
+  heightCm: number;
+  placements: readonly GroupTilePackPlacement[];
+}
+
+export type SheetLayoutPdfBuildInput = Omit<
+  RollLayoutPdfBuildInput,
+  "printableWidthCm" | "totalAlongCm" | "placements"
+> & {
+  /** Sheet size (cm) = page size of every page, e.g. 61 × 86 (VATMAN A1). */
+  sheetWidthCm: number;
+  sheetHeightCm: number;
+  /** Pieces per sheet, in sheet coordinates (margin included); one page each. */
+  sheets: ReadonlyArray<readonly GroupTilePackPlacement[]>;
+};
+
+/**
+ * Sheet layout PDF: one page per sheet, the page exactly the sheet size, the
+ * pieces drawn and outlined exactly as on a roll layout.
+ */
+export async function buildSheetLayoutPdfBuffer(
+  input: SheetLayoutPdfBuildInput,
+): Promise<Uint8Array> {
+  return buildLayoutPdfPages({
+    ...input,
+    pages: input.sheets.map((placements) => ({
+      widthCm: input.sheetWidthCm,
+      heightCm: input.sheetHeightCm,
+      placements,
+    })),
+  });
+}
+
+async function buildLayoutPdfPages(
+  input: Omit<RollLayoutPdfBuildInput, "printableWidthCm" | "totalAlongCm" | "placements"> & {
+    pages: readonly LayoutPdfPage[];
+  },
+): Promise<Uint8Array> {
   const prepare =
     input.prepareRaster ?? prepareRollLayoutRasterPassThrough;
   const border = input.tileBorder ?? DEFAULT_TILE_BORDER;
 
-  const pageWidthPt = cmToPt(input.printableWidthCm);
-  const pageHeightPt = cmToPt(input.totalAlongCm);
-
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([pageWidthPt, pageHeightPt]);
   /** Copies of one file share one decoded TIFF image (keyed by the asset buffer, weakly). */
   const tiffImages = new WeakMap<Uint8Array, { ref: PDFRef; width: number; height: number }>();
 
-  for (const placement of input.placements) {
-    const asset = await input.getAsset(placement.tileId);
+  for (const pageSpec of input.pages) {
+    const pageWidthPt = cmToPt(pageSpec.widthCm);
+    const pageHeightPt = cmToPt(pageSpec.heightCm);
+    const page = pdfDoc.addPage([pageWidthPt, pageHeightPt]);
 
-    const xPt = cmToPt(placement.xCm);
-    const yPt = topDownCmToPdfY(pageHeightPt, placement.yCm, placement.heightCm);
-    const wPt = cmToPt(placement.widthCm);
-    const hPt = cmToPt(placement.heightCm);
+    for (const placement of pageSpec.placements) {
+      const asset = await input.getAsset(placement.tileId);
 
-    // Gallery wrap (canvas): the prepared raster already includes the mirrored
-    // margins, so it fills the whole slot — no white band, no inset. This wins
-    // over the white-border path (the two are mutually exclusive per material).
-    const galleryWrapCm = input.galleryWrapCmByTileId?.get(placement.tileId) ?? 0;
-    // White border (e.g. BANNER MATT): paint the full slot white, then draw the
-    // artwork inset by `borderCm` on every side so the band stays blank.
-    const borderCm =
-      galleryWrapCm > 0 ? 0 : input.borderCmByTileId?.get(placement.tileId) ?? 0;
-    const borderPt = borderCm > 0 ? cmToPt(borderCm) : 0;
-    const artXPt = xPt + borderPt;
-    const artYPt = yPt + borderPt;
-    const artWPt = wPt - 2 * borderPt;
-    const artHPt = hPt - 2 * borderPt;
-    const artPlacement =
-      borderPt > 0
-        ? {
-            ...placement,
-            widthCm: placement.widthCm - 2 * borderCm,
-            heightCm: placement.heightCm - 2 * borderCm,
-          }
-        : placement;
+      const xPt = cmToPt(placement.xCm);
+      const yPt = topDownCmToPdfY(pageHeightPt, placement.yCm, placement.heightCm);
+      const wPt = cmToPt(placement.widthCm);
+      const hPt = cmToPt(placement.heightCm);
 
-    if (borderPt > 0) {
-      page.drawRectangle({
-        x: xPt,
-        y: yPt,
-        width: wPt,
-        height: hPt,
-        color: rgb(1, 1, 1),
-      });
-    }
+      // Gallery wrap (canvas): the prepared raster already includes the mirrored
+      // margins, so it fills the whole slot — no white band, no inset. This wins
+      // over the white-border path (the two are mutually exclusive per material).
+      const galleryWrapCm = input.galleryWrapCmByTileId?.get(placement.tileId) ?? 0;
+      // White border (e.g. BANNER MATT): paint the full slot white, then draw the
+      // artwork inset by `borderCm` on every side so the band stays blank.
+      const borderCm =
+        galleryWrapCm > 0 ? 0 : input.borderCmByTileId?.get(placement.tileId) ?? 0;
+      const borderPt = borderCm > 0 ? cmToPt(borderCm) : 0;
+      const artXPt = xPt + borderPt;
+      const artYPt = yPt + borderPt;
+      const artWPt = wPt - 2 * borderPt;
+      const artHPt = hPt - 2 * borderPt;
+      const artPlacement =
+        borderPt > 0
+          ? {
+              ...placement,
+              widthCm: placement.widthCm - 2 * borderCm,
+              heightCm: placement.heightCm - 2 * borderCm,
+            }
+          : placement;
 
-    const kind = detectAssetKind(asset.buffer, asset.fileName);
-    if (!kind) {
-      throw new Error(`Unsupported file type: ${asset.fileName}`);
-    }
-
-    if (kind === "pdf") {
-      const [embeddedPage] = await pdfDoc.embedPdf(asset.buffer, [0]);
-      const rotateContent = shouldRotateContentForPlacement(
-        embeddedPage.width,
-        embeddedPage.height,
-        artPlacement,
-      );
-      drawRotatedContent(
-        (x, y, width, height, rotate) => {
-          page.drawPage(embeddedPage, { x, y, width, height, rotate });
-        },
-        artXPt,
-        artYPt,
-        artWPt,
-        artHPt,
-        rotateContent,
-      );
-    } else if (kind === "tiff" && !input.prepareRaster) {
-      // Browser path: decode in JS and embed the pixels directly (no canvas,
-      // CMYK kept). The decoder is only loaded when a TIFF is actually met.
-      let image = tiffImages.get(asset.buffer);
-      if (!image) {
-        const { embedTiffImage } = await import("./tiffPdfImage");
-        image = embedTiffImage(pdfDoc, asset.buffer, asset.fileName);
-        tiffImages.set(asset.buffer, image);
+      if (borderPt > 0) {
+        page.drawRectangle({
+          x: xPt,
+          y: yPt,
+          width: wPt,
+          height: hPt,
+          color: rgb(1, 1, 1),
+        });
       }
-      const { ref } = image;
-      const rotateContent = shouldRotateContentForPlacement(
-        image.width,
-        image.height,
-        artPlacement,
-      );
-      drawRotatedContent(
-        (x, y, width, height, rotate) => {
-          const name = page.node.newXObject("Image", ref);
-          page.pushOperators(
-            ...drawImageOperators(name, {
-              x,
-              y,
-              width,
-              height,
-              rotate: rotate ?? degrees(0),
-              xSkew: degrees(0),
-              ySkew: degrees(0),
-            }),
-          );
-        },
-        artXPt,
-        artYPt,
-        artWPt,
-        artHPt,
-        rotateContent,
-      );
-    } else {
-      // PNG / JPEG — and TIFF when the caller converts rasters itself (server, sharp).
-      const prepared = await prepare(asset, placement);
-      const image =
-        prepared.kind === "png"
-          ? await pdfDoc.embedPng(prepared.buffer)
-          : await pdfDoc.embedJpg(prepared.buffer);
-      const rotateContent = shouldRotateContentForPlacement(
-        image.width,
-        image.height,
-        artPlacement,
-      );
-      drawRotatedContent(
-        (x, y, width, height, rotate) => {
-          page.drawImage(image, { x, y, width, height, rotate });
-        },
-        artXPt,
-        artYPt,
-        artWPt,
-        artHPt,
-        rotateContent,
-      );
-    }
 
-    if (border !== "none") {
-      page.drawRectangle({
-        x: xPt,
-        y: yPt,
-        width: wPt,
-        height: hPt,
-        borderWidth: border.widthPt,
-        borderColor: rgb(border.gray, border.gray, border.gray),
-        borderOpacity: 1,
-      });
+      const kind = detectAssetKind(asset.buffer, asset.fileName);
+      if (!kind) {
+        throw new Error(`Unsupported file type: ${asset.fileName}`);
+      }
+
+      if (kind === "pdf") {
+        const [embeddedPage] = await pdfDoc.embedPdf(asset.buffer, [0]);
+        const rotateContent = shouldRotateContentForPlacement(
+          embeddedPage.width,
+          embeddedPage.height,
+          artPlacement,
+        );
+        drawRotatedContent(
+          (x, y, width, height, rotate) => {
+            page.drawPage(embeddedPage, { x, y, width, height, rotate });
+          },
+          artXPt,
+          artYPt,
+          artWPt,
+          artHPt,
+          rotateContent,
+        );
+      } else if (kind === "tiff" && !input.prepareRaster) {
+        // Browser path: decode in JS and embed the pixels directly (no canvas,
+        // CMYK kept). The decoder is only loaded when a TIFF is actually met.
+        let image = tiffImages.get(asset.buffer);
+        if (!image) {
+          const { embedTiffImage } = await import("./tiffPdfImage");
+          image = embedTiffImage(pdfDoc, asset.buffer, asset.fileName);
+          tiffImages.set(asset.buffer, image);
+        }
+        const { ref } = image;
+        const rotateContent = shouldRotateContentForPlacement(
+          image.width,
+          image.height,
+          artPlacement,
+        );
+        drawRotatedContent(
+          (x, y, width, height, rotate) => {
+            const name = page.node.newXObject("Image", ref);
+            page.pushOperators(
+              ...drawImageOperators(name, {
+                x,
+                y,
+                width,
+                height,
+                rotate: rotate ?? degrees(0),
+                xSkew: degrees(0),
+                ySkew: degrees(0),
+              }),
+            );
+          },
+          artXPt,
+          artYPt,
+          artWPt,
+          artHPt,
+          rotateContent,
+        );
+      } else {
+        // PNG / JPEG — and TIFF when the caller converts rasters itself (server, sharp).
+        const prepared = await prepare(asset, placement);
+        const image =
+          prepared.kind === "png"
+            ? await pdfDoc.embedPng(prepared.buffer)
+            : await pdfDoc.embedJpg(prepared.buffer);
+        const rotateContent = shouldRotateContentForPlacement(
+          image.width,
+          image.height,
+          artPlacement,
+        );
+        drawRotatedContent(
+          (x, y, width, height, rotate) => {
+            page.drawImage(image, { x, y, width, height, rotate });
+          },
+          artXPt,
+          artYPt,
+          artWPt,
+          artHPt,
+          rotateContent,
+        );
+      }
+
+      if (border !== "none") {
+        page.drawRectangle({
+          x: xPt,
+          y: yPt,
+          width: wPt,
+          height: hPt,
+          borderWidth: border.widthPt,
+          borderColor: rgb(border.gray, border.gray, border.gray),
+          borderOpacity: 1,
+        });
+      }
     }
   }
 

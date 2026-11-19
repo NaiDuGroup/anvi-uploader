@@ -93,6 +93,10 @@ const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: fals
 const LayoutIssueModal = dynamic(() => import("./LayoutIssueModal"), { ssr: false });
 const ClearLayoutIssueDialog = dynamic(() => import("./ClearLayoutIssueDialog"), { ssr: false });
 const StaffReplaceLayoutFileDialog = dynamic(() => import("./StaffReplaceLayoutFileDialog"), { ssr: false });
+const SheetLayoutPlannerModal = dynamic(
+  () => import("./SheetLayoutPlannerModal").then((m) => m.SheetLayoutPlannerModal),
+  { ssr: false },
+);
 const LayoutPlannerModal = dynamic(
   () => import("./LayoutPlannerModal").then((m) => m.LayoutPlannerModal),
   { ssr: false },
@@ -883,7 +887,18 @@ function BoardGroupCard({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* Assemble layout button for LF roll groups (sheet materials have no roll layout) */}
+          {/* Layout button: sheet layout for sheet materials, roll layout for rolls */}
+          {isLfSheet && (
+            <button
+              type="button"
+              onClick={() => onAssembleLayout(group)}
+              data-testid="lf-sheet-layout-open"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-1.5 text-[11px] font-medium text-sky-600 hover:bg-sky-100 hover:border-sky-400 transition-colors"
+            >
+              <ScanLine className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {t.workshopBoard.sheetLayoutCta}
+            </button>
+          )}
           {isLf && !isLfSheet && (
             <button
               type="button"
@@ -1492,7 +1507,12 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
         />
       )}
 
-      {/* Layout planner modal (rolls only: sheet materials print sheet by sheet) */}
+      {/* Sheet layout modal (sheet materials: pieces pooled on whole sheets) */}
+      {layoutGroup && layoutGroup.meta.lfSheet && (
+        <SheetLayoutPlannerModal group={layoutGroup} onClose={() => setLayoutGroup(null)} />
+      )}
+
+      {/* Roll layout planner modal (rolls only) */}
       {layoutGroup && !layoutGroup.meta.lfSheet && (
         <LayoutPlannerModal
           group={layoutGroup}

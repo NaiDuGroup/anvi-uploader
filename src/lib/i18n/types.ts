@@ -2481,6 +2481,16 @@ export interface TranslationDictionary {
     /** Checkbox toggling the white border (e.g. BANNER MATT 4 cm) on/off. */
     layoutIncludeBorder: (cm: number) => string;
     /** Hint under the SVG: click a tile to rotate or undo. */
+    /** Sheet materials (VATMAN A1): layout of the group's pieces on whole sheets. */
+    sheetLayoutCta: string;
+    /** «Лист 61×86 см · поле 5 мм · 2 листа». */
+    layoutSheetInfo: (sizeLabel: string, marginMm: number, sheets: number) => string;
+    /** Caption above one sheet of the preview: «Лист 1». */
+    layoutSheetCaption: (n: number) => string;
+    layoutSheetsTotal: (n: number) => string;
+    /** Sheets if every line were printed on its own sheets. */
+    layoutSheetsNaive: (n: number) => string;
+    layoutSheetsSaved: (n: number) => string;
     layoutRotateHint: string;
     /** Clears all manual orientation pins and re-packs. */
     layoutResetPins: string;

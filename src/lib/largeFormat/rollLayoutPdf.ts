@@ -8,9 +8,11 @@ import { cmToPx } from "@/lib/printDimensions";
 import {
   ROLL_LAYOUT_MAX_EMBED_DPI,
   buildRollLayoutPdfBuffer as buildRollLayoutPdfBufferCore,
+  buildSheetLayoutPdfBuffer as buildSheetLayoutPdfBufferCore,
   cmToPt,
   type RollLayoutPdfAssetInput,
   type RollLayoutPdfBuildInput,
+  type SheetLayoutPdfBuildInput,
 } from "./rollLayoutPdfCore";
 
 export {
@@ -166,22 +168,37 @@ async function prepareGalleryWrapRaster(
   };
 }
 
+function sharpPrepareRaster(
+  wrapMap: ReadonlyMap<string, number> | undefined,
+): NonNullable<RollLayoutPdfBuildInput["prepareRaster"]> {
+  return async (asset, placement) => {
+    const prepared = await prepareRollLayoutRaster(
+      Buffer.from(asset.buffer),
+      asset.fileName,
+      placement.widthCm,
+      placement.heightCm,
+      placement.rotated,
+      wrapMap?.get(placement.tileId) ?? 0,
+    );
+    return { kind: prepared.kind, buffer: prepared.buffer };
+  };
+}
+
 export async function buildRollLayoutPdfBuffer(
   input: RollLayoutPdfBuildInput,
 ): Promise<Uint8Array> {
-  const wrapMap = input.galleryWrapCmByTileId;
   return buildRollLayoutPdfBufferCore({
     ...input,
-    prepareRaster: async (asset, placement) => {
-      const prepared = await prepareRollLayoutRaster(
-        Buffer.from(asset.buffer),
-        asset.fileName,
-        placement.widthCm,
-        placement.heightCm,
-        placement.rotated,
-        wrapMap?.get(placement.tileId) ?? 0,
-      );
-      return { kind: prepared.kind, buffer: prepared.buffer };
-    },
+    prepareRaster: sharpPrepareRaster(input.galleryWrapCmByTileId),
+  });
+}
+
+/** Sheet layout PDF (one page per sheet) with sharp raster prep, as the roll one. */
+export async function buildSheetLayoutPdfBuffer(
+  input: SheetLayoutPdfBuildInput,
+): Promise<Uint8Array> {
+  return buildSheetLayoutPdfBufferCore({
+    ...input,
+    prepareRaster: sharpPrepareRaster(input.galleryWrapCmByTileId),
   });
 }
