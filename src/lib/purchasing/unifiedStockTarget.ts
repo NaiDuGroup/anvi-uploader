@@ -24,7 +24,7 @@ const VARIANT_INFO_SELECT = {
   label: true,
   sortOrder: true,
   /** Roll width of roll media, used to rank invoice-line suggestions. */
-  lfMaterial: { select: { rollWidthMeters: true } },
+  lfMaterial: { select: { rollWidthMeters: true, materialForm: true } },
   /** Paper weight and sheet size, used to turn kilograms into sheets. */
   sheetPaper: { select: { gsm: true, sheetWidthCm: true, sheetHeightCm: true } },
   item: {
@@ -58,7 +58,9 @@ export function unifiedOptionFromRow(v: VariantInfoRow): StockTargetOption {
     kind: StockTargetKind.StockVariant,
     id: v.id,
     name: unifiedVariantLabel(item.nameRo, v.label, v.sku),
-    widthMeters: v.lfMaterial ? Number(v.lfMaterial.rollWidthMeters.toString()) : null,
+    // Rolls only: a sheet material (VATMAN A1) is counted in sheets, its «width» is a placeholder.
+    widthMeters:
+      v.lfMaterial && v.lfMaterial.materialForm !== "sheet" ? Number(v.lfMaterial.rollWidthMeters.toString()) : null,
     unit: purchaseUnitFromStockUnit(item.category.unit),
     unified,
     sheetPaper: v.sheetPaper

@@ -50,10 +50,14 @@ export async function POST(request: NextRequest) {
 
   const target = await prisma.largeFormatMaterial.findUnique({
     where: { id: targetMaterialId },
-    select: { id: true, name: true, isActive: true },
+    select: { id: true, name: true, isActive: true, materialForm: true },
   });
   if (!target || !target.isActive) {
     return NextResponse.json({ error: "material_not_found" }, { status: 404 });
+  }
+  // Sheet materials (VATMAN A1) are not rolls: nothing is printed «on» them via a roll layout.
+  if (target.materialForm === "sheet") {
+    return NextResponse.json({ error: "material_is_sheet" }, { status: 409 });
   }
 
   // «Нужен макет» lines stay off the roll until their file is replaced.

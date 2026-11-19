@@ -258,6 +258,15 @@ import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
 import { lfPieceFitsAcrossPrintableWidthCm } from "@/lib/largeFormat/lfPieceFitsPrintableWidthCm";
+import {
+  computeLfSheetLine,
+  lfSheetItemFits,
+  lfSheetLayoutAsRollPreview,
+  lfSheetPrintableCm,
+  lfSheetsCountRu,
+  lfSheetSizeCmLabel,
+  type LfSheetLayoutPersisted,
+} from "@/lib/largeFormat/lfSheet";
 import { isSuperAdmin } from "@/lib/roles";
 import { PageSkeleton } from "@/app/admin/_components/PageSkeleton";
 import {
@@ -453,7 +462,13 @@ function lfSkuDimsExceedPrintable(
   const w = parseFloat(wStr.replace(",", "."));
   const h = parseFloat(hStr.replace(",", "."));
   if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) return false;
-  return !lfPieceFitsAcrossPrintableWidthCm(w, h, lfSkuPrintableWidthCm(mat));
+  return !lfMatFitsPiece(mat, w, h);
+}
+
+/** A w×h piece fits the material: across the roll's printable width, or on the sheet (either way round). */
+function lfMatFitsPiece(mat: AdminLargeFormatMaterialJson, w: number, h: number): boolean {
+  if (mat.materialForm === "sheet") return mat.sheet != null && lfSheetItemFits(w, h, mat.sheet);
+  return lfPieceFitsAcrossPrintableWidthCm(w, h, lfSkuPrintableWidthCm(mat));
 }
 
 type WizardStep = "files" | "confirm";
@@ -1285,8 +1300,55 @@ function lfPricingFromSlotInputs(opts: {
       inkSellPerSqmMdl: number;
       minimumLineUpliftMdl: number;
       lfMinimumLineFloorMdl: number | null;
+      /** Sheet material (VATMAN A1): sheets used, price per sheet; `layout` is the first sheet. */
+      sheet?: { layout: LfSheetLayoutPersisted; pricePerSheetMdl: number; label: string };
     }
   | { ok: false; code: "does_not_fit" | "quantity_too_large" } {
+  if (opts.mat.materialForm === "sheet") {
+    // Whole sheets × price per sheet (or preset × qty), as the server's `resolveLargeFormatLine`.
+    if (!opts.mat.sheet) return { ok: false, code: "does_not_fit" };
+    const pe = opts.printEconomics;
+    const res = computeLfSheetLine({
+      sheet: opts.mat.sheet,
+      material: {
+        // Prices already resolved by the catalog JSON; the cost only feeds the profit lines.
+        retailPricePerSheet: opts.mat.effectiveRetailPricePerSheet,
+        dealerPricePerSheet: opts.mat.effectiveDealerPricePerSheet,
+        avgCostPerSheet: opts.mat.costPerSheet,
+        catalogCostPerSheet: opts.mat.costPerSheet ?? 0,
+      },
+      production: {
+        lfRetailMarkupMultiplier: 0,
+        lfDealerMarkupMultiplier: 0,
+        lfMinimumLineTotalMdl: Number.isFinite(opts.lfMinimumLineTotalMdl) ? opts.lfMinimumLineTotalMdl : 0,
+        inkMlPerSqmLargeFormatRoll: pe?.inkMlPerSqmLargeFormatRoll ?? 0,
+      },
+      avgInkCostPerMlMdl: pe?.avgInkCostPerMlMdl ?? 0,
+      printWidthCm: opts.printWidthCm,
+      printHeightCm: opts.printHeightCm,
+      quantity: opts.quantity,
+      customerType: opts.customerType,
+      presetUnitPriceMdl: opts.sizePreset?.unitPriceMdl ?? null,
+    });
+    if (!res.ok) return { ok: false, code: res.code === "quantity_too_large" ? "quantity_too_large" : "does_not_fit" };
+    const minFloor =
+      opts.customerType !== "dealer" && opts.lfMinimumLineTotalMdl > 0 ? Math.round(opts.lfMinimumLineTotalMdl) : 0;
+    return {
+      ok: true,
+      printableWidthCm: lfSheetPrintableCm(opts.mat.sheet).widthCm,
+      pricing: res.pricing,
+      layout: lfSheetLayoutAsRollPreview(res.layout),
+      rollEconomics: pe ? res.economics : null,
+      inkSellPerSqmMdl: 0,
+      minimumLineUpliftMdl: res.minimumLineUpliftMdl,
+      lfMinimumLineFloorMdl: res.minimumLineUpliftMdl > 0 && minFloor > 0 ? minFloor : null,
+      sheet: {
+        layout: res.layout,
+        pricePerSheetMdl: res.pricePerSheetMdl,
+        label: lfSheetsCountRu(res.layout.sheetsCount, opts.mat.sheet),
+      },
+    };
+  }
   const printableM = resolveEffectivePrintableWidthMeters({
     printableWidthMeters: opts.mat.printableWidthMeters,
     rollWidthMeters: opts.mat.rollWidthMeters,
@@ -3641,6 +3703,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         concrete ? m.id === sel.id : lfMaterialFamilyKey(m.name) === sel.id,
       );
       if (members.length === 0) continue;
+      // Sheet materials are priced per line in whole sheets (server does the same).
+      if (members.some((m) => m.materialForm === "sheet")) continue;
       const galleryWrapCm = resolveGalleryWrapCm(members[0]!.name);
       const effW = w + 2 * galleryWrapCm;
       const effH = h + 2 * galleryWrapCm;
@@ -4952,7 +5016,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           printableWidthMeters: mat.printableWidthMeters,
           rollWidthMeters: mat.rollWidthMeters,
         }) * 100;
-      if (!lfPieceFitsAcrossPrintableWidthCm(w, h, printableCm)) return np.blockLfDoesNotFit;
+      if (mat.materialForm === "sheet" ? !lfMatFitsPiece(mat, w, h) : !lfPieceFitsAcrossPrintableWidthCm(w, h, printableCm)) {
+        return np.blockLfDoesNotFit;
+      }
       const presetForCheck = lfActivePresetForSlot(
         { ...a, lfMaterialId: mat.id },
         lfById,
@@ -6910,10 +6976,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                       // Prefer the billing roll for layout/price when dims known.
                                       const matForLayout = billingResolved ?? matCurrent;
                                       const printableCm = lfSkuPrintableWidthCm(matForLayout);
+                                      const isSheetMat = matForLayout.materialForm === "sheet";
+                                      const sheetSizeLabel =
+                                        matForLayout.sheet != null ? lfSheetSizeCmLabel(matForLayout.sheet) : "—";
                                       const fitsCross =
                                         dimsOk &&
                                         billingResolved != null &&
-                                        lfPieceFitsAcrossPrintableWidthCm(wp, hp, printableCm);
+                                        lfMatFitsPiece(matForLayout, wp, hp);
                                       const qCop = parseAdminCopiesInput(a.copiesStr);
                                       let lfResult: ReturnType<typeof lfPricingFromSlotInputs> | null =
                                         null;
@@ -7123,6 +7192,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                             </div>
                                           </div>
                                           <div className="mt-1 flex flex-col rounded-lg border border-gray-100 bg-gray-50/80 p-2 text-[11px] leading-relaxed text-gray-800">
+                                            {isSheetMat ? (
+                                              <p className="text-[10px] text-gray-500">
+                                                {t.admin.lfSheet.sheetInfo(
+                                                  sheetSizeLabel,
+                                                  matForLayout.sheetMarginMm,
+                                                )}
+                                              </p>
+                                            ) : (
+                                              <>
                                             <p className="text-[10px] text-gray-500">
                                               {t.admin.newOrderPage.lfRollNominalWidthM(
                                                 matForLayout.rollWidthMeters,
@@ -7133,6 +7211,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                 printableCm,
                                               )}
                                             </p>
+                                              </>
+                                            )}
                                             <div className="mt-2 flex flex-col gap-1">
                                               {!dimsOk ? (
                                                 <p className="text-[11px] text-gray-500">
@@ -7141,11 +7221,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                               ) : null}
                                               {dimsOk && !fitsCross ? (
                                                 <p className="text-[11px] font-medium text-red-600">
-                                                  {t.admin.newOrderPage.lfPrintExceedsPrintableWidthCm(
-                                                    printableCm,
-                                                    wp,
-                                                    hp,
-                                                  )}
+                                                  {isSheetMat
+                                                    ? t.admin.lfSheet.doesNotFit(sheetSizeLabel)
+                                                    : t.admin.newOrderPage.lfPrintExceedsPrintableWidthCm(
+                                                        printableCm,
+                                                        wp,
+                                                        hp,
+                                                      )}
                                                 </p>
                                               ) : null}
                                               {dimsOk && fitsCross && qCop === null ? (
@@ -7163,7 +7245,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                     ? t.admin.newOrderPage.lfPackQuantityTooLarge(
                                                         LF_ROLL_PACK_MAX_QUANTITY,
                                                       )
-                                                    : t.admin.newOrderPage.lfPackDoesNotFit}
+                                                    : isSheetMat
+                                                      ? t.admin.lfSheet.doesNotFit(sheetSizeLabel)
+                                                      : t.admin.newOrderPage.lfPackDoesNotFit}
                                                 </p>
                                               ) : null}
                                               {dimsOk &&
@@ -7172,11 +7256,21 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                               lfResult &&
                                               lfResult.ok ? (
                                                 <>
+                                                  {lfResult.sheet ? (
+                                                    <p className="mt-1 text-[11px] font-medium text-gray-800">
+                                                      {t.admin.lfSheet.sheetsCalc(lfResult.sheet.label)}
+                                                      {" · "}
+                                                      {lfResult.sheet.pricePerSheetMdl > 0
+                                                        ? t.admin.lfSheet.pricePerSheetLine(lfResult.sheet.pricePerSheetMdl)
+                                                        : t.admin.lfSheet.notPriced}
+                                                    </p>
+                                                  ) : (
                                                   <p className="mt-1 text-[10px] text-gray-600">
                                                     {t.admin.newOrderPage.lfLinearMetersCalc(
                                                       lfResult.pricing.calculatedLinearMeters,
                                                     )}
                                                   </p>
+                                                  )}
                                                   <div className="pr-1">
                                                     <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
                                                       {lfBreakdownFullDetail ? (

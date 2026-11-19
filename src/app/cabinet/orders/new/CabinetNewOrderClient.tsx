@@ -112,6 +112,7 @@ import {
   type BusinessCardSheetLayout,
 } from "@/lib/businessCard/businessCardSheetLayout";
 import { computeLargeFormatRollLayout } from "@/lib/largeFormat/largeFormatRollPack";
+import { lfSheetLayoutAsRollPreview, lfSheetSizeCmLabel, packLfSheets } from "@/lib/largeFormat/lfSheet";
 import type { LargeFormatRollPackResult } from "@/lib/largeFormat/largeFormatRollPack";
 import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { cn } from "@/lib/utils";
@@ -322,7 +323,14 @@ const EMPTY_LF_VALUE: LfFormValue = {
 type LfQuoteState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "ok"; totalMdl: number; linearMeters: number; customerType: "retail" | "dealer" }
+  | {
+      status: "ok";
+      totalMdl: number;
+      linearMeters: number;
+      /** Sheet material: whole sheets and the sheet format («A1»). */
+      sheets?: { count: number; format: string };
+      customerType: "retail" | "dealer";
+    }
   | { status: "error"; code: string };
 
 type SubmitFailure = { kind: "generic"; message: string };
@@ -2069,6 +2077,15 @@ function LfItemBody({
       }
       return null;
     }
+    if (material.materialForm === "sheet") {
+      // Sheet material (VATMAN A1): pieces on sheets; the preview shows the first sheet.
+      if (!material.sheet) return { ok: false as const, code: "does_not_fit" as const };
+      const sp = packLfSheets({ itemWidthCm: widthCm, itemHeightCm: heightCm, quantity: qty, sheet: material.sheet });
+      if (!sp.ok) {
+        return { ok: false as const, code: sp.code === "quantity_too_large" ? ("quantity_too_large" as const) : ("does_not_fit" as const) };
+      }
+      return { ok: true as const, layout: lfSheetLayoutAsRollPreview(sp.layout) };
+    }
     const wrap = resolveGalleryWrapCm(material.name);
     return computeLargeFormatRollLayout({
       printableWidthCm: material.printableWidthMeters * 100,
@@ -2128,6 +2145,8 @@ function LfItemBody({
           ok?: boolean;
           totalSellPriceMdl?: number;
           calculatedLinearMeters?: number;
+          sheetsCount?: number;
+          sheetFormat?: string;
           customerType?: "retail" | "dealer";
           code?: string;
         };
@@ -2137,6 +2156,9 @@ function LfItemBody({
             status: "ok",
             totalMdl: body.totalSellPriceMdl,
             linearMeters: body.calculatedLinearMeters ?? 0,
+            ...(typeof body.sheetsCount === "number" && typeof body.sheetFormat === "string"
+              ? { sheets: { count: body.sheetsCount, format: body.sheetFormat } }
+              : {}),
             customerType: body.customerType ?? "retail",
           });
         } else {
@@ -2234,6 +2256,7 @@ function lfErrorMessage(
   if (!code) return null;
   switch (code) {
     case "lf_pack_does_not_fit":
+    case "lf_sheet_does_not_fit":
       return t.cabinet.newOrder.lfDoesNotFit;
     case "lf_pack_quantity_too_large":
       return t.cabinet.newOrder.lfQuantityTooLarge;
@@ -2405,7 +2428,9 @@ function LargeFormatSection({
             <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
               {pack.code === "quantity_too_large"
                 ? tt.lfQuantityTooLarge
-                : tt.lfDoesNotFit}
+                : material?.materialForm === "sheet" && material.sheet
+                  ? tt.lfSheetDoesNotFit(lfSheetSizeCmLabel(material.sheet))
+                  : tt.lfDoesNotFit}
             </p>
           ) : null}
         </Section>
@@ -3112,7 +3137,9 @@ function LfPriceBlock({
           {quote.customerType === "dealer" ? tt.lfTierDealer : tt.lfTierRetail}
         </span>
         <span className="text-xs text-gray-500">
-          {tt.lfLinearMeters(quote.linearMeters)}
+          {quote.sheets
+            ? tt.lfSheetsCount(quote.sheets.count, quote.sheets.format)
+            : tt.lfLinearMeters(quote.linearMeters)}
         </span>
         {billingRollInfo && (
           <span className="text-xs text-gray-500">

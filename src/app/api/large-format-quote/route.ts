@@ -7,6 +7,7 @@ import {
 } from "@/lib/adminOrderCreateHelpers";
 import { LF_ROLL_PACK_MAX_QUANTITY } from "@/lib/largeFormat/largeFormatRollConstants";
 import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
+import { lfSheetFormatLabel } from "@/lib/largeFormat/lfSheet";
 
 const quoteSchema = z.object({
   largeFormatMaterialId: z.string().uuid().optional(),
@@ -58,6 +59,13 @@ export async function POST(request: NextRequest) {
       ok: true,
       totalSellPriceMdl: res.totalSellPriceMdl,
       calculatedLinearMeters: res.calculatedLinearMeters,
+      // Sheet material (VATMAN A1): whole sheets instead of roll metres.
+      ...(res.largeFormatLineData.sheetLayout
+        ? {
+            sheetsCount: res.largeFormatLineData.sheetLayout.sheetsCount,
+            sheetFormat: lfSheetFormatLabel(res.largeFormatLineData.sheetLayout),
+          }
+        : {}),
       customerType,
     });
   } catch (error) {

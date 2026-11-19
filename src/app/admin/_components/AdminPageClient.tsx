@@ -219,7 +219,10 @@ function procurementTooltipText(
     const req = m.requestedLinearMeters;
     const stock = m.stockAtOrder;
     if (typeof req === "number" && typeof stock === "number") {
-      return admin.procurementDetailLfRoll(req, stock);
+      // Wide-format sheet material (VATMAN A1): whole sheets, not metres.
+      return m.unit === "sheets"
+        ? admin.lfSheet.procurementDetail(req, stock)
+        : admin.procurementDetailLfRoll(req, stock);
     }
   }
   if (kind === "ink") {

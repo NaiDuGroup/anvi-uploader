@@ -1,6 +1,7 @@
 import { lfFinishingSummaryRu } from "./lfFinishing";
 import { lfKitTitleRu } from "./lfKits";
 import { parseLargeFormatLineData } from "./parseLargeFormatLineData";
+import { lfSheetsCountRu } from "./lfSheet";
 import type { LargeFormatLineData } from "./types";
 
 export interface LfLineSummaryParts {
@@ -13,6 +14,8 @@ export interface LfLineSummaryParts {
    * and / or the banner finishing; null without extras. Shown in the admin.
    */
   extrasRu: string | null;
+  /** Sheet material line: «3 листа A1»; null for roll lines. */
+  sheetsLabel?: string | null;
 }
 
 /** Compact LF line facts for admin order list rows (material + size + qty). */
@@ -29,6 +32,9 @@ export function lfLineSummaryPartsFromRaw(raw: unknown): LfLineSummaryParts | nu
     heightCm: data.printHeightCm,
     quantity: data.quantity,
     extrasRu: lfLineExtrasRu(data),
+    ...(data.sheetLayout
+      ? { sheetsLabel: lfSheetsCountRu(data.sheetLayout.sheetsCount, data.sheetLayout) }
+      : {}),
   };
 }
 

@@ -216,7 +216,7 @@ function BoardLineCard({
   const lineSummary = (() => {
     switch (line.facts.kind) {
       case "lf": {
-        const { materialName, widthCm, heightCm, quantity, extrasRu } = line.facts.data;
+        const { materialName, widthCm, heightCm, quantity, extrasRu, sheets } = line.facts.data;
         return (
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
             <ScanLine className="h-3 w-3 shrink-0 text-sky-600" aria-hidden />
@@ -229,6 +229,12 @@ function BoardLineCard({
             <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 leading-none">
               {t.admin.lfFilePrintCopiesBadge(quantity)}
             </span>
+            {sheets ? (
+              // Sheet material (VATMAN A1): how many sheets to print.
+              <span className="shrink-0 rounded-md border border-sky-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-sky-900 leading-none">
+                {sheets.label}
+              </span>
+            ) : null}
             {extrasRu ? (
               <span className="basis-full rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-900">
                 Отделка: {extrasRu}
@@ -756,12 +762,14 @@ function BoardGroupCard({
   const { aggregate, meta } = group;
   const productType = sectionKey;
   const isLf = productType === "large_format_print";
+  /** Sheet material (VATMAN A1): printed sheet by sheet, no roll layout. */
+  const isLfSheet = isLf && meta.lfSheet === true;
   const borderColor = PRODUCT_TYPE_UI[sectionKey].groupBorderClass;
 
   // Cheapest-roll hint: when the family has ≥2 catalog rolls, pack the whole
   // group on each and surface the winner with its savings vs the alternative.
   const rollHint = useMemo(() => {
-    if (!isLf || !meta.familyKey) return null;
+    if (!isLf || isLfSheet || !meta.familyKey) return null;
     const candidates = lfRollCandidates.filter(
       (c) => c.familyKey === meta.familyKey,
     );
@@ -779,7 +787,7 @@ function BoardGroupCard({
     const savingsMdl = runnerUp.costMdl - best.costMdl;
     if (savingsMdl <= 0) return null;
     return { name: best.option.name, savingsMdl };
-  }, [isLf, meta.familyKey, lfRollCandidates, group.lines]);
+  }, [isLf, isLfSheet, meta.familyKey, lfRollCandidates, group.lines]);
 
   return (
     <div className={cn("rounded-xl border border-gray-200 border-l-4 bg-white shadow-sm", borderColor)}>
@@ -831,7 +839,12 @@ function BoardGroupCard({
               <Package className="h-3 w-3 shrink-0" aria-hidden />
               {t.workshopBoard.groupOrdersCount(aggregate.orderCount)}
             </span>
-            {(isLf || sectionKey === "uv_dtf") && aggregate.totalLinearMeters !== undefined && (
+            {isLfSheet && aggregate.totalSheetsLabel ? (
+              <span className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 leading-none">
+                {aggregate.totalSheetsLabel}
+              </span>
+            ) : null}
+            {(isLf || sectionKey === "uv_dtf") && !isLfSheet && aggregate.totalLinearMeters !== undefined && (
               <span className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 leading-none">
                 {t.workshopBoard.groupTotalLm(aggregate.totalLinearMeters)}
               </span>
@@ -858,8 +871,8 @@ function BoardGroupCard({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {/* Assemble layout button for LF groups */}
-          {isLf && (
+          {/* Assemble layout button for LF roll groups (sheet materials have no roll layout) */}
+          {isLf && !isLfSheet && (
             <button
               type="button"
               onClick={() => onAssembleLayout(group)}

@@ -18,10 +18,16 @@ import {
   LEGACY_COST_COLUMN_PLACEHOLDER,
   LF_MATERIAL_LEGACY_KIND,
   lfMaterialStockAttributes,
-  ROLL_MEDIA_CATEGORY_CODE,
+  lfMaterialCategoryCode,
 } from "@/lib/stock/unified/materials";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
+import {
+  lfMaterialFormFieldsSchema,
+  lfMaterialFormIssue,
+  lfSheetRollWidthPlaceholderMeters,
+} from "@/lib/largeFormat/lfMaterialFormFields";
+import { LF_SHEET_DEFAULT_MARGIN_MM } from "@/lib/largeFormat/lfSheet";
 
 function prismaErrorCode(e: unknown): string | undefined {
   if (typeof e === "object" && e !== null && "code" in e) {
@@ -37,7 +43,8 @@ const decimalM = z
 
 const createBody = z.object({
   name: z.string().min(1).max(200),
-  rollWidthMeters: decimalM,
+  /** Required for rolls; a sheet material takes its sheet width. */
+  rollWidthMeters: decimalM.optional(),
   printableWidthMeters: z.union([decimalM, z.null()]).optional(),
   costPerLinearMeter: z.number().int().min(0).max(99_999_999).optional(),
   finalRetailPricePerLinearMeter: z.number().int().min(0).max(99_999_999).optional().default(0),
@@ -50,6 +57,7 @@ const createBody = z.object({
     .optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
+  ...lfMaterialFormFieldsSchema,
 });
 
 export async function GET() {
@@ -139,15 +147,38 @@ export async function POST(request: NextRequest) {
     }
 
     const body = createBody.parse(await request.json());
+    const materialForm = body.materialForm ?? "roll";
+    const issue = lfMaterialFormIssue({
+      materialForm,
+      rollWidthMeters: body.rollWidthMeters != null ? Number(body.rollWidthMeters) : null,
+      sheetWidthCm: body.sheetWidthCm ?? null,
+      sheetHeightCm: body.sheetHeightCm ?? null,
+    });
+    if (issue) return NextResponse.json(issue, { status: 400 });
+    const isSheet = materialForm === "sheet";
+    // Sheet material: the NOT NULL roll width holds the sheet width (never used for packing).
+    const rollWidthMeters: string = isSheet
+      ? lfSheetRollWidthPlaceholderMeters(body.sheetWidthCm!)
+      : body.rollWidthMeters!;
 
     const acct = await getOrCreateAccountingSettings();
     const production = parseProductionCostsJson(acct.productionCosts);
 
     const createDataBase = {
       name: body.name.trim(),
-      rollWidthMeters: body.rollWidthMeters,
-      ...(body.printableWidthMeters !== undefined
+      rollWidthMeters,
+      ...(!isSheet && body.printableWidthMeters !== undefined
         ? { printableWidthMeters: body.printableWidthMeters }
+        : {}),
+      materialForm,
+      ...(isSheet
+        ? {
+            sheetWidthCm: String(body.sheetWidthCm),
+            sheetHeightCm: String(body.sheetHeightCm),
+            sheetMarginMm: body.sheetMarginMm ?? LF_SHEET_DEFAULT_MARGIN_MM,
+            retailPricePerSheet: body.retailPricePerSheet ?? null,
+            dealerPricePerSheet: body.dealerPricePerSheet ?? null,
+          }
         : {}),
       // Cost hint lives on the stock variant; the legacy column only needs a value.
       costPerLinearMeter: LEGACY_COST_COLUMN_PLACEHOLDER,
@@ -174,7 +205,7 @@ export async function POST(request: NextRequest) {
         select: { id: true },
       });
       const stockVariantId: string = await createMaterialStockVariant(tx, {
-        categoryCode: ROLL_MEDIA_CATEGORY_CODE,
+        categoryCode: lfMaterialCategoryCode(materialForm),
         legacyKind: LF_MATERIAL_LEGACY_KIND,
         legacyId: created.id,
         skuPrefix: "ROLL",
@@ -182,8 +213,11 @@ export async function POST(request: NextRequest) {
         isActive: createDataBase.isActive,
         sortOrder: createDataBase.sortOrder,
         attributes: lfMaterialStockAttributes({
-          rollWidthMeters: body.rollWidthMeters,
+          rollWidthMeters,
           printableWidthMeters: body.printableWidthMeters ?? null,
+          materialForm,
+          sheetWidthCm: body.sheetWidthCm ?? null,
+          sheetHeightCm: body.sheetHeightCm ?? null,
         }),
         purchaseCost: body.costPerLinearMeter ?? 0,
       });

@@ -31,6 +31,8 @@ export interface LfLineFacts {
   linearMeters: number;
   /** Banner finishing / roll-up set to do besides the print (Russian); omitted without extras. */
   extrasRu?: string;
+  /** Sheet material (VATMAN A1): sheets used, e.g. «3 листа A1»; omitted for rolls. */
+  sheets?: { count: number; label: string; sheetWidthCm: number; sheetHeightCm: number };
 }
 
 export interface MugLineFacts {
@@ -278,6 +280,8 @@ export interface WorkshopBoardAggregate {
   totalQty: number;
   /** LF only: sum of calculatedLinearMeters across all lines in group */
   totalLinearMeters?: number;
+  /** LF sheet-material group: total sheets (e.g. «7 листов A1»). */
+  totalSheetsLabel?: string;
 }
 
 // ─── Group (by material/SKU) ───────────────────────────────────────────────────
@@ -307,6 +311,8 @@ export interface WorkshopBoardGroupMeta {
   clipColorHex?: string | null;
   /** DTF: film used for the shared transfer layout. */
   dtfFilm?: DtfFilmSpec;
+  /** LF: the group is a sheet material (whole sheets, no roll layout). */
+  lfSheet?: boolean;
 }
 
 export interface WorkshopBoardGroup {

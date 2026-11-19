@@ -1,5 +1,6 @@
 import type { LfFinishingData } from "./lfFinishing";
 import type { LfKitSnapshot } from "./lfKits";
+import type { LfSheetLayoutPersisted } from "./lfSheet";
 
 /** Persisted JSON on `OrderLine.large_format_line_data`. */
 export type LargeFormatCustomerType = "retail" | "dealer";
@@ -21,6 +22,14 @@ export interface LargeFormatMaterialSnapshot {
   retailPricePerLinearMeter: number;
   dealerPrintPricePerLinearMeter: number;
   retailPrintPricePerLinearMeter: number;
+  /** «sheet» for wide-format sheet materials (VATMAN A1); omitted for rolls. */
+  materialForm?: "sheet";
+  /** Sheet materials: sheet size (cm), margin (mm) and the price per sheet used. */
+  sheetWidthCm?: number;
+  sheetHeightCm?: number;
+  sheetMarginMm?: number;
+  pricePerSheetMdl?: number;
+  costPerSheetMdl?: number;
 }
 
 /** Persisted roll packing geometry for previews / audits (stored on order line JSON). */
@@ -105,6 +114,12 @@ export interface LargeFormatLineData {
   totalSellPrice: number;
   estimatedProfit: number;
   layout?: LargeFormatRollLayoutPersisted;
+  /**
+   * Sheet material line: sheets used and where every piece sits on them.
+   * Stock / cost are `sheetLayout.sheetsCount` whole sheets;
+   * `calculatedLinearMeters` is 0 and there is no roll `layout`.
+   */
+  sheetLayout?: LfSheetLayoutPersisted;
   usefulAreaSqm?: number;
   writtenOffAreaSqm?: number;
   materialEfficiencyPct?: number;

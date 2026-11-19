@@ -20,7 +20,7 @@ import type { LargeFormatLineData, LargeFormatCustomerType } from "./types";
 import type { AdminOrderLineInput } from "../validations";
 import { prisma } from "../prisma";
 import { resolveEffectivePrintableWidthMeters } from "./largeFormatRollConstants";
-import { AdminOrderResolveError, withLfLineExtras } from "../adminOrderCreateHelpers";
+import { AdminOrderResolveError, resolveLargeFormatLine, withLfLineExtras } from "../adminOrderCreateHelpers";
 import { getOrCreateAccountingSettings } from "../accounting/accountingSettings";
 import { parseProductionCostsJson } from "../accounting/types";
 import { PrinterCode } from "../stock/unified/printerMath";
@@ -571,6 +571,25 @@ export async function resolveLargeFormatLineGroup(
     if (orderedMaterials.length === 0) {
       throw new AdminOrderResolveError("Invalid large format material");
     }
+  }
+
+  // Sheet materials (VATMAN A1) are priced per line in whole sheets: no shared
+  // roll layout, each line on its own sheets.
+  if (orderedMaterials[0]?.materialForm === "sheet") {
+    const out: CrossLinePackResult[] = [];
+    for (const { input } of inputs) {
+      const r = await resolveLargeFormatLine({
+        largeFormatMaterialId: input.largeFormatMaterialId!,
+        printWidthCm: input.printWidthCm!,
+        printHeightCm: input.printHeightCm!,
+        quantity: input.quantity!,
+        customerType: input.customerType!,
+        lfSizePresetId: input.lfSizePresetId ?? null,
+      });
+      const data = withLfLineExtras(r.largeFormatLineData, input);
+      out.push({ ...r, largeFormatLineData: data, totalSellPriceMdl: data.totalSellPrice });
+    }
+    return out;
   }
 
   const acct = await getOrCreateAccountingSettings();

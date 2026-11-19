@@ -72,6 +72,10 @@ export type PublicLargeFormatMaterial = {
   printableWidthMeters: number;
   sellPricePerLinearMeter: number;
   sizePresets: PublicLargeFormatSizePreset[];
+  /** «sheet»: sold in whole sheets (VATMAN A1); omitted / «roll» for rolls. */
+  materialForm?: "roll" | "sheet";
+  /** Sheet materials: sheet size (cm) and non-printable edge (mm). */
+  sheet?: { sheetWidthCm: number; sheetHeightCm: number; marginMm: number } | null;
 };
 
 interface LargeFormatMaterialsResponse {

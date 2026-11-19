@@ -56,6 +56,7 @@ import { takeLfStandStock } from "@/lib/largeFormat/lfStandStock";
 import type {
   LargeFormatCustomerType,
   LargeFormatLineData,
+  LargeFormatMaterialSnapshot,
   LfSizePresetSnapshot,
 } from "@/lib/largeFormat/types";
 import {
@@ -89,6 +90,7 @@ import { sheetPaperToSnapshot } from "@/lib/businessCard/toSheetPaperSnapshot";
 import { findSheetPaperPricing } from "@/lib/businessCard/sheetPaperStock";
 import { findLfPricingMaterial, type LfPricingMaterial } from "@/lib/largeFormat/lfMaterialStock";
 import { takeMaterialLineStock } from "@/lib/stock/unified/materialOrderStock";
+import { computeLfSheetLine, lfLineStockQuantity, lfMaterialSheetSpec } from "@/lib/largeFormat/lfSheet";
 import {
   BUSINESS_CARD_LAYOUT_ALGORITHM_VERSION,
   type BusinessCardCustomerType,
@@ -891,6 +893,10 @@ export async function resolveLargeFormatLine(input: {
       throw new AdminOrderResolveError("Invalid large format material");
     }
   }
+  // Sheet material (VATMAN A1): whole sheets, price per sheet, no roll layout.
+  if (m.materialForm === "sheet") {
+    return resolveLargeFormatSheetLine(m, input);
+  }
   const printableM = resolveEffectivePrintableWidthMeters({
     printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
     rollWidthMeters: m.rollWidthMeters.toString(),
@@ -1062,6 +1068,112 @@ export async function resolveLargeFormatLine(input: {
     largeFormatLineData: lineData,
     totalSellPriceMdl: pricingFinal.totalSellPrice,
     calculatedLinearMeters: pack.layout.calculatedLinearMeters,
+  };
+}
+
+/**
+ * {@link resolveLargeFormatLine} for a wide-format sheet material: pieces
+ * packed on sheets (printable area = sheet minus margin, rotation allowed),
+ * line price = sheets × price per sheet (or preset × qty), stock and cost in
+ * whole sheets (`sheetLayout`); no roll layout, `calculatedLinearMeters` 0.
+ */
+async function resolveLargeFormatSheetLine(
+  m: LfPricingMaterial,
+  input: {
+    printWidthCm: number;
+    printHeightCm: number;
+    quantity: number;
+    customerType: LargeFormatCustomerType;
+    lfSizePresetId?: string | null;
+  },
+): Promise<{
+  largeFormatMaterialId: string;
+  largeFormatLineData: LargeFormatLineData;
+  totalSellPriceMdl: number;
+  calculatedLinearMeters: number;
+}> {
+  const spec = lfMaterialSheetSpec(m);
+  if (!spec) throw new AdminOrderResolveError("lf_sheet_size_missing");
+  let presetSnapshot: LfSizePresetSnapshot | undefined;
+  if (input.lfSizePresetId) {
+    const preset = await prisma.lfMaterialSizePreset.findUnique({ where: { id: input.lfSizePresetId } });
+    if (!preset || preset.materialId !== m.id || !preset.isActive) {
+      throw new AdminOrderResolveError("lf_size_preset_invalid");
+    }
+    presetSnapshot = {
+      presetId: preset.id,
+      widthCm: preset.widthCm,
+      heightCm: preset.heightCm,
+      unitPriceMdl: selectLfSizePresetPriceMdl(preset, input.customerType),
+      customerType: input.customerType,
+    };
+  }
+  const acct = await getOrCreateAccountingSettings();
+  const prod = parseProductionCostsJson(acct.productionCosts);
+  const avgInkCostPerMl: number = (await printerInkCostPerMl(prisma, PrinterCode.LargeFormat)) ?? 0;
+  // The variant of a sheet material counts sheets: its average / hint are per sheet.
+  const sheetMaterial = {
+    retailPricePerSheet: m.retailPricePerSheet,
+    dealerPricePerSheet: m.dealerPricePerSheet,
+    avgCostPerSheet: m.avgCostPerLm,
+    catalogCostPerSheet: m.catalogCostPerLm,
+  };
+  const res = computeLfSheetLine({
+    sheet: spec,
+    material: sheetMaterial,
+    production: prod,
+    avgInkCostPerMlMdl: avgInkCostPerMl,
+    printWidthCm: input.printWidthCm,
+    printHeightCm: input.printHeightCm,
+    quantity: input.quantity,
+    customerType: input.customerType,
+    presetUnitPriceMdl: presetSnapshot?.unitPriceMdl ?? null,
+  });
+  if (!res.ok) {
+    throw new AdminOrderResolveError(
+      res.code === "quantity_too_large" ? "lf_pack_quantity_too_large" : "lf_sheet_does_not_fit",
+    );
+  }
+  const econ = res.economics;
+  const snap: LargeFormatMaterialSnapshot = {
+    ...largeFormatMaterialToSnapshot(m),
+    materialForm: "sheet",
+    sheetWidthCm: spec.sheetWidthCm,
+    sheetHeightCm: spec.sheetHeightCm,
+    sheetMarginMm: spec.marginMm,
+    pricePerSheetMdl: res.pricePerSheetMdl,
+    costPerSheetMdl: res.costPerSheetMdl,
+  };
+  const lineData: LargeFormatLineData = {
+    materialSnapshot: snap,
+    ...(presetSnapshot ? { sizePresetSnapshot: presetSnapshot } : {}),
+    printWidthCm: input.printWidthCm,
+    printHeightCm: input.printHeightCm,
+    quantity: input.quantity,
+    customerType: input.customerType,
+    ...res.pricing,
+    calculatedLinearMeters: 0,
+    materialCost: econ.materialPurchaseCostMdl,
+    usefulAreaSqm: econ.usefulAreaSqm,
+    writtenOffAreaSqm: econ.writtenOffAreaSqm,
+    materialEfficiencyPct: econ.materialEfficiencyPct,
+    materialPurchaseCostMdl: econ.materialPurchaseCostMdl,
+    inkMlUsed: econ.inkMlUsed,
+    inkCostMdl: econ.inkCostMdl,
+    lfMinimumLineTotalSettingMdl: res.minimumLineUpliftMdl > 0 ? prod.lfMinimumLineTotalMdl : undefined,
+    lfMinimumLineSellUpliftMdl: res.minimumLineUpliftMdl > 0 ? res.minimumLineUpliftMdl : undefined,
+    totalDirectCostMdl: econ.totalDirectCostMdl,
+    marginPercent: econ.marginPercent,
+    avgInkCostPerMlSnapshot: avgInkCostPerMl,
+    inkMlPerSqmSettingUsed: prod.inkMlPerSqmLargeFormatRoll,
+    inkCostPerSqmMdl: econ.inkCostPerSqmMdl,
+    sheetLayout: res.layout,
+  };
+  return {
+    largeFormatMaterialId: m.id,
+    largeFormatLineData: lineData,
+    totalSellPriceMdl: res.pricing.totalSellPrice,
+    calculatedLinearMeters: 0,
   };
 }
 
@@ -1267,11 +1379,13 @@ export async function deductStockForAdminOrderLines(
     } else if (li.productType === "large_format_print" && r.largeFormatExtras) {
       const data = r.largeFormatExtras.largeFormatLineData as unknown as LargeFormatLineData;
       const inkMl = data.inkMlUsed ?? 0;
-      // Roll metres from the roll's unified variant; short → `lf_roll` entry, nothing taken.
+      // Roll metres (or whole sheets of a sheet material) from the material's unified
+      // variant; short → `lf_roll` entry, nothing taken.
       const rollIssue = await takeMaterialLineStock(tx, {
         kind: "roll",
         materialId: r.largeFormatExtras.largeFormatMaterialId,
-        quantity: data.calculatedLinearMeters,
+        quantity: lfLineStockQuantity(data),
+        ...(data.sheetLayout ? { lfUnit: "sheets" as const } : {}),
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         orderLineId,

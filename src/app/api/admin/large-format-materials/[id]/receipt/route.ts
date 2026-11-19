@@ -10,7 +10,10 @@ import { allocateVariantProcurementBacklog } from "@/lib/stock/unified/variantPr
 import { purchaseCostsIncludeVat } from "@/lib/purchasing/purchaseCostBasis";
 
 const bodySchema = z.object({
-  quantityLinearMeters: z.number().positive().max(1_000_000),
+  /** Roll: linear metres. */
+  quantityLinearMeters: z.number().positive().max(1_000_000).optional(),
+  /** Sheet material (VATMAN A1): whole sheets. */
+  quantitySheets: z.number().int().positive().max(1_000_000).optional(),
   totalCostMdl: z.number().int().min(0).max(999_999_999),
   purchasedAt: z.coerce.date(),
   supplier: z.string().max(500).optional().nullable(),
@@ -31,11 +34,12 @@ export async function POST(
     const { id: materialId } = await params;
     const m = await prisma.largeFormatMaterial.findUnique({
       where: { id: materialId },
-      select: { id: true },
+      select: { id: true, materialForm: true },
     });
     if (!m) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
+    const isSheet: boolean = m.materialForm === "sheet";
 
     let body: unknown;
     try {
@@ -45,6 +49,14 @@ export async function POST(
     }
 
     const parsed = bodySchema.parse(body);
+    // A sheet material's variant counts whole sheets; a roll's, metres.
+    const quantity: number | undefined = isSheet ? parsed.quantitySheets : parsed.quantityLinearMeters;
+    if (quantity == null) {
+      return NextResponse.json(
+        { error: isSheet ? "quantity_sheets_required" : "quantity_linear_meters_required" },
+        { status: 400 },
+      );
+    }
 
     const actor = await prisma.user.findUnique({
       where: { id: user.id },
@@ -60,7 +72,7 @@ export async function POST(
       prisma.$transaction(async (tx) => {
         await receive(tx, {
           variantId,
-          quantity: parsed.quantityLinearMeters,
+          quantity,
           totalCostMdl: parsed.totalCostMdl,
           purchasedAt: parsed.purchasedAt,
           supplierName: parsed.supplier ?? null,

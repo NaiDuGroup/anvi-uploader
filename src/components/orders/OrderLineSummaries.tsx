@@ -371,6 +371,13 @@ export const LfLineSummaryView = memo(function LfLineSummaryView({
       <span className="shrink-0 tabular-nums">
         {t.admin.lfOrderLineSizeLabel(parts.widthCm, parts.heightCm)}
       </span>
+      {parts.sheetsLabel ? (
+        // Sheet material (VATMAN A1): sheets instead of roll metres.
+        <>
+          <span className="text-gray-300" aria-hidden>·</span>
+          <span className="shrink-0 tabular-nums font-medium text-sky-900">{parts.sheetsLabel}</span>
+        </>
+      ) : null}
       {showQuantity && parts.quantity > 1 && (
         <>
           <span className="text-gray-300" aria-hidden>·</span>

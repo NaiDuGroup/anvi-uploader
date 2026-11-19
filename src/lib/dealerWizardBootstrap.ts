@@ -40,6 +40,8 @@ export function toDealerWizardBootstrap(data: WizardBootstrapData): WizardBootst
       avgPurchaseCostPerLinearMeter: null,
       purchaseCostPerSqmMdl: null,
       costPerLinearMeter: 0,
+      // Sheet materials (VATMAN A1): no purchase cost per sheet for dealers.
+      costPerSheet: null,
     })),
     sheetPapers: data.sheetPapers.map((p) => ({
       ...p,

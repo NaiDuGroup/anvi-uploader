@@ -16,7 +16,20 @@ type Db = Tx | PrismaClient;
 export const ROLL_MEDIA_CATEGORY_CODE = "roll_media";
 /** «Листовая бумага»: one item + variant per paper, counted in sheets. */
 export const SHEET_PAPER_CATEGORY_CODE = "sheet_paper";
-export const MATERIAL_CATEGORY_CODES: readonly string[] = [ROLL_MEDIA_CATEGORY_CODE, SHEET_PAPER_CATEGORY_CODE];
+/** «Широкоформатные листы»: wide-format materials sold as sheets (VATMAN A1), counted in sheets. */
+export const LF_SHEET_MEDIA_CATEGORY_CODE = "lf_sheet_media";
+/** Categories of `LargeFormatMaterial` variants: rolls (m) and sheet materials (sheets). */
+export const LF_MEDIA_CATEGORY_CODES: readonly string[] = [ROLL_MEDIA_CATEGORY_CODE, LF_SHEET_MEDIA_CATEGORY_CODE];
+export const MATERIAL_CATEGORY_CODES: readonly string[] = [
+  ROLL_MEDIA_CATEGORY_CODE,
+  LF_SHEET_MEDIA_CATEGORY_CODE,
+  SHEET_PAPER_CATEGORY_CODE,
+];
+
+/** Stock category of a wide-format material by its form. */
+export function lfMaterialCategoryCode(materialForm: string | null | undefined): string {
+  return materialForm === "sheet" ? LF_SHEET_MEDIA_CATEGORY_CODE : ROLL_MEDIA_CATEGORY_CODE;
+}
 
 /** `StockItem.legacyKind` of rolls / papers; `legacyId` is the pricing row id. */
 export const LF_MATERIAL_LEGACY_KIND = "lf_material";
@@ -31,9 +44,11 @@ export const SHEET_PAPER_LEGACY_KIND = "sheet_paper";
 export const LEGACY_COST_COLUMN_PLACEHOLDER = 0;
 
 const MATERIALS_MIGRATION = "20261025220000_unified_stock_materials";
+const LF_SHEET_MIGRATION = "20261119120000_lf_sheet_materials";
 
+/** Variants of wide-format materials (rolls and sheet materials). */
 export const ROLL_MEDIA_VARIANT_WHERE = {
-  item: { category: { code: ROLL_MEDIA_CATEGORY_CODE } },
+  item: { category: { code: { in: [...LF_MEDIA_CATEGORY_CODES] } } },
 } as const satisfies Prisma.StockVariantWhereInput;
 
 export const SHEET_PAPER_VARIANT_WHERE = {
@@ -107,14 +122,18 @@ function materialSku(prefix: string, legacyId: string): string {
 export async function createMaterialStockVariant(
   tx: Tx,
   params: {
-    categoryCode: typeof ROLL_MEDIA_CATEGORY_CODE | typeof SHEET_PAPER_CATEGORY_CODE;
+    categoryCode: typeof ROLL_MEDIA_CATEGORY_CODE | typeof LF_SHEET_MEDIA_CATEGORY_CODE | typeof SHEET_PAPER_CATEGORY_CODE | string;
     legacyKind: typeof LF_MATERIAL_LEGACY_KIND | typeof SHEET_PAPER_LEGACY_KIND;
     /** Pricing row id (`LargeFormatMaterial.id` / `SheetPaper.id`). */
     legacyId: string;
     skuPrefix: "ROLL" | "PAPER";
   } & MaterialStockItemFields,
 ): Promise<string> {
-  const categoryId: string = await requireStockCategoryId(tx, params.categoryCode, MATERIALS_MIGRATION);
+  const categoryId: string = await requireStockCategoryId(
+    tx,
+    params.categoryCode,
+    params.categoryCode === LF_SHEET_MEDIA_CATEGORY_CODE ? LF_SHEET_MIGRATION : MATERIALS_MIGRATION,
+  );
   const sku: string = materialSku(params.skuPrefix, params.legacyId);
   const name: string = params.name.trim();
   const item = await tx.stockItem.create({
@@ -282,11 +301,14 @@ export async function requireLfMaterialVariantId(tx: Tx, materialId: string): Pr
       rollWidthMeters: true,
       rollLengthMeters: true,
       printableWidthMeters: true,
+      materialForm: true,
+      sheetWidthCm: true,
+      sheetHeightCm: true,
     },
   });
   if (m.stockVariantId) return m.stockVariantId;
   const variantId: string = await createMaterialStockVariant(tx, {
-    categoryCode: ROLL_MEDIA_CATEGORY_CODE,
+    categoryCode: lfMaterialCategoryCode(m.materialForm),
     legacyKind: LF_MATERIAL_LEGACY_KIND,
     legacyId: m.id,
     skuPrefix: "ROLL",
@@ -341,8 +363,17 @@ export function lfMaterialStockAttributes(m: {
   rollWidthMeters?: DecimalLike;
   rollLengthMeters?: DecimalLike;
   printableWidthMeters?: DecimalLike;
+  materialForm?: string | null;
+  sheetWidthCm?: DecimalLike;
+  sheetHeightCm?: DecimalLike;
 }): Record<string, unknown> {
   const out: Record<string, unknown> = {};
+  if (m.materialForm === "sheet") {
+    // Sheet material: the sheet size, like sheet paper.
+    if (m.sheetWidthCm !== undefined) out.sheetWidthCm = decimalAttr(m.sheetWidthCm);
+    if (m.sheetHeightCm !== undefined) out.sheetHeightCm = decimalAttr(m.sheetHeightCm);
+    return out;
+  }
   if (m.rollWidthMeters !== undefined) out.rollWidthM = decimalAttr(m.rollWidthMeters);
   if (m.rollLengthMeters !== undefined) out.rollLengthM = decimalAttr(m.rollLengthMeters);
   if (m.printableWidthMeters !== undefined) out.printableWidthM = decimalAttr(m.printableWidthMeters);
@@ -360,4 +391,46 @@ export function sheetPaperStockAttributes(p: {
   if (p.sheetHeightCm !== undefined) out.sheetHeightCm = decimalAttr(p.sheetHeightCm);
   if (p.gsm !== undefined) out.gsm = p.gsm;
   return out;
+}
+
+export type LfMaterialFormSwitchBlock = "lf_form_switch_has_stock";
+
+/**
+ * Move a wide-format material's stock item to the category of its new form
+ * (rolls in metres ↔ sheets). Only while the variant holds nothing and has no
+ * movements or receipts — otherwise metres and sheets would mix in one balance.
+ * Returns the block reason, or null when switched (or nothing to switch).
+ */
+export async function switchLfMaterialStockForm(
+  tx: Tx,
+  materialId: string,
+  nextForm: "roll" | "sheet",
+): Promise<LfMaterialFormSwitchBlock | null> {
+  const m = await tx.largeFormatMaterial.findUniqueOrThrow({
+    where: { id: materialId },
+    select: { stockVariantId: true },
+  });
+  if (!m.stockVariantId) return null;
+  const v = await tx.stockVariant.findUnique({
+    where: { id: m.stockVariantId },
+    select: {
+      itemId: true,
+      stockQuantity: true,
+      item: { select: { category: { select: { code: true } } } },
+      _count: { select: { movements: true, receipts: true } },
+    },
+  });
+  if (!v) return null;
+  const targetCode: string = lfMaterialCategoryCode(nextForm);
+  if (v.item.category.code === targetCode) return null;
+  if (Number(v.stockQuantity.toString()) !== 0 || v._count.movements > 0 || v._count.receipts > 0) {
+    return "lf_form_switch_has_stock";
+  }
+  const categoryId: string = await requireStockCategoryId(
+    tx,
+    targetCode,
+    targetCode === LF_SHEET_MEDIA_CATEGORY_CODE ? LF_SHEET_MIGRATION : MATERIALS_MIGRATION,
+  );
+  await tx.stockItem.update({ where: { id: v.itemId }, data: { categoryId } });
+  return null;
 }

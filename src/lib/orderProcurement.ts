@@ -28,8 +28,10 @@ export type OrderProcurementMetaItem =
   | {
       kind: "lf_roll";
       materialId: string;
+      /** Linear metres; whole sheets when `unit` is «sheets» (wide-format sheet material). */
       requestedLinearMeters: number;
       stockAtOrder: number;
+      unit?: "sheets";
     }
   | {
       kind: "sheet_paper";

@@ -1,5 +1,6 @@
 import { stickerPreviewFromLineData, stickerSheetSummaryRu } from "@/lib/stickerSheet/stickerSheet";
 import { postcardPreviewFromLineData, postcardStepsRu, postcardSummaryRu } from "@/lib/postcard/postcard";
+import { lfSheetsCountRu } from "@/lib/largeFormat/lfSheet";
 import { lfLineExtrasRu } from "@/lib/largeFormat/lfLineSummaryLabel";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import {
@@ -156,6 +157,16 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
         quantity: data.quantity,
         linearMeters: data.calculatedLinearMeters,
         ...(lfLineExtrasRu(data) ? { extrasRu: lfLineExtrasRu(data)! } : {}),
+        ...(data.sheetLayout
+          ? {
+              sheets: {
+                count: data.sheetLayout.sheetsCount,
+                label: lfSheetsCountRu(data.sheetLayout.sheetsCount, data.sheetLayout),
+                sheetWidthCm: data.sheetLayout.sheetWidthCm,
+                sheetHeightCm: data.sheetLayout.sheetHeightCm,
+              },
+            }
+          : {}),
       },
     };
   }
@@ -394,7 +405,10 @@ function groupKey(facts: LineFacts): string {
   switch (facts.kind) {
     // LF lines group by material *family* (name without the roll-size token),
     // so ORACAL MATT 1.27 and 1.62 jobs land on one card and can share a layout.
-    case "lf": return `lf::${lfMaterialFamilyKey(facts.data.materialName)}`;
+    case "lf":
+      // Sheet materials (VATMAN A1) print sheet by sheet: never on a roll card.
+      if (facts.data.sheets) return `lfsheet::${facts.data.materialName}`;
+      return `lf::${lfMaterialFamilyKey(facts.data.materialName)}`;
     // Same paper and the same number of passes print together.
     case "sheet_product": return `sheet::${facts.data.paperName}::${facts.data.sides}`;
     case "mug": return `mug::${facts.data.sku}`;
@@ -559,6 +573,19 @@ function makeAggregate(lines: WorkshopBoardLine[]): WorkshopBoardAggregate {
   // UV-DTF stickers are sold per linear metre of film.
   const hasUvDtf =
     lines.length > 0 && lines.every((l) => l.facts.kind === "uv" && l.facts.data.transfer === true);
+  // Sheet-material group: total whole sheets instead of metres.
+  const sheetLines = hasLf ? lines.filter((l) => l.facts.kind === "lf" && l.facts.data.sheets) : [];
+  if (hasLf && sheetLines.length === lines.length && lines.length > 0) {
+    const first = lines[0]!.facts;
+    const count = lines.reduce((s, l) => s + (l.facts.kind === "lf" ? (l.facts.data.sheets?.count ?? 0) : 0), 0);
+    const sheet = first.kind === "lf" ? first.data.sheets : undefined;
+    return {
+      lineCount: lines.length,
+      orderCount: orderIds.size,
+      totalQty,
+      totalSheetsLabel: sheet ? lfSheetsCountRu(count, sheet) : `${count}`,
+    };
+  }
   const totalLinearMeters = hasLf
     ? lines.reduce(
         (s, l) => s + (l.facts.kind === "lf" ? l.facts.data.linearMeters : 0),
@@ -699,6 +726,7 @@ export function groupLines(
         const lf = buildLfGroupMeta(sorted);
         meta = lf.meta;
         if (lf.label) resolvedLabel = lf.label;
+        if (firstFacts.data.sheets) meta.lfSheet = true;
       } else if (firstFacts.kind === "mug") {
         meta.bodyColorHex = firstFacts.data.bodyColorHex;
         meta.handleColorHex = firstFacts.data.handleColorHex;

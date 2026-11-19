@@ -958,6 +958,40 @@ export interface TranslationDictionary {
     lfMaterialCatalogBadgeInactive: string;
     lfMaterialCatalogColName: string;
     lfMaterialCatalogColRollWidthM: string;
+    /** Wide-format materials sold as sheets (VATMAN A1): admin page, receipt, order wizard. */
+    lfSheet: {
+      formLabel: string;
+      formRoll: string;
+      formSheet: string;
+      sheetWidthCm: string;
+      sheetHeightCm: string;
+      marginMm: string;
+      retailPerSheet: string;
+      dealerPerSheet: string;
+      pricePerSheetHint: string;
+      formSwitchHint: string;
+      sheetSizeRequired: string;
+      rollWidthInCmHint: string;
+      colSheetSize: string;
+      colMargin: string;
+      colStockSheets: string;
+      colAvgPerSheet: string;
+      colPricePerSheet: string;
+      sheetsShort: string;
+      receiptTitle: string;
+      receiptQtySheets: string;
+      receiptAvgHint: string;
+      /** Wizard: «Лист 61×86 см, поле 5 мм». */
+      sheetInfo: (sizeCm: string, marginMm: number) => string;
+      /** Wizard: «Листов (расчёт): 3 листа A1». */
+      sheetsCalc: (label: string) => string;
+      /** «Не помещается на лист 61×86». */
+      doesNotFit: (sizeCm: string) => string;
+      pricePerSheetLine: (priceMdl: number) => string;
+      notPriced: string;
+      /** Procurement tooltip: sheets needed vs in stock. */
+      procurementDetail: (requested: number, stock: number) => string;
+    };
     /** Optional catalog override; empty uses roll width minus trim. */
     lfMaterialCatalogColPrintableWidthM: string;
     lfMaterialCatalogPrintableWidthHint: string;
@@ -1882,6 +1916,10 @@ export interface TranslationDictionary {
       lfPerLinearMeter: string;
       /** Linear meters consumed, e.g. "≈ 1.8 m of roll". */
       lfLinearMeters: (meters: number) => string;
+      /** Sheet material (VATMAN A1): «3 листа A1». */
+      lfSheetsCount: (count: number, format: string) => string;
+      /** «Не помещается на лист 61×86». */
+      lfSheetDoesNotFit: (sizeCm: string) => string;
       /** Roll-pack diagram heading + empty hint. */
       lfPreviewTitle: string;
       lfPreviewEmpty: string;

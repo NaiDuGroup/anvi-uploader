@@ -98,7 +98,8 @@ export async function fetchFamilyRolls(
   familyKey: string,
 ): Promise<LfFamilyRollCandidate[]> {
   const materials = await prisma.largeFormatMaterial.findMany({
-    where: { isActive: true },
+    // Sheet materials (VATMAN A1) are never interchangeable rolls.
+    where: { isActive: true, materialForm: "roll" },
     select: {
       id: true,
       name: true,

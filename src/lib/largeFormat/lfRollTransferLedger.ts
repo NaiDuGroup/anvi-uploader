@@ -69,6 +69,8 @@ export async function confirmRollTransfersInTx(
   for (const line of orderLines) {
     const data = parseLargeFormatLineData(line.largeFormatLineData);
     if (!data) continue;
+    // Sheet-material lines (VATMAN A1) hold sheets, never roll metres: not moved to a roll.
+    if (data.sheetLayout) continue;
     transferLines.push({
       orderLineId: line.id,
       orderedVariantId:

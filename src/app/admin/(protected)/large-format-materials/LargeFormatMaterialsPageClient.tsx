@@ -47,6 +47,7 @@ import {
   type MaterialArchiveAction,
 } from "@/app/admin/_components/stock/MaterialArchiveDialog";
 import { visibleMaterialRows } from "@/lib/stock/materialArchive";
+import { lfSheetSizeCmLabel, LF_ROLL_WIDTH_MAX_METERS, LF_SHEET_DEFAULT_MARGIN_MM } from "@/lib/largeFormat/lfSheet";
 
 type Row = AdminLargeFormatMaterialJson;
 
@@ -81,6 +82,14 @@ function rowMatchesSearch(r: Row, q: string): boolean {
 }
 
 const LF_API = "/api/admin/large-format-materials";
+
+function isSheetRow(r: Row): boolean {
+  return r.materialForm === "sheet";
+}
+
+function fmt1(n: number | null | undefined): string {
+  return typeof n === "number" && Number.isFinite(n) ? (Math.round(n * 10) / 10).toFixed(1) : "—";
+}
 
 export default function LargeFormatMaterialsPageClient() {
   const { t } = useLanguageStore();
@@ -202,7 +211,41 @@ export default function LargeFormatMaterialsPageClient() {
                     !r.isActive && "bg-gray-50/60 text-gray-400 opacity-70",
                   )}
                 >
-                  <td className="px-3 py-2.5 font-medium text-gray-900">{r.name}</td>
+                  <td className="px-3 py-2.5 font-medium text-gray-900">
+                    <span className="inline-flex items-center gap-1.5">
+                      {r.name}
+                      {isSheetRow(r) ? (
+                        <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800 ring-1 ring-sky-100">
+                          {lf.lfSheet.formSheet}
+                        </span>
+                      ) : null}
+                    </span>
+                  </td>
+                  {isSheetRow(r) ? (
+                    <>
+                      {/* Sheet material: sheet size, margin, stock in sheets, cost per sheet. */}
+                      <td className="px-3 py-2.5 tabular-nums text-gray-700">
+                        <span className="block text-[10px] uppercase tracking-wide text-gray-400">{lf.lfSheet.colSheetSize}</span>
+                        {r.sheetWidthCm != null && r.sheetHeightCm != null
+                          ? `${lfSheetSizeCmLabel({ sheetWidthCm: r.sheetWidthCm, sheetHeightCm: r.sheetHeightCm })} см`
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums text-gray-700">
+                        <span className="block text-[10px] uppercase tracking-wide text-gray-400">{lf.lfSheet.colMargin}</span>
+                        {r.sheetMarginMm} мм
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums text-gray-800">
+                        <span className="block text-[10px] uppercase tracking-wide text-gray-400">{lf.lfSheet.colStockSheets}</span>
+                        {Number.isFinite(r.stockLinearMeters) ? Math.round(r.stockLinearMeters) : "—"}
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums text-gray-800">
+                        <span className="block text-[10px] uppercase tracking-wide text-gray-400">{lf.lfSheet.colAvgPerSheet}</span>
+                        {fmt1(r.avgPurchaseCostPerLinearMeter)}
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums text-gray-400">—</td>
+                    </>
+                  ) : (
+                    <>
                   <td className="px-3 py-2.5 tabular-nums text-gray-700">{r.rollWidthMeters}</td>
                   <td className="px-3 py-2.5 tabular-nums text-gray-700">
                     {r.printableWidthMeters ?? "—"}
@@ -220,6 +263,8 @@ export default function LargeFormatMaterialsPageClient() {
                       ? (Math.round(r.purchaseCostPerSqmMdl * 10) / 10).toFixed(1)
                       : "—"}
                   </td>
+                    </>
+                  )}
                   <td className="px-3 py-2.5 tabular-nums text-gray-800">
                     {(() => {
                       const eff =
@@ -231,6 +276,39 @@ export default function LargeFormatMaterialsPageClient() {
                         : "—";
                     })()}
                   </td>
+                  {isSheetRow(r) ? (
+                    <>
+                      <td className="px-3 py-2.5 tabular-nums font-medium text-gray-900">
+                        <span className="block text-[10px] font-normal uppercase tracking-wide text-gray-400">{lf.lfSheet.colPricePerSheet}</span>
+                        <span className="inline-flex items-baseline gap-1">
+                          {r.effectiveRetailPricePerSheet ?? "—"}
+                          {r.retailPricePerSheet != null ? (
+                            <span
+                              className="rounded bg-amber-50 px-1 text-[10px] font-normal uppercase tracking-wide text-amber-900 ring-1 ring-amber-100"
+                              title={lf.lfSheet.pricePerSheetHint}
+                            >
+                              {lf.lfMaterialCatalogManualPriceBadge}
+                            </span>
+                          ) : null}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums font-medium text-gray-900">
+                        <span className="block text-[10px] font-normal uppercase tracking-wide text-gray-400">{lf.lfSheet.colPricePerSheet}</span>
+                        <span className="inline-flex items-baseline gap-1">
+                          {r.effectiveDealerPricePerSheet ?? "—"}
+                          {r.dealerPricePerSheet != null ? (
+                            <span
+                              className="rounded bg-amber-50 px-1 text-[10px] font-normal uppercase tracking-wide text-amber-900 ring-1 ring-amber-100"
+                              title={lf.lfSheet.pricePerSheetHint}
+                            >
+                              {lf.lfMaterialCatalogManualPriceBadge}
+                            </span>
+                          ) : null}
+                        </span>
+                      </td>
+                    </>
+                  ) : (
+                    <>
                   <td className="px-3 py-2.5 tabular-nums font-medium text-gray-900">
                     <span className="inline-flex items-baseline gap-1">
                       {r.effectiveRetailPricePerLinearMeter}
@@ -257,6 +335,8 @@ export default function LargeFormatMaterialsPageClient() {
                       ) : null}
                     </span>
                   </td>
+                    </>
+                  )}
                   <td className="px-3 py-2.5">
                     {r.isActive ? (
                       <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 ring-1 ring-emerald-100">
@@ -424,11 +504,13 @@ function LfRollStockOpModal({
     isActive: row.isActive,
   });
   if (!variant) return null;
+  // Sheet materials count whole sheets; rolls, metres.
+  const unit: StockUnit = isSheetRow(row) ? StockUnit.Sheets : StockUnit.Meters;
   return op === "inventory" ? (
     <StockInventoryModal
       variant={variant}
       itemName={row.name}
-      unit={StockUnit.Meters}
+      unit={unit}
       onClose={onClose}
       onSaved={onChanged}
     />
@@ -436,7 +518,7 @@ function LfRollStockOpModal({
     <StockHistoryModal
       variant={variant}
       itemName={row.name}
-      unit={StockUnit.Meters}
+      unit={unit}
       onClose={onClose}
       onChanged={onChanged}
     />
@@ -454,6 +536,9 @@ function LfRollReceiptModal({
 }) {
   const { t, locale } = useLanguageStore();
   const lf = t.admin;
+  /** Sheet material (VATMAN A1): whole sheets, average per sheet. */
+  const sheet: boolean = isSheetRow(material);
+  const unitSuffix: string = sheet ? lf.lfSheet.sheetsShort : "m";
   const [qtyStr, setQtyStr] = useState("");
   const [totalStr, setTotalStr] = useState("");
   const [purchasedAt, setPurchasedAt] = useState(() =>
@@ -527,7 +612,7 @@ function LfRollReceiptModal({
     setError(null);
     const qty = parsedQty;
     const total = Number.parseInt(effectiveTotalStr.replace(/\s/g, ""), 10);
-    if (!(qty > 0) || !Number.isFinite(qty)) {
+    if (!(qty > 0) || !Number.isFinite(qty) || (sheet && !Number.isInteger(qty))) {
       setError("qty");
       return;
     }
@@ -541,7 +626,7 @@ function LfRollReceiptModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          quantityLinearMeters: qty,
+          ...(sheet ? { quantitySheets: qty } : { quantityLinearMeters: qty }),
           totalCostMdl: total,
           purchasedAt,
           supplier: supplier.trim() || null,
@@ -589,7 +674,7 @@ function LfRollReceiptModal({
               id="lf-roll-receipt-modal-title"
               className="text-lg font-bold tracking-tight text-gray-900"
             >
-              {lf.lfRollReceiptModalTitle}
+              {sheet ? lf.lfSheet.receiptTitle : lf.lfRollReceiptModalTitle}
             </h2>
             <p className="mt-1 line-clamp-2 text-sm leading-snug text-gray-600">{material.name}</p>
           </div>
@@ -610,10 +695,10 @@ function LfRollReceiptModal({
           <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 shadow-sm">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-xs font-medium text-gray-600 sm:col-span-2">
-                {lf.lfRollReceiptQtyLm}
+                {sheet ? lf.lfSheet.receiptQtySheets : lf.lfRollReceiptQtyLm}
                 <Input
                   className="mt-1 h-9 bg-white"
-                  inputMode="decimal"
+                  inputMode={sheet ? "numeric" : "decimal"}
                   value={qtyStr}
                   onChange={(e) => setQtyStr(e.target.value)}
                   disabled={saving}
@@ -621,6 +706,9 @@ function LfRollReceiptModal({
               </label>
               <label className="block text-xs font-medium text-gray-600">
                 {lf.lfRollReceiptTotalMdl}
+                {sheet ? (
+                  <span className="ml-1 font-normal text-gray-400">({lf.lfSheet.receiptAvgHint})</span>
+                ) : null}
                 <Input
                   className="mt-1 h-9 bg-white"
                   inputMode="numeric"
@@ -701,7 +789,7 @@ function LfRollReceiptModal({
                     >
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <span className="text-sm font-semibold tabular-nums text-emerald-900">
-                          +{h.quantityLinearMeters} m
+                          +{h.quantityLinearMeters} {unitSuffix}
                         </span>
                         <time
                           className="text-[11px] font-medium text-gray-500"
@@ -776,7 +864,7 @@ function LfRollReceiptModal({
                               outflow ? "text-amber-900" : "text-gray-900",
                             )}
                           >
-                            {qtyDisp} m
+                            {qtyDisp} {unitSuffix}
                           </span>
                           <time className="text-[11px] font-medium text-gray-500">{when}</time>
                         </div>
@@ -875,6 +963,18 @@ function LfMaterialModal({
       : "",
   );
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
+  /** Рулон (metres) | Лист (whole sheets, e.g. VATMAN A1 61×86). */
+  const [form, setForm] = useState<"roll" | "sheet">(initial?.materialForm === "sheet" ? "sheet" : "roll");
+  const [sheetW, setSheetW] = useState(initial?.sheetWidthCm != null ? String(initial.sheetWidthCm) : "");
+  const [sheetH, setSheetH] = useState(initial?.sheetHeightCm != null ? String(initial.sheetHeightCm) : "");
+  const [marginMm, setMarginMm] = useState(String(initial?.sheetMarginMm ?? LF_SHEET_DEFAULT_MARGIN_MM));
+  const [sheetRetail, setSheetRetail] = useState(
+    initial?.retailPricePerSheet != null ? String(initial.retailPricePerSheet) : "",
+  );
+  const [sheetDealer, setSheetDealer] = useState(
+    initial?.dealerPricePerSheet != null ? String(initial.dealerPricePerSheet) : "",
+  );
+  const isSheet = form === "sheet";
   const [err, setErr] = useState("");
   const [refInkPerSqm, setRefInkPerSqm] = useState<number | null>(null);
 
@@ -931,22 +1031,54 @@ function LfMaterialModal({
       setErr("validation");
       return;
     }
+    const parseCm = (v: string): number => Number.parseFloat(v.trim().replace(",", "."));
+    const sr = parseOptionalNonneg(sheetRetail);
+    const sd = parseOptionalNonneg(sheetDealer);
+    const sw = parseCm(sheetW);
+    const sh = parseCm(sheetH);
+    const mm = Number.parseInt(marginMm.trim(), 10);
+    if (isSheet) {
+      if (!(sw > 0) || !(sh > 0)) {
+        setErr(lf.lfSheet.sheetSizeRequired);
+        return;
+      }
+      if (!Number.isInteger(mm) || mm < 0 || mm > 100 || sr === "invalid" || sd === "invalid") {
+        setErr("validation");
+        return;
+      }
+    } else {
+      // VATMAN rows were saved as 61 / 55 «metres»: centimetres in the metres field.
+      const w = parseCm(rollW);
+      if (!(w > 0) || w > LF_ROLL_WIDTH_MAX_METERS) {
+        setErr(lf.lfSheet.rollWidthInCmHint);
+        return;
+      }
+    }
 
     setSaving(true);
     try {
       const payload: Record<string, unknown> = {
         name: name.trim(),
-        rollWidthMeters: rollW,
+        materialForm: form,
         finalRetailPricePerLinearMeter: 0,
         finalDealerPricePerLinearMeter: 0,
-        manualFinalRetailPricePerLinearMeter: mr,
-        manualFinalDealerPricePerLinearMeter: md,
         isActive,
       };
-      if (printableW.trim() !== "") {
-        payload.printableWidthMeters = printableW.trim();
-      } else if (mode === "edit") {
-        payload.printableWidthMeters = null;
+      if (isSheet) {
+        payload.sheetWidthCm = sw;
+        payload.sheetHeightCm = sh;
+        payload.sheetMarginMm = mm;
+        payload.retailPricePerSheet = sr;
+        payload.dealerPricePerSheet = sd;
+      } else {
+        payload.rollWidthMeters = rollW.trim().replace(",", ".");
+        payload.manualFinalRetailPricePerLinearMeter = mr;
+        payload.manualFinalDealerPricePerLinearMeter = md;
+        if (printableW.trim() !== "") {
+          payload.printableWidthMeters = printableW.trim();
+        } else if (mode === "edit") {
+          payload.printableWidthMeters = null;
+        }
       }
       const url =
         mode === "add"
@@ -958,7 +1090,11 @@ function LfMaterialModal({
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        setErr("Save failed");
+        // Server reasons are Russian sentences (roll width in cm, sheet size, roll ↔ sheet blocked).
+        const body = (await res.json().catch(() => null)) as { error?: unknown; code?: unknown } | null;
+        setErr(
+          typeof body?.code === "string" && typeof body.error === "string" ? body.error : "Save failed",
+        );
         return;
       }
       await onSaved();
@@ -981,8 +1117,68 @@ function LfMaterialModal({
           <label className="block text-sm font-medium text-gray-700">{lf.lfMaterialCatalogColName}</label>
           <Input value={name} onChange={(e) => setName(e.target.value)} className="h-10" />
           <div>
+            <span className="text-xs text-gray-600">{lf.lfSheet.formLabel}</span>
+            <div className="mt-1 inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5" role="radiogroup">
+              {(["roll", "sheet"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  role="radio"
+                  aria-checked={form === f}
+                  onClick={() => setForm(f)}
+                  className={cn(
+                    "rounded-md px-3 py-1 text-sm font-medium transition-colors",
+                    form === f ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200" : "text-gray-500 hover:text-gray-800",
+                  )}
+                >
+                  {f === "roll" ? lf.lfSheet.formRoll : lf.lfSheet.formSheet}
+                </button>
+              ))}
+            </div>
+            {mode === "edit" && (initial?.materialForm === "sheet" ? "sheet" : "roll") !== form ? (
+              <p className="mt-1 text-[10px] leading-snug text-amber-800">{lf.lfSheet.formSwitchHint}</p>
+            ) : null}
+          </div>
+          {isSheet ? (
+            <>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-gray-600">{lf.lfSheet.sheetWidthCm}</label>
+                  <Input value={sheetW} onChange={(e) => setSheetW(e.target.value)} className="h-9" inputMode="decimal" placeholder="61" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">{lf.lfSheet.sheetHeightCm}</label>
+                  <Input value={sheetH} onChange={(e) => setSheetH(e.target.value)} className="h-9" inputMode="decimal" placeholder="86" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">{lf.lfSheet.marginMm}</label>
+                  <Input value={marginMm} onChange={(e) => setMarginMm(e.target.value)} className="h-9" inputMode="numeric" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-600">{lf.lfSheet.retailPerSheet}</label>
+                  <Input value={sheetRetail} onChange={(e) => setSheetRetail(e.target.value)} className="h-9" inputMode="numeric" placeholder="—" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">{lf.lfSheet.dealerPerSheet}</label>
+                  <Input value={sheetDealer} onChange={(e) => setSheetDealer(e.target.value)} className="h-9" inputMode="numeric" placeholder="—" />
+                </div>
+              </div>
+              <p className="text-[10px] leading-relaxed text-gray-500">{lf.lfSheet.pricePerSheetHint}</p>
+              <div className="rounded-lg border border-gray-100 bg-gray-50/90 p-3">
+                <p className="text-xs font-semibold text-gray-800">{lf.lfSheet.colAvgPerSheet}</p>
+                <p className="mt-1 text-sm tabular-nums text-gray-900">
+                  {initial?.costPerSheet != null ? `${Math.round(initial.costPerSheet * 10000) / 10000} ${t.admin.currency} / ${lf.lfSheet.sheetsShort}` : "—"}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+          <div>
             <label className="text-xs text-gray-600">{lf.lfMaterialCatalogColRollWidthM}</label>
             <Input value={rollW} onChange={(e) => setRollW(e.target.value)} className="h-9" />
+            <p className="mt-1 text-[10px] text-gray-500">{lf.lfSheet.rollWidthInCmHint}</p>
           </div>
           <div>
             <label className="text-xs text-gray-600">{lf.lfMaterialCatalogColPrintableWidthM}</label>
@@ -1043,6 +1239,8 @@ function LfMaterialModal({
             </div>
           </div>
           <p className="text-[10px] leading-relaxed text-gray-500">{lf.lfMaterialCatalogManualPriceHint}</p>
+            </>
+          )}
           <div className="flex items-center gap-2">
             <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
               <input

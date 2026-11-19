@@ -113,7 +113,7 @@ const ROLL_SELECT = {
 /** Active wide-format rolls, by width (narrowest first). */
 async function loadActiveRolls(): Promise<RollRow[]> {
   return prisma.largeFormatMaterial.findMany({
-    where: { isActive: true },
+    where: { isActive: true, materialForm: "roll" },
     orderBy: [{ rollWidthMeters: "asc" }, { sortOrder: "asc" }],
     select: ROLL_SELECT,
   });

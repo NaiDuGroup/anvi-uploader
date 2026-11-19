@@ -114,3 +114,16 @@ describe("DTF purchase factors", () => {
     expect(stockQuantityFromInvoice(StockTargetKind.DtfPowder, 2, 1000)).toBe(2000);
   });
 });
+
+describe("wide-format sheet materials (VATMAN A1, «Широкоформатные листы», unit sheet)", () => {
+  it("one invoice piece / sheet = one sheet", () => {
+    for (const unit of ["buc", "foaie", "шт", "buc."]) {
+      expect(
+        suggestUnitsPerInvoiceUnit(StockTargetKind.StockVariant, "Hirtie VATMAN 180G A1 61x86", unit, "sheets", null),
+      ).toBe(1);
+      expect(
+        suggestUnitsPerInvoiceUnit(StockTargetKind.StockVariant, "VATMAN 260G A1", unit, "sheets", null),
+      ).toBe(1);
+    }
+  });
+});

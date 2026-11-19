@@ -11,10 +11,12 @@ import { sheetLinePaperSheets } from "@/lib/stickerSheet/stickerSheet";
 import { returnLfStandStockForOrder } from "@/lib/largeFormat/lfStandStock";
 import { returnGiftSetBoxStockForOrder } from "@/lib/giftSet/giftSetStock";
 import { SHEET_PRODUCT_TYPES } from "@/lib/sheetProduct/sheetProductConfig";
+import { lfLineStockQuantity } from "@/lib/largeFormat/lfSheet";
 import { ORDER_HOLDING_KINDS, StockMovementKind } from "./kinds";
 import { consume, returnToStock } from "./ledger";
 import { roundQty } from "./ledgerMath";
 import {
+  LF_MEDIA_CATEGORY_CODES,
   MATERIAL_CATEGORY_CODES,
   requireLfMaterialVariantId,
   requireSheetPaperVariantId,
@@ -55,9 +57,17 @@ function shortageEntry(
   materialId: string,
   requested: number,
   available: number,
+  lfUnit?: "sheets",
 ): OrderProcurementMetaItem {
   return kind === "roll"
-    ? { kind: "lf_roll", materialId, requestedLinearMeters: requested, stockAtOrder: available }
+    ? {
+        kind: "lf_roll",
+        materialId,
+        requestedLinearMeters: requested,
+        stockAtOrder: available,
+        // Wide-format sheet material (VATMAN A1): the quantities are sheets.
+        ...(lfUnit ? { unit: lfUnit } : {}),
+      }
     : { kind: "sheet_paper", sheetPaperId: materialId, requestedSheets: requested, stockAtOrder: available };
 }
 
@@ -74,6 +84,8 @@ export async function takeMaterialLineStock(
     materialId: string;
     quantity: number;
     orderLineId: string;
+    /** `kind: "roll"` on a wide-format sheet material: `quantity` is whole sheets. */
+    lfUnit?: "sheets";
   },
 ): Promise<OrderProcurementMetaItem | null> {
   const variantId: string = await requireVariantId(tx, params.kind, params.materialId);
@@ -87,7 +99,9 @@ export async function takeMaterialLineStock(
     orderLineId: params.orderLineId,
     createdById: params.createdById,
   });
-  return res.consumed ? null : shortageEntry(params.kind, params.materialId, res.requested, res.available);
+  return res.consumed
+    ? null
+    : shortageEntry(params.kind, params.materialId, res.requested, res.available, params.lfUnit);
 }
 
 // ─── What an order holds ─────────────────────────────────────────────────────
@@ -222,8 +236,8 @@ type BacklogLine = {
 
 function lineQuantity(kind: MaterialKind, line: BacklogLine): number {
   if (kind === "roll") {
-    const lm: number | undefined = parseLargeFormatLineData(line.largeFormatLineData)?.calculatedLinearMeters;
-    return typeof lm === "number" && lm > 0 ? lm : 0;
+    // Roll metres, or whole sheets of a wide-format sheet material.
+    return lfLineStockQuantity(parseLargeFormatLineData(line.largeFormatLineData));
   }
   // Paper sheets the line takes (A3+ postcards / stickers: their paper units), as at write-off.
   const data = parseBusinessCardLineData(line.businessCardLineData);
@@ -313,7 +327,7 @@ export async function allocateMaterialProcurementBacklog(
   });
   if (!v) return;
   const kind: MaterialKind | null =
-    v.lfMaterial || v.item.category.code === ROLL_MEDIA_CATEGORY_CODE
+    v.lfMaterial || LF_MEDIA_CATEGORY_CODES.includes(v.item.category.code)
       ? "roll"
       : v.sheetPaper || v.item.category.code === SHEET_PAPER_CATEGORY_CODE
         ? "sheet"
@@ -358,9 +372,11 @@ export async function allocateMaterialProcurementBacklog(
     if (!list.some(waiting)) continue;
 
     const { heldByLine, unattributed } = backlogHoldings(
-      await materialStockHeldByOrder(tx, order.id, [
-        kind === "roll" ? ROLL_MEDIA_CATEGORY_CODE : SHEET_PAPER_CATEGORY_CODE,
-      ]),
+      await materialStockHeldByOrder(
+        tx,
+        order.id,
+        kind === "roll" ? LF_MEDIA_CATEGORY_CODES : [SHEET_PAPER_CATEGORY_CODE],
+      ),
       params.variantId,
       order.orderLines.map((l) => l.id),
     );

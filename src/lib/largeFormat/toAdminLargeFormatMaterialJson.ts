@@ -2,6 +2,12 @@ import type { LfMaterialSizePreset } from "@prisma/client";
 import type { ProductionCostsConfig } from "@/lib/accounting/types";
 import { effectiveLfMaterialCostPerLinearMeterMdl } from "@/lib/largeFormat/lfRollOrderEconomics";
 import { resolveLfSellRatesPerLinearMeterMdl } from "@/lib/largeFormat/lfResolveSellRates";
+import {
+  effectiveLfSheetCostMdl,
+  lfMaterialSheetSpec,
+  parseLfMaterialForm,
+  resolveLfSellPricePerSheetMdl,
+} from "@/lib/largeFormat/lfSheet";
 import type { LfPricingMaterial } from "@/lib/largeFormat/lfMaterialStock";
 import {
   toLfSizePresetJson,
@@ -32,9 +38,38 @@ export function toAdminLargeFormatMaterialJson(
     material: m,
   });
 
+  const materialForm = parseLfMaterialForm(m.materialForm);
+  // Sheet material: its variant counts sheets, so average / hint are per sheet.
+  const sheetMaterial = {
+    retailPricePerSheet: m.retailPricePerSheet,
+    dealerPricePerSheet: m.dealerPricePerSheet,
+    avgCostPerSheet: m.avgCostPerLm,
+    catalogCostPerSheet: m.catalogCostPerLm,
+  };
+
   return {
     id: m.id,
     name: m.name,
+    /** «roll» (metres) | «sheet» (whole sheets). */
+    materialForm,
+    sheetWidthCm: m.sheetWidthCm != null ? Number(m.sheetWidthCm.toString()) : null,
+    sheetHeightCm: m.sheetHeightCm != null ? Number(m.sheetHeightCm.toString()) : null,
+    sheetMarginMm: m.sheetMarginMm,
+    /** Sheet spec for packing (null for rolls / sheet size not set). */
+    sheet: lfMaterialSheetSpec(m),
+    retailPricePerSheet: m.retailPricePerSheet,
+    dealerPricePerSheet: m.dealerPricePerSheet,
+    /** Sheet materials: price per sheet actually used (manual, else cost × LF markup). */
+    effectiveRetailPricePerSheet:
+      materialForm === "sheet"
+        ? resolveLfSellPricePerSheetMdl({ material: sheetMaterial, production, customerType: "retail" })
+        : null,
+    effectiveDealerPricePerSheet:
+      materialForm === "sheet"
+        ? resolveLfSellPricePerSheetMdl({ material: sheetMaterial, production, customerType: "dealer" })
+        : null,
+    /** Sheet materials: purchase cost per sheet (average, else hint). */
+    costPerSheet: materialForm === "sheet" ? effectiveLfSheetCostMdl(sheetMaterial) : null,
     rollWidthMeters: m.rollWidthMeters.toString(),
     printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
     /** Unified stock variant holding balance and cost (null only for rows not linked yet). */

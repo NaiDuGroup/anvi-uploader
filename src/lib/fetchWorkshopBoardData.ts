@@ -85,7 +85,7 @@ const ORDER_FILE_SELECT = {
 async function fetchLfRollCandidates(): Promise<LfRollCandidate[]> {
   // Balance and cost come from each roll's unified stock variant.
   const materials = await findLfPricingMaterials(prisma, {
-    where: { isActive: true },
+    where: { isActive: true, materialForm: "roll" },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
 

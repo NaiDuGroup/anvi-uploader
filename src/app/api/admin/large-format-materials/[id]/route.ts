@@ -15,10 +15,18 @@ import {
   lfMaterialStockAttributes,
   requireLfMaterialVariantId,
   retireMaterialStockVariant,
+  switchLfMaterialStockForm,
   syncMaterialStockVariant,
 } from "@/lib/stock/unified/materials";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
+import {
+  LF_FORM_SWITCH_BLOCKED_HINT,
+  lfMaterialFormFieldsSchema,
+  lfMaterialFormIssue,
+  lfSheetRollWidthPlaceholderMeters,
+} from "@/lib/largeFormat/lfMaterialFormFields";
+import { parseLfMaterialForm } from "@/lib/largeFormat/lfSheet";
 import {
   hasMaterialHistory,
   lfMaterialHistoryCounts,
@@ -52,7 +60,10 @@ const patchBody = z.object({
     .optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
+  ...lfMaterialFormFieldsSchema,
 });
+
+class FormSwitchBlocked extends Error {}
 
 export async function PATCH(
   request: NextRequest,
@@ -70,18 +81,63 @@ export async function PATCH(
 
     const existing = await prisma.largeFormatMaterial.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, materialForm: true, rollWidthMeters: true, sheetWidthCm: true, sheetHeightCm: true },
     });
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    const prevForm = parseLfMaterialForm(existing.materialForm);
+    const nextForm = body.materialForm ?? prevForm;
+    const isSheet = nextForm === "sheet";
+    const nextSheetW: number | null =
+      body.sheetWidthCm !== undefined
+        ? body.sheetWidthCm
+        : existing.sheetWidthCm != null
+          ? Number(existing.sheetWidthCm.toString())
+          : null;
+    const nextSheetH: number | null =
+      body.sheetHeightCm !== undefined
+        ? body.sheetHeightCm
+        : existing.sheetHeightCm != null
+          ? Number(existing.sheetHeightCm.toString())
+          : null;
+    // Validate the resulting state; a roll's width only when it is sent (old rows may still be wrong).
+    const issue = lfMaterialFormIssue({
+      materialForm: nextForm,
+      rollWidthMeters:
+        body.rollWidthMeters !== undefined
+          ? Number(body.rollWidthMeters)
+          : nextForm === "roll" && prevForm === "sheet"
+            ? Number(existing.rollWidthMeters.toString())
+            : 1,
+      sheetWidthCm: nextSheetW,
+      sheetHeightCm: nextSheetH,
+    });
+    if (issue) return NextResponse.json(issue, { status: 400 });
+    // Sheet material: the NOT NULL roll width follows the sheet width (never used for packing).
+    const sheetRollWidth: string | null =
+      isSheet && nextSheetW != null ? lfSheetRollWidthPlaceholderMeters(nextSheetW) : null;
 
     const data: Prisma.LargeFormatMaterialUpdateInput = {
       ...(body.name !== undefined ? { name: body.name.trim() } : {}),
-      ...(body.rollWidthMeters !== undefined ? { rollWidthMeters: body.rollWidthMeters } : {}),
-      ...(body.printableWidthMeters !== undefined
+      ...(sheetRollWidth != null
+        ? { rollWidthMeters: sheetRollWidth, printableWidthMeters: null }
+        : body.rollWidthMeters !== undefined
+          ? { rollWidthMeters: body.rollWidthMeters }
+          : {}),
+      ...(!isSheet && body.printableWidthMeters !== undefined
         ? { printableWidthMeters: body.printableWidthMeters }
         : {}),
+      ...(body.materialForm !== undefined ? { materialForm: body.materialForm } : {}),
+      ...(body.sheetWidthCm !== undefined
+        ? { sheetWidthCm: body.sheetWidthCm == null ? null : String(body.sheetWidthCm) }
+        : {}),
+      ...(body.sheetHeightCm !== undefined
+        ? { sheetHeightCm: body.sheetHeightCm == null ? null : String(body.sheetHeightCm) }
+        : {}),
+      ...(body.sheetMarginMm !== undefined ? { sheetMarginMm: body.sheetMarginMm } : {}),
+      ...(body.retailPricePerSheet !== undefined ? { retailPricePerSheet: body.retailPricePerSheet } : {}),
+      ...(body.dealerPricePerSheet !== undefined ? { dealerPricePerSheet: body.dealerPricePerSheet } : {}),
       ...(body.finalRetailPricePerLinearMeter !== undefined
         ? { finalRetailPricePerLinearMeter: body.finalRetailPricePerLinearMeter }
         : {}),
@@ -99,6 +155,12 @@ export async function PATCH(
     };
 
     const updated = await prisma.$transaction(async (tx) => {
+      // Roll (m) ↔ sheet (sheets): the stock item changes category, only while it is empty.
+      if (nextForm !== prevForm) {
+        await requireLfMaterialVariantId(tx, id);
+        const blocked = await switchLfMaterialStockForm(tx, id, nextForm);
+        if (blocked) throw new FormSwitchBlocked(blocked);
+      }
       if (Object.keys(data).length > 0) {
         await tx.largeFormatMaterial.update({ where: { id }, data });
       }
@@ -109,16 +171,24 @@ export async function PATCH(
         ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
         ...(body.sortOrder !== undefined ? { sortOrder: body.sortOrder } : {}),
         ...(body.costPerLinearMeter !== undefined ? { purchaseCost: body.costPerLinearMeter } : {}),
-        ...(body.rollWidthMeters !== undefined || body.printableWidthMeters !== undefined
+        ...(isSheet
           ? {
               attributes: lfMaterialStockAttributes({
-                ...(body.rollWidthMeters !== undefined ? { rollWidthMeters: body.rollWidthMeters } : {}),
-                ...(body.printableWidthMeters !== undefined
-                  ? { printableWidthMeters: body.printableWidthMeters }
-                  : {}),
+                materialForm: "sheet",
+                sheetWidthCm: nextSheetW,
+                sheetHeightCm: nextSheetH,
               }),
             }
-          : {}),
+          : body.rollWidthMeters !== undefined || body.printableWidthMeters !== undefined
+            ? {
+                attributes: lfMaterialStockAttributes({
+                  ...(body.rollWidthMeters !== undefined ? { rollWidthMeters: body.rollWidthMeters } : {}),
+                  ...(body.printableWidthMeters !== undefined
+                    ? { printableWidthMeters: body.printableWidthMeters }
+                    : {}),
+                }),
+              }
+            : {}),
       });
       return findLfPricingMaterialWithPresets(tx, id);
     });
@@ -137,6 +207,12 @@ export async function PATCH(
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: "Validation failed", details: e.flatten() }, { status: 400 });
+    }
+    if (e instanceof FormSwitchBlocked) {
+      return NextResponse.json(
+        { error: LF_FORM_SWITCH_BLOCKED_HINT, code: "lf_form_switch_has_stock" },
+        { status: 409 },
+      );
     }
     console.error("PATCH /api/admin/large-format-materials/[id]:", e);
     const code = prismaErrorCode(e);

@@ -454,6 +454,18 @@ model LargeFormatMaterial {
   manualFinalRetailPricePerLinearMeter Int?                   @map("manual_final_retail_price_per_lm")
   /// When set, overrides formula/legacy for dealer channel (MDL per linear m).
   manualFinalDealerPricePerLinearMeter Int?                   @map("manual_final_dealer_price_per_lm")
+  /// «roll» (default: metres, roll layout) | «sheet» (whole sheets, e.g. VATMAN A1 61×86). Switchable only while the stock variant is empty and has no movements.
+  materialForm                         String                 @default("roll") @map("material_form")
+  /// Sheet materials: sheet size (cm). Null for rolls.
+  sheetWidthCm                         Decimal?               @map("sheet_width_cm") @db.Decimal(8, 2)
+  sheetHeightCm                        Decimal?               @map("sheet_height_cm") @db.Decimal(8, 2)
+  /// Sheet materials: non-printable edge per side (mm).
+  sheetMarginMm                        Int                    @default(5) @map("sheet_margin_mm")
+  /// Sheet materials: sell price per sheet (MDL); null = average cost per sheet × LF retail / dealer markup.
+  retailPricePerSheet                  Int?                   @map("retail_price_per_sheet")
+  dealerPricePerSheet                  Int?                   @map("dealer_price_per_sheet")
+  /// Sheet materials: legacy mirror like `avgPurchaseCostPerLinearMeter`; the live weighted average per sheet is on the stock variant.
+  avgPurchaseCostPerSheet              Decimal?               @map("avg_purchase_cost_per_sheet") @db.Decimal(14, 4)
   isActive                             Boolean                @default(true) @map("is_active")
   sortOrder                            Int                    @default(0) @map("sort_order")
   createdAt                            DateTime               @default(now()) @map("created_at")
