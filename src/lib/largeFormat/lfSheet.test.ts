@@ -6,6 +6,8 @@ import {
   lfMaterialSheetSpec,
   effectiveLfSheetCostMdl,
   lfLineStockQuantity,
+  lfLineSheetLayout,
+  lfLineStockQuantityForMaterial,
   lfSheetDoesNotFitRu,
   lfSheetFormatLabel,
   lfSheetItemFits,
@@ -262,5 +264,38 @@ describe("lfSheetLineUnpriced", () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(lfSheetLineUnpriced(res)).toBe(true);
+  });
+});
+
+describe("lines priced while the material was a roll", () => {
+  const A1 = { sheetWidthCm: 61, sheetHeightCm: 86, marginMm: 5 };
+  // Prod #10425: 55×70 ×1 on VATMAN 260G, 0.56 roll metres, no sheetLayout.
+  const legacy = { printWidthCm: 55, printHeightCm: 70, quantity: 1, calculatedLinearMeters: 0.56 };
+
+  it("packs the pieces on the material's sheet now", () => {
+    const layout = lfLineSheetLayout(legacy, A1);
+    expect(layout?.sheetsCount).toBe(1);
+    expect(lfLineStockQuantityForMaterial(legacy, A1)).toEqual({ quantity: 1, unit: "sheets" });
+  });
+
+  it("whole sheets for several pieces (4 × A3 on one A1)", () => {
+    const q = lfLineStockQuantityForMaterial({ printWidthCm: 29.7, printHeightCm: 42, quantity: 5, calculatedLinearMeters: 0.9 }, A1);
+    expect(q).toEqual({ quantity: 2, unit: "sheets" });
+  });
+
+  it("a piece larger than the sheet counts one sheet per piece, never metres", () => {
+    const q = lfLineStockQuantityForMaterial({ printWidthCm: 70, printHeightCm: 100, quantity: 3, calculatedLinearMeters: 2.1 }, A1);
+    expect(q).toEqual({ quantity: 3, unit: "sheets" });
+  });
+
+  it("a roll material keeps roll metres", () => {
+    expect(lfLineSheetLayout(legacy, null)).toBeNull();
+    expect(lfLineStockQuantityForMaterial(legacy, null)).toEqual({ quantity: 0.56 });
+  });
+
+  it("a stored sheet layout wins", () => {
+    const stored = packLfSheets({ itemWidthCm: 42, itemHeightCm: 59.4, quantity: 3, sheet: A1 });
+    if (!stored.ok) throw new Error("pack");
+    expect(lfLineSheetLayout({ ...legacy, sheetLayout: stored.layout }, null)).toBe(stored.layout);
   });
 });

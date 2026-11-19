@@ -1,6 +1,6 @@
 import { stickerPreviewFromLineData, stickerSheetSummaryRu } from "@/lib/stickerSheet/stickerSheet";
 import { postcardPreviewFromLineData, postcardStepsRu, postcardSummaryRu } from "@/lib/postcard/postcard";
-import { lfSheetsCountRu } from "@/lib/largeFormat/lfSheet";
+import { lfLineSheetLayout, lfSheetsCountRu, type LfSheetSpec } from "@/lib/largeFormat/lfSheet";
 import { lfLineExtrasRu } from "@/lib/largeFormat/lfLineSummaryLabel";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import {
@@ -62,6 +62,13 @@ export interface RawOrderLine {
   stockVariantId?: string | null;
   penProductSnapshot: unknown;
   largeFormatLineData: unknown;
+  /**
+   * Current sheet spec of the line's wide-format material when it is a sheet
+   * material (VATMAN A1); absent for rolls. A line priced while the material was
+   * still a roll has no `sheetLayout` and a roll snapshot: this keeps it off the
+   * roll layout.
+   */
+  lfSheetSpec?: LfSheetSpec | null;
   businessCardLineData?: unknown;
   dtfLineData?: unknown;
   uvLineData?: unknown;
@@ -140,16 +147,18 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
     if (!data) return null;
     const name = data.materialSnapshot?.name;
     if (typeof name !== "string" || name.trim() === "") return null;
+    // Sheet material (stored layout, or the material is a sheet now): no roll widths.
+    const sheetLayout = lfLineSheetLayout(data, line.lfSheetSpec);
     return {
       kind: "lf",
       data: {
         materialName: name.trim(),
         rollWidthMeters:
-          typeof data.materialSnapshot?.rollWidthMeters === "string"
+          !sheetLayout && typeof data.materialSnapshot?.rollWidthMeters === "string"
             ? data.materialSnapshot.rollWidthMeters
             : null,
         printableWidthMeters:
-          typeof data.materialSnapshot?.printableWidthMeters === "string"
+          !sheetLayout && typeof data.materialSnapshot?.printableWidthMeters === "string"
             ? data.materialSnapshot.printableWidthMeters
             : null,
         widthCm: data.printWidthCm,
@@ -157,13 +166,13 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
         quantity: data.quantity,
         linearMeters: data.calculatedLinearMeters,
         ...(lfLineExtrasRu(data) ? { extrasRu: lfLineExtrasRu(data)! } : {}),
-        ...(data.sheetLayout
+        ...(sheetLayout
           ? {
               sheets: {
-                count: data.sheetLayout.sheetsCount,
-                label: lfSheetsCountRu(data.sheetLayout.sheetsCount, data.sheetLayout),
-                sheetWidthCm: data.sheetLayout.sheetWidthCm,
-                sheetHeightCm: data.sheetLayout.sheetHeightCm,
+                count: sheetLayout.sheetsCount,
+                label: lfSheetsCountRu(sheetLayout.sheetsCount, sheetLayout),
+                sheetWidthCm: sheetLayout.sheetWidthCm,
+                sheetHeightCm: sheetLayout.sheetHeightCm,
               },
             }
           : {}),
@@ -726,7 +735,12 @@ export function groupLines(
         const lf = buildLfGroupMeta(sorted);
         meta = lf.meta;
         if (lf.label) resolvedLabel = lf.label;
-        if (firstFacts.data.sheets) meta.lfSheet = true;
+        if (firstFacts.data.sheets) {
+          // Sheet card: never a roll width (the roll layout reads these).
+          meta.lfSheet = true;
+          meta.rollWidthMeters = null;
+          meta.printableWidthMeters = null;
+        }
       } else if (firstFacts.kind === "mug") {
         meta.bodyColorHex = firstFacts.data.bodyColorHex;
         meta.handleColorHex = firstFacts.data.handleColorHex;

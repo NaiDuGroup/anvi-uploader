@@ -11,7 +11,8 @@ import { sheetLinePaperSheets } from "@/lib/stickerSheet/stickerSheet";
 import { returnLfStandStockForOrder } from "@/lib/largeFormat/lfStandStock";
 import { returnGiftSetBoxStockForOrder } from "@/lib/giftSet/giftSetStock";
 import { SHEET_PRODUCT_TYPES } from "@/lib/sheetProduct/sheetProductConfig";
-import { lfLineStockQuantity } from "@/lib/largeFormat/lfSheet";
+import { lfLineStockQuantityForMaterial, type LfSheetSpec } from "@/lib/largeFormat/lfSheet";
+import { loadLfSheetSpecs } from "@/lib/largeFormat/lfSheetSpecs";
 import { ORDER_HOLDING_KINDS, StockMovementKind } from "./kinds";
 import { consume, returnToStock } from "./ledger";
 import { roundQty } from "./ledgerMath";
@@ -234,10 +235,11 @@ type BacklogLine = {
   businessCardLineData: Prisma.JsonValue;
 };
 
-function lineQuantity(kind: MaterialKind, line: BacklogLine): number {
+function lineQuantity(kind: MaterialKind, line: BacklogLine, lfSheet: LfSheetSpec | null): number {
   if (kind === "roll") {
-    // Roll metres, or whole sheets of a wide-format sheet material.
-    return lfLineStockQuantity(parseLargeFormatLineData(line.largeFormatLineData));
+    // Roll metres, or whole sheets of a wide-format sheet material (also a line
+    // priced while the material was still a roll: never fractional «sheets»).
+    return lfLineStockQuantityForMaterial(parseLargeFormatLineData(line.largeFormatLineData), lfSheet).quantity;
   }
   // Paper sheets the line takes (A3+ postcards / stickers: their paper units), as at write-off.
   const data = parseBusinessCardLineData(line.businessCardLineData);
@@ -334,6 +336,8 @@ export async function allocateMaterialProcurementBacklog(
         : null;
   if (!kind) return;
   const materialId: string | null = (kind === "roll" ? v.lfMaterial?.id : v.sheetPaper?.id) ?? null;
+  const lfSheet: LfSheetSpec | null =
+    kind === "roll" && materialId ? ((await loadLfSheetSpecs(tx, [materialId])).get(materialId) ?? null) : null;
 
   const lineWhere: Prisma.OrderLineWhereInput = {
     productType: kind === "roll" ? LF_PRODUCT_TYPE : { in: [...SHEET_PRODUCT_TYPES] },
@@ -381,7 +385,7 @@ export async function allocateMaterialProcurementBacklog(
       order.orderLines.map((l) => l.id),
     );
     const takes = planBacklogTake(
-      order.orderLines.map((l) => ({ id: l.id, quantity: lineQuantity(kind, l) })),
+      order.orderLines.map((l) => ({ id: l.id, quantity: lineQuantity(kind, l, lfSheet) })),
       heldByLine,
       unattributed,
     );

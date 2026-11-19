@@ -21,7 +21,8 @@ import {
   consumePrinterUse,
   returnPrinterConsumablesForOrder,
 } from "@/lib/stock/unified/printers";
-import { lfLineStockQuantity } from "@/lib/largeFormat/lfSheet";
+import { lfLineStockQuantityForMaterial } from "@/lib/largeFormat/lfSheet";
+import { loadLfSheetSpecs } from "@/lib/largeFormat/lfSheetSpecs";
 import {
   returnMaterialStockForOrder,
   takeMaterialLineStock,
@@ -186,17 +187,20 @@ export async function POST(
           }
         } else if (line.productType === "large_format_print" && line.largeFormatMaterialId) {
           const lf = parseLargeFormatLineData(line.largeFormatLineData);
-          // Roll metres, or whole sheets of a sheet material (VATMAN A1).
-          const lm = lfLineStockQuantity(lf);
-          const inkMl = lf?.inkMlUsed ?? 0;
           const matId = line.largeFormatMaterialId;
+          // Roll metres, or whole sheets of a sheet material (VATMAN A1) — by the
+          // material's current form, so a line priced as a roll still takes sheets.
+          const lfSheet = (await loadLfSheetSpecs(tx, [matId])).get(matId) ?? null;
+          const stockQty = lfLineStockQuantityForMaterial(lf, lfSheet);
+          const lm = stockQty.quantity;
+          const inkMl = lf?.inkMlUsed ?? 0;
 
           // Roll metres / sheets from the material's unified variant; short → `lf_roll` entry.
           const rollIssue = await takeMaterialLineStock(tx, {
             kind: "roll",
             materialId: matId,
             quantity: lm,
-            ...(lf?.sheetLayout ? { lfUnit: "sheets" as const } : {}),
+            ...(stockQty.unit ? { lfUnit: stockQty.unit } : {}),
             orderId: order.id,
             orderNumber: order.orderNumber,
             orderLineId: line.id,

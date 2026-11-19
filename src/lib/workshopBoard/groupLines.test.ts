@@ -169,6 +169,55 @@ describe("groupLines", () => {
     expect(group.aggregate.totalLinearMeters).toBeCloseTo(3.0);
   });
 
+  it("puts a line priced as a roll on a material that is a sheet now on the sheet card (no roll widths)", () => {
+    // Prod #10425: VATMAN 260G priced while it was a «roll» 61 m / printable 55 m.
+    const f = file("f1", "line-1", 1, { paperType: "large_format" });
+    const order = makeOrder({
+      id: "order-vatman",
+      orderNumber: 10425,
+      productType: "large_format_print",
+      orderLines: [
+        makeLine({
+          id: "line-1",
+          productType: "large_format_print",
+          largeFormatLineData: lfLineData("VATMAN 260G", 55, 70, 1, 0.56, {
+            rollWidthMeters: "61",
+            printableWidthMeters: "55",
+          }),
+          lfSheetSpec: { sheetWidthCm: 61, sheetHeightCm: 86, marginMm: 5 },
+          files: [f],
+        }),
+      ],
+      files: [f],
+    });
+    const group = groupLines([order])[0]!.groups[0]!;
+    expect(group.meta.lfSheet).toBe(true);
+    expect(group.meta.rollWidthMeters).toBeNull();
+    expect(group.meta.printableWidthMeters).toBeNull();
+    expect(group.aggregate.totalLinearMeters).toBeUndefined();
+    expect(group.aggregate.totalSheetsLabel).toBe("1 лист A1");
+    const facts = group.lines[0]!.facts;
+    expect(facts.kind === "lf" && facts.data.sheets?.count).toBe(1);
+    expect(facts.kind === "lf" && facts.data.printableWidthMeters).toBeNull();
+  });
+
+  it("keeps a roll line on the roll card when its material is a roll", () => {
+    const order = makeOrder({
+      productType: "large_format_print",
+      orderLines: [
+        makeLine({
+          id: "line-1",
+          productType: "large_format_print",
+          largeFormatLineData: lfLineData("ORACAL MATT 1.27*50m", 100, 150, 1, 1.5),
+          lfSheetSpec: null,
+        }),
+      ],
+    });
+    const group = groupLines([order])[0]!.groups[0]!;
+    expect(group.meta.lfSheet).toBeUndefined();
+    expect(group.meta.printableWidthMeters).toBe("1.20");
+  });
+
   it("groups two LF lines of the same material together and sums linear meters", () => {
     const mkOrder = (id: string, num: number, lm: number): RawOrder =>
       makeOrder({

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { LF_ROLL_WIDTH_MAX_METERS } from "@/lib/largeFormat/lfSheet";
 import { buildRollLayoutPdfBuffer } from "@/lib/largeFormat/rollLayoutPdf";
 import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { readOrderFileBuffer } from "@/lib/largeFormat/readOrderFileBuffer";
@@ -26,7 +27,8 @@ const bodySchema = z.object({
   materialLabel: z.string().min(1).max(200),
   /** Listed in the downloaded file name. Optional for older clients. */
   orderNumbers: z.array(z.number().int()).max(500).optional(),
-  printableWidthCm: z.number().finite().positive(),
+  // A roll is at most LF_ROLL_WIDTH_MAX_METERS wide (a «5500 cm» width is a cm-as-metres mistake).
+  printableWidthCm: z.number().finite().positive().max(LF_ROLL_WIDTH_MAX_METERS * 100),
   totalAlongCm: z.number().finite().positive(),
   placements: z.array(placementSchema).min(1),
   tiles: z
@@ -86,8 +88,20 @@ export async function POST(request: NextRequest) {
   const fileIds = [...new Set(tiles.map((t) => t.fileId))];
   const files = await prisma.file.findMany({
     where: { id: { in: fileIds } },
-    select: { id: true, fileName: true, fileUrl: true, orderLine: { select: { productionStatus: true } } },
+    select: {
+      id: true,
+      fileName: true,
+      fileUrl: true,
+      orderLine: {
+        select: { productionStatus: true, largeFormatMaterial: { select: { materialForm: true } } },
+      },
+    },
   });
+  // Sheet materials (VATMAN A1) are printed sheet by sheet, never on a roll layout —
+  // also lines priced while the material was still a roll.
+  if (files.some((f) => f.orderLine.largeFormatMaterial?.materialForm === "sheet")) {
+    return NextResponse.json({ error: "material_is_sheet" }, { status: 409 });
+  }
   // «Нужен макет» lines are never laid out (the planner does not offer them either).
   if (files.some((f) => f.orderLine.productionStatus === "NEEDS_LAYOUT")) {
     return NextResponse.json({ error: "line_needs_layout" }, { status: 409 });

@@ -479,3 +479,58 @@ export function lfSheetLayoutAsRollPreview(layout: LfSheetLayoutPersisted): Larg
     orientationsUsed: [],
   };
 }
+
+// ─── Lines priced before their material became a sheet ───────────────────────
+
+/** Fields of a line's `largeFormatLineData` the sheet fallback reads. */
+export interface LfLineSheetSource {
+  printWidthCm?: number;
+  printHeightCm?: number;
+  quantity?: number;
+  calculatedLinearMeters?: number;
+  sheetLayout?: LfSheetLayoutPersisted | null;
+}
+
+/**
+ * Sheet layout of a line on a sheet material: the stored `sheetLayout`, or —
+ * for a line priced while the material was still a roll (no `sheetLayout`,
+ * roll metres and a roll snapshot) — its pieces packed on the material's sheet
+ * now. Null for a roll material. A piece that does not fit a sheet counts one
+ * sheet per piece (never roll metres).
+ */
+export function lfLineSheetLayout(
+  data: LfLineSheetSource | null | undefined,
+  sheet: LfSheetSpec | null | undefined,
+): LfSheetLayoutPersisted | null {
+  if (!data) return null;
+  if (data.sheetLayout) return data.sheetLayout;
+  if (!sheet) return null;
+  const w = Number(data.printWidthCm);
+  const h = Number(data.printHeightCm);
+  const qty = Number.isInteger(data.quantity) && (data.quantity ?? 0) > 0 ? data.quantity! : 1;
+  const pack = packLfSheets({ itemWidthCm: w, itemHeightCm: h, quantity: qty, sheet });
+  if (pack.ok) return pack.layout;
+  return {
+    sheetsCount: qty,
+    perSheet: 1,
+    sheetWidthCm: sheet.sheetWidthCm,
+    sheetHeightCm: sheet.sheetHeightCm,
+    marginMm: sheet.marginMm,
+    gapCm: LF_SHEET_PACK_GAP_CM,
+    placements: [],
+  };
+}
+
+/**
+ * Stock quantity of a line given its material's current form: whole sheets on
+ * a sheet material (also for lines priced while it was a roll), roll metres
+ * on a roll.
+ */
+export function lfLineStockQuantityForMaterial(
+  data: LfLineSheetSource | null | undefined,
+  sheet: LfSheetSpec | null | undefined,
+): { quantity: number; unit?: "sheets" } {
+  const layout = lfLineSheetLayout(data, sheet);
+  if (layout) return { quantity: lfLineStockQuantity({ sheetLayout: layout }), unit: "sheets" };
+  return { quantity: lfLineStockQuantity(data) };
+}

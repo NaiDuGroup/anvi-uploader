@@ -2,6 +2,7 @@ import { giftSetBoardFlags, giftSetBoardSkus, procurementVariantIds, type GiftSe
 import { Prisma } from "@prisma/client";
 import { chisinauDayEndExclusive, chisinauDayStart } from "@/lib/chisinauDay";
 import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
+import { loadLfSheetSpecs } from "@/lib/largeFormat/lfSheetSpecs";
 import { prisma } from "./prisma";
 import { orderSearchSql } from "./orderSearchSql";
 import { fillDtfGarmentNames } from "./dtf/dtfGarmentNames";
@@ -291,6 +292,13 @@ export async function fetchWorkshopBoardData(
     orders.flatMap((o) => [o.createdBy, o.sentToWorkshopBy]),
   );
 
+  // Sheet materials (VATMAN A1) by their current form: lines priced while the
+  // material was a roll still go on the sheet card, never the roll layout.
+  const lfSheetSpecs = await loadLfSheetSpecs(
+    prisma,
+    orders.flatMap((o) => o.orderLines.map((l) => l.largeFormatMaterialId)),
+  );
+
   const rawOrders = orders.map((o) => ({
     id: o.id,
     orderNumber: o.orderNumber,
@@ -329,6 +337,7 @@ export async function fetchWorkshopBoardData(
       stockVariantId: line.stockVariantId,
       penProductSnapshot: line.penProductSnapshot,
       largeFormatLineData: line.largeFormatLineData,
+      lfSheetSpec: line.largeFormatMaterialId ? (lfSheetSpecs.get(line.largeFormatMaterialId) ?? null) : null,
       businessCardLineData: line.businessCardLineData,
       dtfLineData: line.dtfLineData,
       uvLineData: line.uvLineData,

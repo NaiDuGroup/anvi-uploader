@@ -1492,8 +1492,8 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
         />
       )}
 
-      {/* Layout planner modal */}
-      {layoutGroup && (
+      {/* Layout planner modal (rolls only: sheet materials print sheet by sheet) */}
+      {layoutGroup && !layoutGroup.meta.lfSheet && (
         <LayoutPlannerModal
           group={layoutGroup}
           rollCandidates={lfRollCandidates}
