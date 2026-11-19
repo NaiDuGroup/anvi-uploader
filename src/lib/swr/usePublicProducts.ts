@@ -76,6 +76,8 @@ export type PublicLargeFormatMaterial = {
   materialForm?: "roll" | "sheet";
   /** Sheet materials: sheet size (cm) and non-printable edge (mm). */
   sheet?: { sheetWidthCm: number; sheetHeightCm: number; marginMm: number } | null;
+  /** Sheet materials: price per whole sheet (MDL) for this customer; null for rolls. */
+  sellPricePerSheet?: number | null;
 };
 
 interface LargeFormatMaterialsResponse {

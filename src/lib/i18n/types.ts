@@ -981,6 +981,9 @@ export interface TranslationDictionary {
       receiptTitle: string;
       receiptQtySheets: string;
       receiptAvgHint: string;
+      consumptionHistory: string;
+      packPreviewTitle: string;
+      directCostLabel: string;
       /** Wizard: «Лист 61×86 см, поле 5 мм». */
       sheetInfo: (sizeCm: string, marginMm: number) => string;
       /** Wizard: «Листов (расчёт): 3 листа A1». */
@@ -1920,6 +1923,10 @@ export interface TranslationDictionary {
       lfSheetsCount: (count: number, format: string) => string;
       /** «Не помещается на лист 61×86». */
       lfSheetDoesNotFit: (sizeCm: string) => string;
+      lfPerSheet: string;
+      lfSheetDoesNotFitAny: string;
+      lfSheetPreviewTitle: string;
+      lfSheetPreviewEmpty: string;
       /** Roll-pack diagram heading + empty hint. */
       lfPreviewTitle: string;
       lfPreviewEmpty: string;

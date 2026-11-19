@@ -9,7 +9,7 @@ import { resolveLfSellRatesPerLinearMeterMdl } from "@/lib/largeFormat/lfResolve
 import { selectLfSizePresetPriceMdl } from "@/lib/largeFormat/lfPresetPricing";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
 import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
-import { lfMaterialSheetSpec, parseLfMaterialForm } from "@/lib/largeFormat/lfSheet";
+import { lfMaterialSheetSpec, parseLfMaterialForm, resolveLfSellPricePerSheetMdl } from "@/lib/largeFormat/lfSheet";
 
 /**
  * Customer-facing large-format roll catalog. Returns only active materials and
@@ -62,6 +62,20 @@ export async function GET() {
       // Sheet materials (VATMAN A1): the preview packs on sheets; the price comes from the quote.
       materialForm: parseLfMaterialForm(r.materialForm),
       sheet: lfMaterialSheetSpec(r),
+      /** Sheet materials: price per whole sheet for this customer (rolls: null). */
+      sellPricePerSheet:
+        parseLfMaterialForm(r.materialForm) === "sheet"
+          ? resolveLfSellPricePerSheetMdl({
+              material: {
+                retailPricePerSheet: r.retailPricePerSheet,
+                dealerPricePerSheet: r.dealerPricePerSheet,
+                avgCostPerSheet: r.avgCostPerLm,
+                catalogCostPerSheet: r.catalogCostPerLm,
+              },
+              production,
+              customerType,
+            })
+          : null,
       sizePresets: r.sizePresets
         .filter((p) => p.isActive)
         .sort((a, b) => a.sortOrder - b.sortOrder)

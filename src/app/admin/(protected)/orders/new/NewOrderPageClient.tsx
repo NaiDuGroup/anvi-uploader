@@ -7400,10 +7400,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                                     </>
                                                                   ) : null}
                                                                   <span className="font-medium">
-                                                                    {
-                                                                      t.admin.newOrderPage
-                                                                        .lfDirectCostLabel
-                                                                    }
+                                                                    {isSheetMat
+                                                                      ? t.admin.lfSheet.directCostLabel
+                                                                      : t.admin.newOrderPage.lfDirectCostLabel}
                                                                   </span>
                                                                   <span className="text-right font-medium tabular-nums">
                                                                     {econ.totalDirectCostMdl}{" "}
@@ -7536,7 +7535,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                               title={
                                                 familyGroupSlot
                                                   ? `${t.admin.newOrderPage.lfPackPreviewTitle} (${familyGroupSlot.groupSize} поз.)`
-                                                  : t.admin.newOrderPage.lfPackPreviewTitle
+                                                  : isSheetMat
+                                                    ? t.admin.lfSheet.packPreviewTitle
+                                                    : t.admin.newOrderPage.lfPackPreviewTitle
                                               }
                                               emptyHint={
                                                 t.admin.newOrderPage.lfPackPreviewPlaceholder

@@ -64,6 +64,7 @@ import { SublimationBoardLineSummary } from "./workshopBoard/SublimationBoardPar
 import { TypeOverviewGrid } from "./workshopBoard/TypeOverviewGrid";
 import { prepareTiles } from "@/lib/largeFormat/layoutTiles";
 import { evaluateLfRollOptions } from "@/lib/largeFormat/lfRollChoice";
+import { lfSheetSizeCmLabel } from "@/lib/largeFormat/lfSheet";
 import { GROUP_TILE_PACK_DEFAULT_GAP_CM } from "@/lib/largeFormat/groupTilePack";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import type { OrderStatus } from "@/lib/validations";
@@ -815,8 +816,19 @@ function BoardGroupCard({
             </h3>
           </div>
 
-          {/* Roll width info for LF */}
-          {isLf && meta.rollWidthMeters && (
+          {/* Sheet size for sheet materials (VATMAN A1), roll width for rolls */}
+          {isLfSheet
+            ? (() => {
+                const f = group.lines[0]?.facts;
+                const sh = f?.kind === "lf" ? f.data.sheets : undefined;
+                return sh ? (
+                  <p className="mt-0.5 text-[11px] text-gray-400">
+                    {t.admin.lfSheet.formSheet} {lfSheetSizeCmLabel(sh)} см
+                  </p>
+                ) : null;
+              })()
+            : null}
+          {isLf && !isLfSheet && meta.rollWidthMeters && (
             <p className="mt-0.5 text-[11px] text-gray-400">
               {t.workshopBoard.rollWidth(meta.rollWidthMeters)}
             </p>

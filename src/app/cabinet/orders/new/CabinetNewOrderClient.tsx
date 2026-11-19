@@ -2116,7 +2116,9 @@ function LfItemBody({
         code:
           pack && !pack.ok && pack.code === "quantity_too_large"
             ? "lf_pack_quantity_too_large"
-            : "lf_pack_does_not_fit",
+            : material?.materialForm === "sheet"
+              ? "lf_sheet_does_not_fit"
+              : "lf_pack_does_not_fit",
       });
       return;
     }
@@ -2256,8 +2258,9 @@ function lfErrorMessage(
   if (!code) return null;
   switch (code) {
     case "lf_pack_does_not_fit":
-    case "lf_sheet_does_not_fit":
       return t.cabinet.newOrder.lfDoesNotFit;
+    case "lf_sheet_does_not_fit":
+      return t.cabinet.newOrder.lfSheetDoesNotFitAny;
     case "lf_pack_quantity_too_large":
       return t.cabinet.newOrder.lfQuantityTooLarge;
     case "large_format_requires_login":
@@ -2343,7 +2346,11 @@ function LargeFormatSection({
                   onChange({ ...value, selectionValue, presetId: null })
                 }
                 name={displayName}
-                rateLabel={`${formatAmountMdl(sellPrice, currency)} / ${tt.lfPerLinearMeter}`}
+                rateLabel={
+                  (repr as PublicLargeFormatMaterial).materialForm === "sheet"
+                    ? `${formatAmountMdl((repr as PublicLargeFormatMaterial).sellPricePerSheet ?? 0, currency)} / ${tt.lfPerSheet}`
+                    : `${formatAmountMdl(sellPrice, currency)} / ${tt.lfPerLinearMeter}`
+                }
               />
             );
           })}
@@ -2419,8 +2426,8 @@ function LargeFormatSection({
           </div>
 
           <LfRollPackPreview
-            title={tt.lfPreviewTitle}
-            emptyHint={tt.lfPreviewEmpty}
+            title={material?.materialForm === "sheet" ? tt.lfSheetPreviewTitle : tt.lfPreviewTitle}
+            emptyHint={material?.materialForm === "sheet" ? tt.lfSheetPreviewEmpty : tt.lfPreviewEmpty}
             diagram={diagram}
           />
 

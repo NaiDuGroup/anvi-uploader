@@ -267,6 +267,8 @@ export default function LargeFormatMaterialsPageClient() {
                   )}
                   <td className="px-3 py-2.5 tabular-nums text-gray-800">
                     {(() => {
+                      // Sheet rows: cost per sheet is already in «Ср. закупка/лист»; per-metre cost is meaningless.
+                      if (isSheetRow(r)) return <span className="text-gray-400">—</span>;
                       const eff =
                         r.avgPurchaseCostPerLinearMeter != null
                           ? r.avgPurchaseCostPerLinearMeter
@@ -820,13 +822,15 @@ function LfRollReceiptModal({
 
             <section
               className="flex flex-col rounded-xl border border-amber-200/80 bg-gradient-to-b from-amber-50/80 to-white p-4 shadow-sm"
-              aria-label={lf.lfRollConsumptionHistory}
+              aria-label={sheet ? lf.lfSheet.consumptionHistory : lf.lfRollConsumptionHistory}
             >
               <div className="mb-3 flex items-center gap-2 text-amber-950">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-900 ring-1 ring-amber-200/80">
                   <PackageMinus className="h-4 w-4 shrink-0" aria-hidden />
                 </span>
-                <h3 className="text-sm font-semibold leading-tight">{lf.lfRollConsumptionHistory}</h3>
+                <h3 className="text-sm font-semibold leading-tight">
+                  {sheet ? lf.lfSheet.consumptionHistory : lf.lfRollConsumptionHistory}
+                </h3>
               </div>
               {consumeLoading ? (
                 <div className="flex flex-1 items-center justify-center py-8 text-gray-400">
@@ -1125,7 +1129,10 @@ function LfMaterialModal({
                   type="button"
                   role="radio"
                   aria-checked={form === f}
-                  onClick={() => setForm(f)}
+                  onClick={() => {
+                    setForm(f);
+                    setErr("");
+                  }}
                   className={cn(
                     "rounded-md px-3 py-1 text-sm font-medium transition-colors",
                     form === f ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200" : "text-gray-500 hover:text-gray-800",
