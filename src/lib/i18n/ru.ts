@@ -19,6 +19,14 @@ import { libraryRu } from "./library/ru";
 import { announcementsRu } from "./announcements/ru";
 import { ProductPickerGroup } from "../productPickerGroup";
 
+function ruTiles(n: number): string {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return "плитка";
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "плитки";
+  return "плиток";
+}
+
 function ruSheets(n: number): string {
   const m10 = n % 10;
   const m100 = n % 100;
@@ -1098,6 +1106,7 @@ export const ru: TranslationDictionary = {
     stockConsumptionKindProcurementBacklog: "Закрытие очереди закупки",
     stockConsumptionKindLayoutTransferOut: "Печать макета (перенос с другого рулона)",
     stockConsumptionKindLayoutTransferBack: "Возврат: макет напечатан на другом рулоне",
+    stockConsumptionKindLayoutPoolReturn: "Возврат: экономия общей раскладки листов",
     stockConsumptionLabelMaterialCost: "Себест. материала (рулон)",
     stockConsumptionLabelMaterialSell: "Продажа материала",
     stockConsumptionOrderNumber: (n) => `Заказ №${n}`,
@@ -2302,9 +2311,9 @@ export const ru: TranslationDictionary = {
     layoutCurrentLength: (m: number) => `Текущая длина: ${m.toFixed(2)} м`,
     layoutNaiveLength: (m: number) => `Наивная сумма: ${m.toFixed(2)} м`,
     layoutSaved: (m: number, pct: number) => `Экономия: ${m.toFixed(2)} м (${pct.toFixed(0)}%)`,
-    layoutUnplaced: (n: number) => `Не влезли: ${n} плит${n === 1 ? "ка" : "ок"}`,
+    layoutUnplaced: (n: number) => `Не влезли: ${n} ${ruTiles(n)}`,
     layoutClose: "Закрыть",
-    layoutTilesCount: (n: number) => `${n} плит${n === 1 ? "ка" : "ок"}`,
+    layoutTilesCount: (n: number) => `${n} ${ruTiles(n)}`,
     layoutWhiteBorder: (cm: number) => `Белое поле: ${cm} см`,
     layoutGalleryWrap: (cm: number) => `Зеркальный запах: ${cm} см с каждой стороны`,
     layoutDownloadPdf: "Скачать PDF",
@@ -2341,6 +2350,22 @@ export const ru: TranslationDictionary = {
         ? `Списание перенесено: ${moved} строк${skipped > 0 ? `, уже на этом рулоне: ${skipped}` : ""}`
         : "Все строки уже числятся на этом рулоне",
     layoutConfirmRollError: "Не удалось зафиксировать печать",
+    layoutConfirmSheetsCta: (sheetsLabel) => `Подтвердить печать: ${sheetsLabel}`,
+    layoutConfirmSheetsHint:
+      "Напечатали эту раскладку? Сэкономленные листы вернутся на склад, себестоимость строк пересчитается по площади.",
+    layoutConfirmSheetsBusy: "Фиксируем…",
+    layoutConfirmSheetsDone: (returnedLabel) => `Печать зафиксирована: на склад вернули ${returnedLabel}`,
+    layoutConfirmSheetsAlready: "Эти строки уже подтверждены",
+    layoutConfirmSheetsNoSaving: "Экономии нет — списание по строкам уже верное",
+    layoutConfirmSheetsError: (code) =>
+      code === "line_already_confirmed"
+        ? "Часть строк уже подтверждена в другой раскладке — снимите их"
+        : code === "line_needs_layout"
+          ? "Есть строки, которые ждут новый макет"
+          : code === "sheets_too_few"
+            ? "Листов меньше, чем нужно по площади"
+            : "Не удалось зафиксировать печать",
+    layoutSheetPooledBadge: (poolSheetsLabel, orders) => `Напечатано: общая раскладка ${poolSheetsLabel} (${orders})`,
     layoutConfirmRollNegativeStock: (name: string) =>
       `Внимание: остаток «${name}» ушёл в минус — проверьте склад.`,
     nbBatchTitle: "Собрать общий макет из блокнотов",
@@ -2861,6 +2886,7 @@ export const ru: TranslationDictionary = {
       TRANSFER: "Перемещение",
       LAYOUT_TRANSFER_OUT: "Печать макета (перенос с другого рулона)",
       LAYOUT_TRANSFER_BACK: "Возврат: макет напечатан на другом рулоне",
+      LAYOUT_POOL_RETURN: "Возврат: экономия общей раскладки листов",
     },
     categoryNotFound: "Категория не найдена или удалена.",
     searchPlaceholder: "Поиск по артикулу, названию, цвету",

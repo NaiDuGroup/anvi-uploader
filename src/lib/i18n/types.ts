@@ -1218,6 +1218,7 @@ export interface TranslationDictionary {
     stockConsumptionKindLayoutTransferOut: string;
     /** Counterpart: lm returned to the previously charged roll (+lm). */
     stockConsumptionKindLayoutTransferBack: string;
+    stockConsumptionKindLayoutPoolReturn: string;
     stockConsumptionLabelMaterialCost: string;
     stockConsumptionLabelMaterialSell: string;
     stockConsumptionOrderNumber: (n: number) => string;
@@ -2514,6 +2515,16 @@ export interface TranslationDictionary {
     /** Result: `moved` lines transferred, `skipped` already on this roll. */
     layoutConfirmRollDone: (moved: number, skipped: number) => string;
     layoutConfirmRollError: string;
+    /** Sheet layout: «Подтвердить печать: 2 листа». */
+    layoutConfirmSheetsCta: (sheetsLabel: string) => string;
+    layoutConfirmSheetsHint: string;
+    layoutConfirmSheetsBusy: string;
+    layoutConfirmSheetsDone: (returnedLabel: string) => string;
+    layoutConfirmSheetsAlready: string;
+    layoutConfirmSheetsNoSaving: string;
+    layoutConfirmSheetsError: (code: string) => string;
+    /** Line already printed in a confirmed pooled layout. */
+    layoutSheetPooledBadge: (poolSheetsLabel: string, orders: string) => string;
     /** Warning appended when the target roll balance went below zero. */
     layoutConfirmRollNegativeStock: (name: string) => string;
     /**
@@ -2949,7 +2960,8 @@ export interface TranslationDictionary {
       | "WRITE_OFF"
       | "TRANSFER"
       | "LAYOUT_TRANSFER_OUT"
-      | "LAYOUT_TRANSFER_BACK",
+      | "LAYOUT_TRANSFER_BACK"
+      | "LAYOUT_POOL_RETURN",
       string
     >;
     categoryNotFound: string;

@@ -32,7 +32,15 @@ export interface LfLineFacts {
   /** Banner finishing / roll-up set to do besides the print (Russian); omitted without extras. */
   extrasRu?: string;
   /** Sheet material (VATMAN A1): sheets used, e.g. «3 листа A1»; omitted for rolls. */
-  sheets?: { count: number; label: string; sheetWidthCm: number; sheetHeightCm: number; marginMm: number };
+  sheets?: {
+    count: number;
+    label: string;
+    sheetWidthCm: number;
+    sheetHeightCm: number;
+    marginMm: number;
+    /** Printed in a confirmed pooled layout («Подтвердить печать»): its whole-sheet share. */
+    pooled?: { stockSheets: number; poolSheets: number; orderNumbers: number[] };
+  };
 }
 
 export interface MugLineFacts {
@@ -280,7 +288,10 @@ export interface WorkshopBoardAggregate {
   totalQty: number;
   /** LF only: sum of calculatedLinearMeters across all lines in group */
   totalLinearMeters?: number;
-  /** LF sheet-material group: total sheets (e.g. «7 листов A1»). */
+  /**
+   * LF sheet-material group: sheets with lines pooled on shared sheets (e.g.
+   * «2 листа A1 (по строкам 3)» when pooling saves sheets, else «3 листа A1»).
+   */
   totalSheetsLabel?: string;
 }
 

@@ -1,6 +1,7 @@
 import type { LfFinishingData } from "./lfFinishing";
 import type { LfKitSnapshot } from "./lfKits";
 import type { LfSheetLayoutPersisted } from "./lfSheet";
+import type { LfSheetPoolRecord } from "./lfSheetPool";
 
 /** Persisted JSON on `OrderLine.large_format_line_data`. */
 export type LargeFormatCustomerType = "retail" | "dealer";
@@ -120,6 +121,12 @@ export interface LargeFormatLineData {
    * `calculatedLinearMeters` is 0 and there is no roll `layout`.
    */
   sheetLayout?: LfSheetLayoutPersisted;
+  /**
+   * Sheet material line printed in a confirmed pooled layout (workshop
+   * «Подтвердить печать»): its share of the pool's sheets. Material cost is
+   * already re-based on `shareSheets`; the ledger holds `stockSheets`.
+   */
+  sheetPool?: LfSheetPoolRecord;
   usefulAreaSqm?: number;
   writtenOffAreaSqm?: number;
   materialEfficiencyPct?: number;

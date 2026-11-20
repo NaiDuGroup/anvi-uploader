@@ -2,6 +2,8 @@ import { stickerPreviewFromLineData, stickerSheetSummaryRu } from "@/lib/sticker
 import { postcardPreviewFromLineData, postcardStepsRu, postcardSummaryRu } from "@/lib/postcard/postcard";
 import { lfLineSheetLayout, lfSheetsCountRu, type LfSheetSpec } from "@/lib/largeFormat/lfSheet";
 import { lfLineExtrasRu } from "@/lib/largeFormat/lfLineSummaryLabel";
+import { packTilesOnSheets } from "@/lib/largeFormat/lfSheetLayoutPack";
+import { prepareTiles } from "@/lib/largeFormat/layoutTiles";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import {
   businessCardTrimSize,
@@ -176,6 +178,15 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
                 sheetWidthCm: line.lfSheetSpec?.sheetWidthCm ?? sheetLayout.sheetWidthCm,
                 sheetHeightCm: line.lfSheetSpec?.sheetHeightCm ?? sheetLayout.sheetHeightCm,
                 marginMm: line.lfSheetSpec?.marginMm ?? sheetLayout.marginMm,
+                ...(data.sheetPool
+                  ? {
+                      pooled: {
+                        stockSheets: data.sheetPool.stockSheets,
+                        poolSheets: data.sheetPool.poolSheets,
+                        orderNumbers: data.sheetPool.orderNumbers,
+                      },
+                    }
+                  : {}),
               },
             }
           : {}),
@@ -578,6 +589,36 @@ function buildLfGroupMeta(
   };
 }
 
+/** Above this many pieces the card keeps the per-line sum (the modal still pools). */
+const CARD_POOL_MAX_TILES = 400;
+
+/**
+ * Sheets of a sheet-material card with lines pooled like the layout modal:
+ * confirmed lines count their whole-sheet share of their pool, the rest are
+ * packed together on shared sheets. Never more than the per-line sum.
+ */
+function pooledSheetsCount(
+  lines: WorkshopBoardLine[],
+  sheet: { sheetWidthCm: number; sheetHeightCm: number; marginMm: number },
+  naive: number,
+): number {
+  let confirmed = 0;
+  const open: WorkshopBoardLine[] = [];
+  for (const l of lines) {
+    if (l.facts.kind !== "lf") continue;
+    const pooled = l.facts.data.sheets?.pooled;
+    if (pooled) confirmed += pooled.stockSheets;
+    else open.push(l);
+  }
+  const tiles = prepareTiles(open, new Map(), true);
+  if (tiles.length > CARD_POOL_MAX_TILES) return naive;
+  const packed = packTilesOnSheets(tiles, sheet);
+  const openNaive = open.reduce((s, l) => s + (l.facts.kind === "lf" ? (l.facts.data.sheets?.count ?? 0) : 0), 0);
+  // Pieces that fit no sheet keep their per-line sheets.
+  const openCount = packed.unplacedTileIds.length > 0 ? openNaive : Math.min(openNaive, packed.sheets.length);
+  return Math.min(naive, confirmed + openCount);
+}
+
 function makeAggregate(lines: WorkshopBoardLine[]): WorkshopBoardAggregate {
   const orderIds = new Set(lines.map((l) => l.orderId));
   const totalQty = lines.reduce((s, l) => s + factsQty(l.facts), 0);
@@ -589,13 +630,15 @@ function makeAggregate(lines: WorkshopBoardLine[]): WorkshopBoardAggregate {
   const sheetLines = hasLf ? lines.filter((l) => l.facts.kind === "lf" && l.facts.data.sheets) : [];
   if (hasLf && sheetLines.length === lines.length && lines.length > 0) {
     const first = lines[0]!.facts;
-    const count = lines.reduce((s, l) => s + (l.facts.kind === "lf" ? (l.facts.data.sheets?.count ?? 0) : 0), 0);
+    const naive = lines.reduce((s, l) => s + (l.facts.kind === "lf" ? (l.facts.data.sheets?.count ?? 0) : 0), 0);
     const sheet = first.kind === "lf" ? first.data.sheets : undefined;
+    const count = sheet ? pooledSheetsCount(lines, sheet, naive) : naive;
+    const label = sheet ? lfSheetsCountRu(count, sheet) : `${count}`;
     return {
       lineCount: lines.length,
       orderCount: orderIds.size,
       totalQty,
-      totalSheetsLabel: sheet ? lfSheetsCountRu(count, sheet) : `${count}`,
+      totalSheetsLabel: count < naive ? `${label} (по строкам ${naive})` : label,
     };
   }
   const totalLinearMeters = hasLf

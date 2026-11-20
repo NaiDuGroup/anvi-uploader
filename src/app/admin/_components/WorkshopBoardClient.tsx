@@ -1509,7 +1509,13 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
 
       {/* Sheet layout modal (sheet materials: pieces pooled on whole sheets) */}
       {layoutGroup && layoutGroup.meta.lfSheet && (
-        <SheetLayoutPlannerModal group={layoutGroup} onClose={() => setLayoutGroup(null)} />
+        <SheetLayoutPlannerModal
+          group={layoutGroup}
+          onStockChanged={() => {
+            fetchBoard(true).catch(() => {});
+          }}
+          onClose={() => setLayoutGroup(null)}
+        />
       )}
 
       {/* Roll layout planner modal (rolls only) */}

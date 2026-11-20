@@ -20,6 +20,8 @@ export function stockConsumptionKindLabel(
       return admin.stockConsumptionKindLayoutTransferOut;
     case "LAYOUT_TRANSFER_BACK":
       return admin.stockConsumptionKindLayoutTransferBack;
+    case "LAYOUT_POOL_RETURN":
+      return admin.stockConsumptionKindLayoutPoolReturn;
     default:
       return (stock?.movementKinds as Record<string, string> | undefined)?.[kind] ?? kind;
   }

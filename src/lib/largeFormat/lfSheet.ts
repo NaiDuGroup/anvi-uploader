@@ -489,6 +489,8 @@ export interface LfLineSheetSource {
   quantity?: number;
   calculatedLinearMeters?: number;
   sheetLayout?: LfSheetLayoutPersisted | null;
+  /** Confirmed pooled print: the line holds `stockSheets` whole sheets. */
+  sheetPool?: { stockSheets: number } | null;
 }
 
 /**
@@ -531,6 +533,11 @@ export function lfLineStockQuantityForMaterial(
   sheet: LfSheetSpec | null | undefined,
 ): { quantity: number; unit?: "sheets" } {
   const layout = lfLineSheetLayout(data, sheet);
-  if (layout) return { quantity: lfLineStockQuantity({ sheetLayout: layout }), unit: "sheets" };
+  if (layout) {
+    // Printed in a confirmed pooled layout: only its whole-sheet share of the pool.
+    const pooled = data?.sheetPool?.stockSheets;
+    if (typeof pooled === "number" && Number.isInteger(pooled) && pooled >= 0) return { quantity: pooled, unit: "sheets" };
+    return { quantity: lfLineStockQuantity({ sheetLayout: layout }), unit: "sheets" };
+  }
   return { quantity: lfLineStockQuantity(data) };
 }

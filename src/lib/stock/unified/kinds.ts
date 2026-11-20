@@ -20,6 +20,11 @@ export enum StockMovementKind {
   LayoutTransferOut = "LAYOUT_TRANSFER_OUT",
   /** Counterpart of {@link LayoutTransferOut}: metres returned to the roll previously charged (+m). */
   LayoutTransferBack = "LAYOUT_TRANSFER_BACK",
+  /**
+   * Wide-format sheet material: whole sheets given back when lines of several
+   * orders were printed together on fewer sheets than their per-line layouts (+sheets).
+   */
+  LayoutPoolReturn = "LAYOUT_POOL_RETURN",
 }
 
 /** Kinds that take stock for an order. */
@@ -29,7 +34,10 @@ export type OrderTakeKind =
   | StockMovementKind.LayoutTransferOut;
 
 /** Kinds that give an order's stock back. */
-export type OrderGiveBackKind = StockMovementKind.OrderReturn | StockMovementKind.LayoutTransferBack;
+export type OrderGiveBackKind =
+  | StockMovementKind.OrderReturn
+  | StockMovementKind.LayoutTransferBack
+  | StockMovementKind.LayoutPoolReturn;
 
 /** Every movement kind that says how much an order holds (net of returns and transfers). */
 export const ORDER_HOLDING_KINDS: readonly StockMovementKind[] = [
@@ -38,6 +46,7 @@ export const ORDER_HOLDING_KINDS: readonly StockMovementKind[] = [
   StockMovementKind.ProcurementBacklog,
   StockMovementKind.LayoutTransferOut,
   StockMovementKind.LayoutTransferBack,
+  StockMovementKind.LayoutPoolReturn,
 ];
 
 /** `StockCategory.kind` — groups categories on the Склад hub. */

@@ -1084,6 +1084,7 @@ export const ro: TranslationDictionary = {
     stockConsumptionKindProcurementBacklog: "Onorare backlog aprovizionare",
     stockConsumptionKindLayoutTransferOut: "Tipar machet (mutat de pe altă rolă)",
     stockConsumptionKindLayoutTransferBack: "Retur: machet tipărit pe altă rolă",
+    stockConsumptionKindLayoutPoolReturn: "Retur: economie din macheta comună pe coli",
     stockConsumptionLabelMaterialCost: "Cost material rulou",
     stockConsumptionLabelMaterialSell: "Vânzare material rulou",
     stockConsumptionOrderNumber: (n) => `Comanda #${n}`,
@@ -2281,6 +2282,22 @@ export const ro: TranslationDictionary = {
         ? `Stoc mutat pentru ${moved} ${moved === 1 ? "rând" : "rânduri"}${skipped > 0 ? `, deja pe această rolă: ${skipped}` : ""}`
         : "Toate rândurile sunt deja pe această rolă",
     layoutConfirmRollError: "Nu s-a putut înregistra tiparul",
+    layoutConfirmSheetsCta: (sheetsLabel) => `Confirmă tiparul: ${sheetsLabel}`,
+    layoutConfirmSheetsHint:
+      "Ați tipărit această machetă? Colile economisite revin în stoc, costul liniilor se recalculează după suprafață.",
+    layoutConfirmSheetsBusy: "Se înregistrează…",
+    layoutConfirmSheetsDone: (returnedLabel) => `Tipar înregistrat: în stoc au revenit ${returnedLabel}`,
+    layoutConfirmSheetsAlready: "Aceste linii sunt deja confirmate",
+    layoutConfirmSheetsNoSaving: "Nu există economie — consumul pe linii este deja corect",
+    layoutConfirmSheetsError: (code) =>
+      code === "line_already_confirmed"
+        ? "Unele linii sunt deja confirmate în altă machetă — debifați-le"
+        : code === "line_needs_layout"
+          ? "Unele linii așteaptă o machetă nouă"
+          : code === "sheets_too_few"
+            ? "Prea puține coli pentru suprafața pieselor"
+            : "Nu s-a putut înregistra tiparul",
+    layoutSheetPooledBadge: (poolSheetsLabel, orders) => `Tipărit: machetă comună ${poolSheetsLabel} (${orders})`,
     layoutConfirmRollNegativeStock: (name: string) =>
       `Atenție: stocul „${name}” a devenit negativ — verificați depozitul.`,
     nbBatchTitle: "Asamblează machetă din mai multe caiete",
@@ -2685,6 +2702,7 @@ export const ro: TranslationDictionary = {
       TRANSFER: "Transfer",
       LAYOUT_TRANSFER_OUT: "Tipar machet (mutat de pe altă rolă)",
       LAYOUT_TRANSFER_BACK: "Retur: machet tipărit pe altă rolă",
+      LAYOUT_POOL_RETURN: "Retur: economie din macheta comună pe coli",
     },
     categoryNotFound: "Categoria nu a fost găsită sau a fost ștearsă.",
     searchPlaceholder: "Caută după cod, denumire, culoare",

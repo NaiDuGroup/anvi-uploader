@@ -1083,6 +1083,7 @@ export const en: TranslationDictionary = {
     stockConsumptionKindProcurementBacklog: "Backlog fulfillment",
     stockConsumptionKindLayoutTransferOut: "Layout print (moved from another roll)",
     stockConsumptionKindLayoutTransferBack: "Return: layout printed on another roll",
+    stockConsumptionKindLayoutPoolReturn: "Return: saved by a pooled sheet layout",
     stockConsumptionLabelMaterialCost: "Roll material COGS",
     stockConsumptionLabelMaterialSell: "Roll material sell",
     stockConsumptionOrderNumber: (n) => `Order #${n}`,
@@ -2272,6 +2273,22 @@ export const en: TranslationDictionary = {
         ? `Stock moved for ${moved} line${moved === 1 ? "" : "s"}${skipped > 0 ? `, already on this roll: ${skipped}` : ""}`
         : "All lines are already charged to this roll",
     layoutConfirmRollError: "Could not record the print",
+    layoutConfirmSheetsCta: (sheetsLabel) => `Confirm print: ${sheetsLabel}`,
+    layoutConfirmSheetsHint:
+      "Printed this layout? Saved sheets go back to stock and line costs are re-split by area.",
+    layoutConfirmSheetsBusy: "Recording…",
+    layoutConfirmSheetsDone: (returnedLabel) => `Print recorded: ${returnedLabel} returned to stock`,
+    layoutConfirmSheetsAlready: "These lines are already confirmed",
+    layoutConfirmSheetsNoSaving: "No saving — the per-line write-off is already right",
+    layoutConfirmSheetsError: (code) =>
+      code === "line_already_confirmed"
+        ? "Some lines are already confirmed in another layout — uncheck them"
+        : code === "line_needs_layout"
+          ? "Some lines wait for a new layout"
+          : code === "sheets_too_few"
+            ? "Fewer sheets than the pieces' area needs"
+            : "Could not record the print",
+    layoutSheetPooledBadge: (poolSheetsLabel, orders) => `Printed: pooled layout ${poolSheetsLabel} (${orders})`,
     layoutConfirmRollNegativeStock: (name: string) =>
       `Warning: “${name}” balance went negative — check the stock.`,
     nbBatchTitle: "Combine multiple notebooks into one layout",
@@ -2672,6 +2689,7 @@ export const en: TranslationDictionary = {
       TRANSFER: "Transfer",
       LAYOUT_TRANSFER_OUT: "Layout print (moved from another roll)",
       LAYOUT_TRANSFER_BACK: "Return: layout printed on another roll",
+      LAYOUT_POOL_RETURN: "Return: saved by a pooled sheet layout",
     },
     categoryNotFound: "Category not found or deleted.",
     searchPlaceholder: "Search by SKU, name, colour",

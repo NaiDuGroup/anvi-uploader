@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { X, AlertTriangle, Download, RotateCcw } from "lucide-react";
+import { X, AlertTriangle, Download, RotateCcw, CheckCircle2 } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { prepareTiles, type PreparedTile } from "@/lib/largeFormat/layoutTiles";
 import {
@@ -9,7 +9,7 @@ import {
   isSquareTile,
   type OrientationPin,
 } from "@/lib/largeFormat/layoutOrientationPins";
-import { lfSheetSizeCmLabel, type LfSheetSpec } from "@/lib/largeFormat/lfSheet";
+import { lfSheetSizeCmLabel, lfSheetsCountRu, type LfSheetSpec } from "@/lib/largeFormat/lfSheet";
 import {
   packTilesOnSheets,
   pieceFitsSheetAs,
@@ -146,9 +146,16 @@ function SheetSvg({
   );
 }
 
+/** Line printed in a confirmed pooled layout (its share is already on the ledger). */
+function linePool(line: WorkshopBoardGroup["lines"][number]) {
+  return line.facts.kind === "lf" ? (line.facts.data.sheets?.pooled ?? null) : null;
+}
+
 export interface SheetLayoutPlannerModalProps {
   group: WorkshopBoardGroup;
   onClose: () => void;
+  /** After «Подтвердить печать» changed stock / costs (the board reloads). */
+  onStockChanged?: () => void;
 }
 
 /**
@@ -156,7 +163,7 @@ export interface SheetLayoutPlannerModalProps {
  * pieces pooled on whole sheets, one PDF page per sheet. Same look and
  * behaviour as the roll {@link LayoutPlannerModal}.
  */
-export function SheetLayoutPlannerModal({ group, onClose }: SheetLayoutPlannerModalProps) {
+export function SheetLayoutPlannerModal({ group, onClose, onStockChanged }: SheetLayoutPlannerModalProps) {
   const { t } = useLanguageStore();
   const wb = t.workshopBoard;
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -168,9 +175,11 @@ export function SheetLayoutPlannerModal({ group, onClose }: SheetLayoutPlannerMo
   const heldCount = useMemo(() => heldForLayoutCount(group.lines), [group.lines]);
   const orderColorMap = useMemo(() => buildOrderColorMap(lfLines), [lfLines]);
 
+  // Lines already printed in a confirmed pooled layout start unchecked.
   const [selectedLineIds, setSelectedLineIds] = useState<ReadonlySet<string>>(
-    () => new Set(lfLines.map((l) => l.orderLineId)),
+    () => new Set(lfLines.filter((l) => !linePool(l)).map((l) => l.orderLineId)),
   );
+  const pooledLines = useMemo(() => lfLines.filter((l) => linePool(l)), [lfLines]);
   const toggleLine = useCallback((orderLineId: string) => {
     setSelectedLineIds((prev) => {
       const next = new Set(prev);
@@ -330,6 +339,57 @@ export function SheetLayoutPlannerModal({ group, onClose }: SheetLayoutPlannerMo
     wb.layoutPdfError,
   ]);
 
+  // ── Confirm print: give the sheets saved by pooling back to stock ─────────
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const confirmInFlightRef = useRef(false);
+  const selectedPooled = filteredLines.some((l) => linePool(l));
+  const canConfirmSheets =
+    spec != null && result != null && tiles.length > 0 && unplacedCount === 0 && savedSheets > 0 && !selectedPooled;
+
+  const handleConfirmSheets = useCallback(async () => {
+    if (confirmInFlightRef.current || !canConfirmSheets || !spec) return;
+    confirmInFlightRef.current = true;
+    setConfirmBusy(true);
+    setConfirmError(null);
+    setConfirmMessage(null);
+    const lineIds = filteredLines.map((l) => l.orderLineId);
+    try {
+      const res = await fetch("/api/workshop-board/confirm-sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderLineIds: lineIds, poolSheets: sheetsCount }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(wb.layoutConfirmSheetsError(data?.error ?? ""));
+      }
+      const data = (await res.json()) as {
+        alreadyConfirmed: boolean;
+        noSaving: boolean;
+        returnedSheets: number;
+      };
+      if (data.alreadyConfirmed) setConfirmMessage(wb.layoutConfirmSheetsAlready);
+      else if (data.noSaving) setConfirmMessage(wb.layoutConfirmSheetsNoSaving);
+      else {
+        setConfirmMessage(wb.layoutConfirmSheetsDone(lfSheetsCountRu(data.returnedSheets, spec)));
+        // Confirmed lines leave the selection; the board reloads with their pool.
+        setSelectedLineIds((prev) => {
+          const next = new Set(prev);
+          for (const id of lineIds) next.delete(id);
+          return next;
+        });
+        onStockChanged?.();
+      }
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err.message : wb.layoutConfirmSheetsError(""));
+    } finally {
+      confirmInFlightRef.current = false;
+      setConfirmBusy(false);
+    }
+  }, [canConfirmSheets, spec, filteredLines, sheetsCount, wb, onStockChanged]);
+
   function handleBackdropClick(e: React.MouseEvent<HTMLDivElement>) {
     if (e.target === backdropRef.current) onClose();
   }
@@ -423,6 +483,29 @@ export function SheetLayoutPlannerModal({ group, onClose }: SheetLayoutPlannerMo
               {naiveSheets > sheetsCount && <MetricRow label={wb.layoutSheetsNaive(naiveSheets)} highlight={false} />}
               {savedSheets > 0 && <MetricRow label={wb.layoutSheetsSaved(savedSheets)} highlight />}
             </div>
+            {pooledLines.length > 0 && (
+              <div
+                className="space-y-1 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-[11px] text-emerald-800"
+                data-testid="lf-sheet-layout-pooled"
+              >
+                {pooledLines.map((l) => {
+                  const pool = linePool(l)!;
+                  return (
+                    <div key={l.orderLineId} className="flex items-start gap-1.5">
+                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+                      <span>
+                        #{l.orderNumber}
+                        {l.totalLines > 1 ? `.${l.lineIndex}` : ""} —{" "}
+                        {wb.layoutSheetPooledBadge(
+                          spec ? lfSheetsCountRu(pool.poolSheets, spec) : String(pool.poolSheets),
+                          pool.orderNumbers.map((n) => `#${n}`).join(", "),
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {unplacedCount > 0 && (
               <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-700">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -439,6 +522,19 @@ export function SheetLayoutPlannerModal({ group, onClose }: SheetLayoutPlannerMo
               {pdfError}
             </p>
           )}
+          {confirmError && (
+            <p className="text-[12px] text-red-600" role="alert">
+              {confirmError}
+            </p>
+          )}
+          {confirmMessage && (
+            <p className="text-[12px] text-emerald-700" data-testid="lf-sheet-confirm-message">
+              {confirmMessage}
+            </p>
+          )}
+          {canConfirmSheets && !confirmMessage && (
+            <p className="text-[11px] text-gray-500">{wb.layoutConfirmSheetsHint}</p>
+          )}
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
@@ -452,6 +548,19 @@ export function SheetLayoutPlannerModal({ group, onClose }: SheetLayoutPlannerMo
               <Download className="h-4 w-4" aria-hidden />
               {pdfLoading ? wb.layoutGeneratingPdf : wb.layoutDownloadPdf}
             </button>
+            {spec && savedSheets > 0 && (
+              <button
+                type="button"
+                onClick={handleConfirmSheets}
+                disabled={!canConfirmSheets || confirmBusy}
+                title={selectedPooled ? wb.layoutConfirmSheetsError("line_already_confirmed") : undefined}
+                data-testid="lf-sheet-confirm-print"
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <CheckCircle2 className="h-4 w-4" aria-hidden />
+                {confirmBusy ? wb.layoutConfirmSheetsBusy : wb.layoutConfirmSheetsCta(lfSheetsCountRu(sheetsCount, spec))}
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}

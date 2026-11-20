@@ -201,6 +201,32 @@ describe("groupLines", () => {
     expect(facts.kind === "lf" && facts.data.printableWidthMeters).toBeNull();
   });
 
+  it("sheet card counts lines pooled on shared sheets (55×70 + 3 × A3 → 2 листа, по строкам 3)", () => {
+    const spec = { sheetWidthCm: 61, sheetHeightCm: 86, marginMm: 5 };
+    const lfLine = (id: string, w: number, h: number, qty: number, extra: Record<string, unknown> = {}) => {
+      const f = file(`f-${id}`, id, 1, { paperType: "large_format" });
+      return { f, line: makeLine({ id, productType: "large_format_print", largeFormatLineData: { ...(lfLineData("VATMAN 260G", w, h, qty, 0) as object), ...extra }, lfSheetSpec: spec, files: [f] }) };
+    };
+    const a = lfLine("l-big", 55, 70, 1);
+    const b = lfLine("l-a3x1", 29.7, 42, 1);
+    const c = lfLine("l-a3x2", 29.7, 42, 2);
+    const o1 = makeOrder({ id: "o1", orderNumber: 101, productType: "large_format_print", orderLines: [a.line, b.line], files: [a.f, b.f] });
+    const o2 = makeOrder({ id: "o2", orderNumber: 102, productType: "large_format_print", orderLines: [c.line], files: [c.f] });
+    expect(groupLines([o1, o2])[0]!.groups[0]!.aggregate.totalSheetsLabel).toBe("2 листа A1 (по строкам 3)");
+
+    // After «Подтвердить печать» the confirmed lines count their pooled share.
+    const pooled = (stockSheets: number) => ({ sheetPool: { stockSheets, poolSheets: 2, orderNumbers: [101, 102] } });
+    const a2 = lfLine("l-big", 55, 70, 1, pooled(1));
+    const b2 = lfLine("l-a3x1", 29.7, 42, 1, pooled(0));
+    const c2 = lfLine("l-a3x2", 29.7, 42, 2, pooled(1));
+    const p1 = makeOrder({ id: "o1", orderNumber: 101, productType: "large_format_print", orderLines: [a2.line, b2.line], files: [a2.f, b2.f] });
+    const p2 = makeOrder({ id: "o2", orderNumber: 102, productType: "large_format_print", orderLines: [c2.line], files: [c2.f] });
+    const group = groupLines([p1, p2])[0]!.groups[0]!;
+    expect(group.aggregate.totalSheetsLabel).toBe("2 листа A1 (по строкам 3)");
+    const facts = group.lines.find((l) => l.orderLineId === "l-a3x1")!.facts;
+    expect(facts.kind === "lf" && facts.data.sheets?.pooled).toEqual({ stockSheets: 0, poolSheets: 2, orderNumbers: [101, 102] });
+  });
+
   it("keeps a roll line on the roll card when its material is a roll", () => {
     const order = makeOrder({
       productType: "large_format_print",
