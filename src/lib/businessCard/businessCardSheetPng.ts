@@ -205,7 +205,14 @@ async function buildSideSheet(
 
   // Composite runs after rotate inside one pipeline, so turn in a second pass.
   const finished = side.rotateDeg === 180 ? sharp(sheet).rotate(180) : sharp(sheet);
-  return finished.withMetadata({ density: BUSINESS_CARD_SHEET_DPI }).png().toBuffer();
+  // The sheet is opaque white underneath, so the alpha that composite adds is
+  // all 255: drop it so the PNG is plain RGB and its pixel stream can go into
+  // the Ricoh PDF as-is (`businessCardSheetPdf`).
+  return finished
+    .removeAlpha()
+    .withMetadata({ density: BUSINESS_CARD_SHEET_DPI })
+    .png()
+    .toBuffer();
 }
 
 export async function buildBusinessCardSheetPngs(

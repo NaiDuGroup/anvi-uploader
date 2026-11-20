@@ -348,9 +348,10 @@ function triggerDownload(file: BusinessCardLayoutFile): void {
 }
 
 /**
- * Builds the business-card imposition PNGs (one per printed side) for one line
- * on demand and downloads them as a ZIP with a folder named after the order
- * number. The sheets are generated server-side from the
+ * Builds the sheet imposition (business cards, flyers, postcards) for one line
+ * on demand and downloads it as ONE PDF for the Ricoh: page 1 the front, page 2
+ * the back (two-sided lines), each page the exact sheet size, ready to print
+ * in duplex. The sheets are generated server-side from the
  * grid frozen on the order line, so they always match what the order was
  * priced with. A successful download marks THIS line «Печатается» when it was
  * still waiting (the order's other lines keep their status; the order status

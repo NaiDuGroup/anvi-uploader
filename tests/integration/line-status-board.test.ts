@@ -602,7 +602,8 @@ describe.skipIf(!isLocalDb)("integration: per-line production status on the work
   });
 
   it("business-card style download on the board: marking one line PRINTING leaves the rest", async () => {
-    // The board's «Скачать макет» calls the same per-line endpoint with only that line.
+    // The board's «Скачать макет» (one Ricoh PDF, see sheet-product-layout) then
+    // calls the same per-line status endpoint with only that line.
     const o = await threeLineOrder();
     stubFetchToRoutes();
     const r = await fetch(`/api/orders/${o.id}/lines/status`, {

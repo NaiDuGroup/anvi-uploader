@@ -19,6 +19,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
+import { PDFDocument } from "pdf-lib";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
@@ -68,6 +69,7 @@ import { fetchOrdersData } from "@/lib/fetchOrders";
 import { fetchWorkshopSidebarData } from "@/lib/fetchWorkshopSidebar";
 import { orderPollFingerprint, type PollFingerprintOrder } from "@/lib/orderPollFingerprint";
 import type { OrderStatus } from "@/lib/validations";
+import { computeBusinessCardSheetLayout } from "@/lib/businessCard/businessCardSheetLayout";
 import { cleanupTestMugs, createTestMug } from "./mugSeed";
 import { cleanupTestNotebook, createTestNotebook } from "./notebookSeed";
 import { cleanupTestLfMaterial, createTestLfMaterial, type TestLfMaterial } from "./lfMaterialSeed";
@@ -375,6 +377,71 @@ describe.skipIf(!isLocalDb)("integration audit: «Нужен макет» gaps",
       expect((await clear(o.id, bc.id)).status).toBe(200);
       const r = await asWorkshop(() => sheetLayout(req("/x", "POST", { orderLineId: bc.id })));
       expect(r.body.error).not.toBe("line_needs_layout"); // no grid data in the test: another refusal
+    });
+
+    it("sheet-product-layout: a two-sided A4+ flyer line downloads ONE PDF, front then back, 225 × 320 mm pages", async () => {
+      const o = await mixedOrder();
+      const sheet = { sheetWidthCm: 22.5, sheetHeightCm: 32, cardWidthCm: 10.7, cardHeightCm: 15.2 };
+      const grid = computeBusinessCardSheetLayout(sheet);
+      const frontKey = await storePng("flyer-front.png", 1264, 1795, 300);
+      const backKey = await storePng("flyer-back.png", 1264, 1795, 300);
+      const line = await prisma.orderLine.create({
+        data: {
+          orderId: o.id,
+          sortOrder: 11,
+          productType: "flyer",
+          productionStatus: "WAITING",
+          businessCardLineData: {
+            paperSnapshot: { id: "p", name: "A4+ 150", sheetWidthCm: 22.5, sheetHeightCm: 32, costPerSheet: 1, retailPricePerSheet: 5, dealerPricePerSheet: 4 },
+            cardWidthCm: 10.7,
+            cardHeightCm: 15.2,
+            cardTrimWidthCm: 10.5,
+            cardTrimHeightCm: 15,
+            bleedCm: 0.1,
+            sides: "two",
+            quantity: 200,
+            cardsPerSheet: grid.cardsPerSheet,
+            sheetsUsed: 50,
+            customerType: "retail",
+            layout: {
+              algorithmVersion: 1,
+              columns: grid.columns,
+              rows: grid.rows,
+              cardsPerSheet: grid.cardsPerSheet,
+              rotated: grid.rotated,
+              gapCm: grid.gapCm,
+              marginXCm: grid.marginXCm,
+              marginYCm: grid.marginYCm,
+              slotWidthCm: grid.slotWidthCm,
+              slotHeightCm: grid.slotHeightCm,
+            },
+            pricePerSheetMdl: 5,
+            totalSellPriceMdl: 250,
+            paperCostMdl: 50,
+            avgPaperCostPerSheetSnapshot: 1,
+            estimatedProfitMdl: 200,
+          },
+          files: {
+            create: [
+              { orderId: o.id, fileName: "front.png", fileUrl: frontKey, copies: 1, color: "color", paperType: "business_card_front" },
+              { orderId: o.id, fileName: "back.png", fileUrl: backKey, copies: 1, color: "color", paperType: "business_card_back" },
+            ],
+          },
+        },
+      });
+      const r = await asWorkshop(() => sheetLayout(req("/x", "POST", { orderLineId: line.id })));
+      expect(r.status).toBe(200);
+      const order = await prisma.order.findUniqueOrThrow({ where: { id: o.id }, select: { orderNumber: true } });
+      expect(r.body.fileName).toBe(`flaery-${order.orderNumber}-200sht-50listov.pdf`);
+      const key = new URL(String(r.body.downloadUrl), "http://localhost").searchParams.get("key")!;
+      const file = path.join(LOCAL_UPLOADS, key);
+      writtenKeys.push(file);
+      const doc = await PDFDocument.load(readFileSync(file));
+      expect(doc.getPageCount()).toBe(2);
+      for (const page of doc.getPages()) {
+        expect(page.getWidth() * (25.4 / 72)).toBeCloseTo(225, 3);
+        expect(page.getHeight() * (25.4 / 72)).toBeCloseTo(320, 3);
+      }
     });
   });
 
