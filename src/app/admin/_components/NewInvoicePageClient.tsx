@@ -620,6 +620,18 @@ function NewInvoiceForm({
             });
             setClientFormOpen(false);
           }}
+          onUseExisting={(existing) => {
+            setClient({
+              id: existing.id,
+              kind: existing.kind,
+              phone: existing.phone,
+              personName: existing.personName,
+              companyName: existing.companyName,
+              companyIdno: existing.companyIdno,
+              isDealer: existing.isDealer,
+            });
+            setClientFormOpen(false);
+          }}
         />
       ) : null}
     </main>

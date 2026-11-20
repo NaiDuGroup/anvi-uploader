@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { createClientBodySchema } from "@/lib/validations";
 import { normalizedPhoneForDb } from "@/lib/studioClient";
+import { duplicateClientResponseBody, findDuplicateClient } from "@/lib/clientDuplicatesServer";
 import { phoneSearchDigitVariants } from "@/lib/phoneNormalize";
 import { serializeOrderPrice } from "@/lib/orderPriceDecimal";
 import {
@@ -152,17 +153,12 @@ export async function POST(request: NextRequest) {
         ? normalizedPhoneForDb(validated.phone!)
         : normalizedPhoneForDb(validated.phone?.trim() ?? "") ?? null;
 
-    if (validated.kind === "INDIVIDUAL" && phoneNorm) {
-      const dup = await prisma.studioCustomer.findFirst({
-        where: { kind: "INDIVIDUAL", phoneNormalized: phoneNorm },
-        select: { id: true },
-      });
-      if (dup) {
-        return NextResponse.json(
-          { error: "A client with this phone already exists" },
-          { status: 409 },
-        );
-      }
+    const dup = await findDuplicateClient({
+      phoneNormalized: phoneNorm,
+      companyIdno: validated.kind === "LEGAL" ? validated.companyIdno : null,
+    });
+    if (dup) {
+      return NextResponse.json(duplicateClientResponseBody(dup), { status: 409 });
     }
 
     const client = await prisma.studioCustomer.create({

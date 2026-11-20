@@ -1,12 +1,18 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import type { ClientKind } from "@/lib/validations";
 import { cn } from "@/lib/utils";
+import {
+  duplicateClientLabel,
+  type DuplicateClientField,
+  type DuplicateClientInfo,
+} from "@/lib/clientDuplicates";
 
 /** Minimal record returned by `POST /api/admin/clients` and `PATCH /api/admin/clients/[id]`. */
 export interface ClientFormSavedClient {
@@ -36,12 +42,18 @@ export function ClientFormModal({
    * Kept as a render prop to keep the modal feature-agnostic.
    */
   renderHeaderExtras,
+  /**
+   * When set, a duplicate (409) offers «Выбрать этого клиента» — e.g. the invoice
+   * form picks the existing record instead of creating a second one.
+   */
+  onUseExisting,
 }: {
   t: T;
   initial: ClientFormInitial;
   onClose: () => void;
   onSaved: (saved: ClientFormSavedClient) => void;
   renderHeaderExtras?: (initial: ClientFormSavedClient) => React.ReactNode;
+  onUseExisting?: (existing: DuplicateClientInfo) => void;
 }) {
   const [kind, setKind] = useState<ClientKind>(
     (initial?.kind as ClientKind) ?? "INDIVIDUAL",
@@ -52,10 +64,15 @@ export function ClientFormModal({
   const [companyIdno, setCompanyIdno] = useState(initial?.companyIdno ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [duplicate, setDuplicate] = useState<{
+    field: DuplicateClientField;
+    existing: DuplicateClientInfo;
+  } | null>(null);
 
   const submit = async () => {
     setSaving(true);
     setError("");
+    setDuplicate(null);
     const body = {
       kind,
       phone: phone.trim() || undefined,
@@ -76,9 +93,15 @@ export function ClientFormModal({
       const errBody = (await res.json().catch(() => ({}))) as {
         error?: string;
         id?: string;
+        field?: DuplicateClientField;
+        existing?: DuplicateClientInfo;
       };
       if (res.status === 409) {
-        setError(t.admin.clientsDuplicatePhone);
+        if (errBody.error === "duplicate_client" && errBody.existing && errBody.field) {
+          setDuplicate({ field: errBody.field, existing: errBody.existing });
+        } else {
+          setError(t.admin.clientsDuplicatePhone);
+        }
         return;
       }
       if (!res.ok) {
@@ -213,6 +236,43 @@ export function ClientFormModal({
           )}
 
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+          {duplicate ? (
+            <div
+              role="alert"
+              className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+            >
+              <p>
+                {duplicate.field === "idno"
+                  ? t.admin.clientsDuplicateIdnoOf
+                  : t.admin.clientsDuplicatePhoneOf}{" "}
+                <span className="font-semibold">{duplicateClientLabel(duplicate.existing)}</span>
+              </p>
+              <p className="mt-0.5 text-xs text-red-700">
+                {[duplicate.existing.companyIdno ? `IDNO ${duplicate.existing.companyIdno}` : null, duplicate.existing.phone]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Link
+                  href={`/admin/clients/${duplicate.existing.id}`}
+                  prefetch={false}
+                  className="inline-flex h-8 items-center rounded-md border border-red-300 bg-white px-3 text-xs font-medium text-red-800 hover:bg-red-100"
+                >
+                  {t.admin.clientsDuplicateOpen}
+                </Link>
+                {onUseExisting ? (
+                  <button
+                    type="button"
+                    onClick={() => onUseExisting(duplicate.existing)}
+                    className="inline-flex h-8 items-center rounded-md bg-red-600 px-3 text-xs font-medium text-white hover:bg-red-700"
+                  >
+                    {t.admin.clientsDuplicateUse}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
 
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1" onClick={onClose}>

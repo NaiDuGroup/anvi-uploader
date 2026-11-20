@@ -248,6 +248,10 @@ export interface TranslationDictionary {
     clientsConfirmDeleteTitle: string;
     clientsConfirmDeleteBody: string;
     clientsDuplicatePhone: string;
+    clientsDuplicateIdnoOf: string;
+    clientsDuplicatePhoneOf: string;
+    clientsDuplicateOpen: string;
+    clientsDuplicateUse: string;
     clientsSaveFailed: string;
     clientsValidationFailed: string;
     clientsUnauthorized: string;

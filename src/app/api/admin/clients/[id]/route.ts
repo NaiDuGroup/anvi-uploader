@@ -6,6 +6,8 @@ import { getSessionUser } from "@/lib/auth";
 import { isAdmin, isSuperAdmin } from "@/lib/roles";
 import { createClientBodySchema } from "@/lib/validations";
 import { normalizedPhoneForDb } from "@/lib/studioClient";
+import { duplicateClientResponseBody, findDuplicateClient } from "@/lib/clientDuplicatesServer";
+import { normalizeIdno, phoneMatchKey } from "@/lib/clientDuplicates";
 import { dealerUrgencyMode, toFeeMdl } from "@/lib/dealerUrgency";
 import { getGlobalDealerUrgencyFeeMdl } from "@/lib/dealerUrgencyServer";
 
@@ -103,21 +105,21 @@ export async function PATCH(
         ? normalizedPhoneForDb(validated.phone!)
         : normalizedPhoneForDb(validated.phone?.trim() ?? "") ?? null;
 
-    if (validated.kind === "INDIVIDUAL" && phoneNorm) {
-      const dup = await prisma.studioCustomer.findFirst({
-        where: {
-          kind: "INDIVIDUAL",
-          phoneNormalized: phoneNorm,
-          NOT: { id },
-        },
-        select: { id: true },
-      });
-      if (dup) {
-        return NextResponse.json(
-          { error: "A client with this phone already exists" },
-          { status: 409 },
-        );
-      }
+    // Only a phone / IDNO that changed is checked: dealer / email toggles and
+    // name edits must keep working on duplicates that already exist in the DB.
+    const nextIdno = validated.kind === "LEGAL" ? validated.companyIdno : null;
+    const phoneChanged = phoneMatchKey(phoneNorm) !== phoneMatchKey(existing.phoneNormalized);
+    const idnoChanged = normalizeIdno(nextIdno) !== normalizeIdno(existing.companyIdno);
+    const dup =
+      phoneChanged || idnoChanged
+        ? await findDuplicateClient({
+            phoneNormalized: phoneChanged ? phoneNorm : null,
+            companyIdno: idnoChanged ? nextIdno : null,
+            excludeId: id,
+          })
+        : null;
+    if (dup) {
+      return NextResponse.json(duplicateClientResponseBody(dup), { status: 409 });
     }
 
     const client = await prisma.studioCustomer.update({
