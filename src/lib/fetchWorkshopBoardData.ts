@@ -43,7 +43,7 @@ const BOARD_EXTENDED_STATUSES: OrderStatus[] = [
   "DELIVERED",
 ];
 
-const ORDER_LINE_SELECT = {
+export const ORDER_LINE_SELECT = {
   id: true,
   sortOrder: true,
   productType: true,
@@ -70,7 +70,7 @@ const ORDER_LINE_SELECT = {
   ownerReplacedRole: true,
 } as const satisfies Prisma.OrderLineSelect;
 
-const ORDER_FILE_SELECT = {
+export const ORDER_FILE_SELECT = {
   id: true,
   orderId: true,
   orderLineId: true,

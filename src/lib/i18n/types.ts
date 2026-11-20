@@ -2,6 +2,7 @@ import type { DtfDictionary } from "./dtf/types";
 import type { FileMetaText } from "@/lib/files/fileMetaFormat";
 import type { UvDictionary } from "./uv/types";
 import type { LayoutIssueDictionary } from "./layoutIssue/types";
+import type { OrderPanelDictionary } from "./orderPanel/types";
 import type { DealerUrgencyDictionary } from "./dealerUrgency/types";
 import type { OrderHistoryDictionary } from "./orderHistory/types";
 import type { LibraryDictionary } from "./library/types";
@@ -2835,6 +2836,7 @@ export interface TranslationDictionary {
   uv: UvDictionary;
   /** «Нужен макет» on an order line (board, studio orders, cabinet). */
   layoutIssue: LayoutIssueDictionary;
+  orderPanel: OrderPanelDictionary;
   dealerUrgency: DealerUrgencyDictionary;
   orderHistory: OrderHistoryDictionary;
   /** «Сублимация» order lines. */

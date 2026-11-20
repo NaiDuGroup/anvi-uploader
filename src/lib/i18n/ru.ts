@@ -4,6 +4,7 @@ import { ruFilesCount } from "./filesCount";
 import { dtfRu } from "./dtf/ru";
 import { uvRu } from "./uv/ru";
 import { layoutIssueRu } from "./layoutIssue/ru";
+import { orderPanelRu } from "./orderPanel/ru";
 import { dealerUrgencyRu } from "./dealerUrgency/ru";
 import { orderHistoryRu } from "./orderHistory/ru";
 import { sublimationRu } from "./sublimation/ru";
@@ -2744,6 +2745,7 @@ export const ru: TranslationDictionary = {
   },
   uv: uvRu,
   layoutIssue: layoutIssueRu,
+  orderPanel: orderPanelRu,
   dealerUrgency: dealerUrgencyRu,
   orderHistory: orderHistoryRu,
   sublimation: sublimationRu,

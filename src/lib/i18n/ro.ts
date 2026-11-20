@@ -4,6 +4,7 @@ import { roFilesCount } from "./filesCount";
 import { dtfRo } from "./dtf/ro";
 import { uvRo } from "./uv/ro";
 import { layoutIssueRo } from "./layoutIssue/ro";
+import { orderPanelRo } from "./orderPanel/ro";
 import { dealerUrgencyRo } from "./dealerUrgency/ro";
 import { orderHistoryRo } from "./orderHistory/ro";
 import { sublimationRo } from "./sublimation/ro";
@@ -2562,6 +2563,7 @@ export const ro: TranslationDictionary = {
   },
   uv: uvRo,
   layoutIssue: layoutIssueRo,
+  orderPanel: orderPanelRo,
   dealerUrgency: dealerUrgencyRo,
   orderHistory: orderHistoryRo,
   sublimation: sublimationRo,

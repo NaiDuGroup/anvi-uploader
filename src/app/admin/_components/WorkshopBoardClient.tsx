@@ -1,11 +1,8 @@
 "use client";
 
 import { GiftSetBadge } from "@/components/orders/GiftSetBadge";
-import { isGiftSetSku } from "@/lib/giftSet/giftSet";
 import React, {
-  createContext,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -20,12 +17,7 @@ import {
   Flame,
   MessageCircle,
   ScanLine,
-  Coffee,
-  BookOpen,
-  CreditCard,
   Download,
-  FileText,
-  Pencil,
   ChevronDown,
   ChevronUp,
   Search,
@@ -36,14 +28,9 @@ import {
   UserCheck,
   Send,
   Info,
-  Sticker,
 } from "lucide-react";
-import { StickerSheetPreview } from "@/components/orders/StickerSheetPreview";
-import { PRODUCT_TYPE_ICONS } from "@/lib/productTypeIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FileThumb } from "@/components/FileThumb";
-import { FileMetaLine } from "@/components/FileMetaLine";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { useWorkshopBoardStore } from "@/stores/useWorkshopBoardStore";
 import { cn } from "@/lib/utils";
@@ -52,15 +39,16 @@ import type {
   WorkshopBoardSection,
   WorkshopBoardGroup,
   WorkshopBoardLine,
-  WorkshopBoardFile,
   LfRollCandidate,
   BoardSectionKey,
 } from "@/lib/workshopBoard/types";
 import { summarizeSection } from "@/lib/workshopBoard/sectionSummary";
 import { PRODUCT_TYPE_UI } from "./workshopBoard/productTypeUi";
-import { DtfBoardLineSummary, DtfFilmLayoutButton, UvDtfFilmLayoutButton } from "./workshopBoard/DtfBoardParts";
-import { UvBoardLineSummary } from "./workshopBoard/UvBoardParts";
-import { SublimationBoardLineSummary } from "./workshopBoard/SublimationBoardParts";
+import { DtfFilmLayoutButton, UvDtfFilmLayoutButton } from "./workshopBoard/DtfBoardParts";
+import { BoardLineFacts } from "./workshopBoard/BoardLineFacts";
+import { FileThumbnailStrip, OpenFileContext, type LightboxFile } from "./workshopBoard/BoardFiles";
+import { BOARD_HIGHLIGHT_MS, BoardOrderPanelContext, useBoardOrderPanel, type BoardOrderHighlight } from "./workshopBoard/orderPanelContext";
+import { orderLinesOnBoard } from "@/lib/workshopBoard/orderOverviewAccess";
 import { TypeOverviewGrid } from "./workshopBoard/TypeOverviewGrid";
 import { prepareTiles } from "@/lib/largeFormat/layoutTiles";
 import { evaluateLfRollOptions } from "@/lib/largeFormat/lfRollChoice";
@@ -89,6 +77,10 @@ import {
 import type { IssueReasonKey } from "../_lib/constants";
 
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
+const OrderOverviewDrawer = dynamic(
+  () => import("./workshopBoard/OrderOverviewDrawer").then((m) => m.OrderOverviewDrawer),
+  { ssr: false },
+);
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const LayoutIssueModal = dynamic(() => import("./LayoutIssueModal"), { ssr: false });
 const ClearLayoutIssueDialog = dynamic(() => import("./ClearLayoutIssueDialog"), { ssr: false });
@@ -135,66 +127,6 @@ interface WorkshopBoardClientProps {
 
 type SavingState = { orderId: string; kind: "status" | "prio" } | null;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-interface LightboxFile {
-  id: string;
-  name: string;
-}
-
-/** Opens a board file in the shared viewer; provided by `WorkshopBoardClient`. */
-const OpenFileContext = createContext<(file: LightboxFile) => void>(() => {});
-
-// ─── File Thumbnail strip ─────────────────────────────────────────────────────
-
-const THUMBNAILS_SHOWN = 4;
-
-function isExternalUrl(url: string): boolean {
-  return url.startsWith("http://") || url.startsWith("https://");
-}
-
-function FileThumbnailStrip({ files }: { files: WorkshopBoardFile[] }) {
-  const openFile = useContext(OpenFileContext);
-  const shown = files.slice(0, THUMBNAILS_SHOWN);
-  const firstHidden = files[THUMBNAILS_SHOWN];
-  // Link files point outside our storage, so the viewer can't show them: open the link itself.
-  const open = (f: WorkshopBoardFile): void => {
-    if (isExternalUrl(f.fileUrl)) window.open(f.fileUrl, "_blank", "noopener,noreferrer");
-    else openFile({ id: f.id, name: f.fileName });
-  };
-  const stored = shown.filter((f) => !isExternalUrl(f.fileUrl));
-  return (
-    <div className="space-y-1">
-      <div className="flex flex-wrap items-center gap-1">
-        {shown.map((f) => (
-          <div key={f.id} title={f.fileName}>
-            <FileThumb fileId={f.id} fileName={f.fileName} onClick={() => open(f)} />
-          </div>
-        ))}
-        {firstHidden && (
-          <button
-            type="button"
-            onClick={() => open(firstHidden)}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-gray-200 bg-gray-50 text-[10px] font-semibold text-gray-500 transition-colors hover:bg-gray-100"
-          >
-            +{files.length - THUMBNAILS_SHOWN}
-          </button>
-        )}
-      </div>
-      {stored.length > 0 && (
-        <ul className="space-y-0.5 text-[10px] leading-tight">
-          {stored.map((f) => (
-            <li key={f.id} className="flex min-w-0 gap-1">
-              {stored.length > 1 && <span className="max-w-[7rem] shrink-0 truncate text-gray-400">{f.fileName}</span>}
-              <FileMetaLine fileId={f.id} className="min-w-0 truncate" />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 // ─── Line card ────────────────────────────────────────────────────────────────
 
 function BoardLineCard({
@@ -217,246 +149,10 @@ function BoardLineCard({
   const isSaving = saving?.orderId === line.orderId;
   const isPrioSaving = isSaving && saving?.kind === "prio";
   const isStatusSaving = isSaving && saving?.kind === "status";
+  const { openOrder, highlight } = useBoardOrderPanel();
+  const highlighted = highlight?.orderId === line.orderId;
 
-  const lineSummary = (() => {
-    switch (line.facts.kind) {
-      case "lf": {
-        const { materialName, widthCm, heightCm, quantity, extrasRu, sheets } = line.facts.data;
-        return (
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
-            <ScanLine className="h-3 w-3 shrink-0 text-sky-600" aria-hidden />
-            <span className="font-medium text-gray-800 truncate max-w-[14rem]" title={materialName}>
-              {materialName}
-            </span>
-            <span className="text-gray-300" aria-hidden>·</span>
-            <span className="tabular-nums shrink-0">{widthCm}×{heightCm} см</span>
-            <span className="text-gray-300" aria-hidden>·</span>
-            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 leading-none">
-              {t.admin.lfFilePrintCopiesBadge(quantity)}
-            </span>
-            {sheets ? (
-              // Sheet material (VATMAN A1): how many sheets to print.
-              <span className="shrink-0 rounded-md border border-sky-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-sky-900 leading-none">
-                {sheets.label}
-              </span>
-            ) : null}
-            {extrasRu ? (
-              <span className="basis-full rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-900">
-                Отделка: {extrasRu}
-              </span>
-            ) : null}
-          </div>
-        );
-      }
-      case "sheet_product": {
-        const {
-          paperName,
-          quantity,
-          sheetsUsed,
-          sides,
-          cardsPerSheet,
-          cardTrimWidthCm,
-          cardTrimHeightCm,
-          finishingRu,
-          sticker,
-          postcard,
-        } = line.facts.data;
-        if (postcard) {
-          const PostcardIcon = PRODUCT_TYPE_ICONS.postcard;
-          return (
-            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
-              <PostcardIcon className="h-3 w-3 shrink-0 text-rose-700" aria-hidden />
-              <span className="min-w-0 max-w-full rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[11px] font-semibold leading-tight text-rose-800">
-                {postcard.summaryRu}
-              </span>
-              <span className="max-w-[12rem] truncate font-medium text-gray-800" title={paperName}>
-                {paperName}
-              </span>
-              <span className="shrink-0">
-                {sides === "two" ? t.admin.bcOrderLineSidesTwo : t.admin.bcOrderLineSidesOne}
-              </span>
-              <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-teal-800">
-                {t.admin.bcOrderLineRunLabel(quantity)}
-              </span>
-              <span className="shrink-0 text-gray-500">
-                {t.admin.bcOrderLinePerSheetLabel(cardsPerSheet)}
-              </span>
-              <span className="shrink-0 font-medium text-gray-700">
-                {t.admin.bcOrderLineSheetsLabel(sheetsUsed)} {postcard.preview.format}
-              </span>
-              <div className="flex basis-full items-start gap-2">
-                <StickerSheetPreview data={postcard.preview} maxHeightPx={96} fillColor="#ffe4e6" className="shrink-0" />
-                <ol className="min-w-0 list-decimal space-y-0.5 pl-4 text-[11px] text-gray-700">
-                  {postcard.stepsRu.map((step) => (
-                    <li key={step}>{step}</li>
-                  ))}
-                </ol>
-              </div>
-            </div>
-          );
-        }
-        if (sticker) {
-          return (
-            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
-              <Sticker className="h-3 w-3 shrink-0 text-lime-700" aria-hidden />
-              <span className="shrink-0 rounded-md border border-lime-200 bg-lime-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-lime-800">
-                {sticker.summaryRu}
-              </span>
-              <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-teal-800">
-                {t.admin.bcOrderLineRunLabel(quantity)}
-              </span>
-              <span className="shrink-0 text-gray-500">
-                {t.admin.bcOrderLinePerSheetLabel(cardsPerSheet)}
-              </span>
-              <span className="shrink-0 font-medium text-gray-700">
-                {t.admin.bcOrderLineSheetsLabel(sheetsUsed)}
-              </span>
-              <span className="max-w-[12rem] truncate text-gray-400" title={paperName}>
-                {paperName}
-              </span>
-              <StickerSheetPreview data={sticker} maxHeightPx={96} className="basis-full" />
-              {sticker.format === "A4+" ? (
-                <span className="basis-full text-[10px] text-gray-500">
-                  {t.admin.stickerSheet.a4PairCaption} · {sheetsUsed} A4+ = {Math.ceil(sheetsUsed / 2)} A3+
-                </span>
-              ) : null}
-            </div>
-          );
-        }
-        return (
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
-            <CreditCard className="h-3 w-3 shrink-0 text-teal-600" aria-hidden />
-            <span
-              className="max-w-[14rem] truncate font-medium text-gray-800"
-              title={paperName}
-            >
-              {paperName}
-            </span>
-            <span className="text-gray-300" aria-hidden>·</span>
-            <span className="shrink-0 tabular-nums">
-              {t.admin.bcOrderLineCardSizeLabel(
-                cardTrimWidthCm,
-                cardTrimHeightCm,
-              )}
-            </span>
-            <span className="text-gray-300" aria-hidden>·</span>
-            <span className="shrink-0">
-              {sides === "two"
-                ? t.admin.bcOrderLineSidesTwo
-                : t.admin.bcOrderLineSidesOne}
-            </span>
-            <span className="text-gray-300" aria-hidden>·</span>
-            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-teal-800">
-              {t.admin.bcOrderLineRunLabel(quantity)}
-            </span>
-            <span className="shrink-0 text-gray-500">
-              {t.admin.bcOrderLineSheetsLabel(sheetsUsed)}
-            </span>
-            <span className="shrink-0 text-gray-500">
-              {t.admin.bcOrderLinePerSheetLabel(cardsPerSheet)}
-            </span>
-            {finishingRu ? (
-              <span className="shrink-0 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-800">
-                {finishingRu}
-              </span>
-            ) : null}
-          </div>
-        );
-      }
-      case "mug": {
-        const { displayName, quantity } = line.facts.data;
-        return (
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
-            <Coffee className="h-3 w-3 shrink-0 text-amber-600" aria-hidden />
-            <span className="font-medium text-gray-800 truncate max-w-[14rem]" title={displayName}>
-              {displayName}
-            </span>
-            <span className="text-gray-300" aria-hidden>·</span>
-            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 leading-none">
-              {t.admin.orderSkuPiecesBadge(quantity)}
-            </span>
-          </div>
-        );
-      }
-      case "notebook": {
-        const { displayName, quantity, paperKind } = line.facts.data;
-        return (
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
-            <BookOpen className="h-3 w-3 shrink-0 text-emerald-600" aria-hidden />
-            <span className="font-medium text-gray-800 truncate max-w-[14rem]" title={displayName}>
-              {displayName}
-            </span>
-            {paperKind && (
-              <>
-                <span className="text-gray-300" aria-hidden>·</span>
-                <span className="text-gray-500">
-                  {paperKind === "squared"
-                    ? t.admin.notebookPaperKindSquared
-                    : paperKind === "dated"
-                      ? t.admin.notebookPaperKindDated
-                      : paperKind === "ruled"
-                        ? t.admin.notebookPaperKindRuled
-                        : paperKind}
-                </span>
-              </>
-            )}
-            <span className="text-gray-300" aria-hidden>·</span>
-            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-800 leading-none">
-              {t.admin.orderSkuPiecesBadge(quantity)}
-            </span>
-          </div>
-        );
-      }
-      case "pen": {
-        const { displayName, sku, quantity } = line.facts.data;
-        return (
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
-            <Pencil className="h-3 w-3 shrink-0 text-pink-600" aria-hidden />
-            <span className="font-medium text-gray-800 truncate max-w-[14rem]" title={displayName}>
-              {displayName}
-            </span>
-            {/* A ready set's pen carries the set's SKU (grouping only): «Ручка из набора · чёрный» says it all. */}
-            {!isGiftSetSku(sku) && (
-              <>
-                <span className="text-gray-300" aria-hidden>·</span>
-                <span className="font-mono text-gray-500">{sku}</span>
-              </>
-            )}
-            <span className="text-gray-300" aria-hidden>·</span>
-            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-pink-200 bg-pink-50 px-1.5 py-0.5 text-[11px] font-semibold text-pink-800 leading-none">
-              {t.admin.orderSkuPiecesBadge(quantity)}
-            </span>
-          </div>
-        );
-      }
-      case "dtf":
-        return <DtfBoardLineSummary facts={line.facts.data} />;
-      case "uv":
-        return <UvBoardLineSummary facts={line.facts.data} />;
-      case "sublimation":
-        return <SublimationBoardLineSummary facts={line.facts.data} />;
-      case "paper": {
-        const { label, color, quantity } = line.facts.data;
-        const colorLabel = color === "color"
-          ? t.workshopBoard.paperColorLabel
-          : color === "bw"
-            ? t.workshopBoard.paperBwLabel
-            : t.workshopBoard.paperMixedLabel;
-        return (
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
-            <FileText className="h-3 w-3 shrink-0 text-violet-600" aria-hidden />
-            <span className="font-medium text-gray-800">{label}</span>
-            <span className="text-gray-300" aria-hidden>·</span>
-            <span>{colorLabel}</span>
-            <span className="text-gray-300" aria-hidden>·</span>
-            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-semibold text-violet-800 leading-none">
-              ×{quantity}
-            </span>
-          </div>
-        );
-      }
-    }
-  })();
+  const lineSummary = <BoardLineFacts line={line} />;
 
   // A done line of an order still on the board: kept visible, marked ✓ and de-emphasised.
   const done = lineDoneOnBoard(line);
@@ -467,8 +163,11 @@ function BoardLineCard({
     <div
       data-testid={`board-line-${line.orderLineId}`}
       data-line-status={line.lineStatus}
+      data-board-order={line.orderId}
+      data-highlighted={highlighted ? "true" : undefined}
       className={cn(
         "rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-colors",
+        highlighted && "animate-pulse ring-2 ring-amber-400 ring-offset-2",
         line.isPrio && !done && !needsLayout && "border-l-4 border-l-red-400 bg-red-50/30",
         line.unreadCommentCount > 0 && !line.isPrio && !done && !needsLayout && "border-l-4 border-l-blue-400",
         needsLayout && "border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/40",
@@ -478,9 +177,16 @@ function BoardLineCard({
       {/* Header row */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[10px] font-bold uppercase tracking-wide text-gray-500">
+          <button
+            type="button"
+            onClick={() => openOrder(line.orderId, line.orderLineId)}
+            title={t.orderPanel.openWholeOrder}
+            aria-label={`${t.orderPanel.openWholeOrder} ${ref}`}
+            data-testid={`board-line-ref-${line.orderLineId}`}
+            className="cursor-pointer rounded font-mono text-[10px] font-bold uppercase tracking-wide text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+          >
             {ref}
-          </span>
+          </button>
           {line.isPrio && (
             <span className="inline-flex items-center gap-0.5 rounded-md border border-red-200 bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold text-red-700 leading-none">
               <Flame className="h-2.5 w-2.5" aria-hidden />
@@ -764,6 +470,12 @@ function BoardGroupCard({
 }) {
   const { t } = useLanguageStore();
   const [collapsed, setCollapsed] = useState(false);
+  const { highlight } = useBoardOrderPanel();
+  // «Показать на доске»: open the group when it holds a line of that order.
+  useEffect(() => {
+    if (highlight && group.lines.some((l) => l.orderId === highlight.orderId)) setCollapsed(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a new highlight
+  }, [highlight]);
   const { aggregate, meta } = group;
   const productType = sectionKey;
   const isLf = productType === "large_format_print";
@@ -974,6 +686,13 @@ function BoardSection({
 }) {
   const { t } = useLanguageStore();
   const [collapsed, setCollapsed] = useState(false);
+  const { highlight } = useBoardOrderPanel();
+  useEffect(() => {
+    if (highlight && section.groups.some((g) => g.lines.some((l) => l.orderId === highlight.orderId))) {
+      setCollapsed(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a new highlight
+  }, [highlight]);
   const pt = section.key;
 
   // Count tiles whose LINE is still waiting (SENT_TO_WORKSHOP in order-status
@@ -1211,6 +930,9 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   const [saving, setSaving] = useState<SavingState>(null);
   const [savingLineKey, setSavingLineKey] = useState<string | null>(null);
   const [commentOrder, setCommentOrder] = useState<{ id: string; orderNumber: number } | null>(null);
+  // «Весь заказ» panel (opened from a card's line code) and «Показать на доске».
+  const [panelOrder, setPanelOrder] = useState<{ orderId: string; orderLineId: string } | null>(null);
+  const [highlight, setHighlight] = useState<BoardOrderHighlight | null>(null);
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [layoutGroup, setLayoutGroup] = useState<WorkshopBoardGroup | null>(null);
   const [lightboxFile, setLightboxFile] = useState<LightboxFile | null>(null);
@@ -1441,8 +1163,49 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
 
   const isEmpty = !loading && sections.length === 0;
 
+  const panelLinesOnBoard = useMemo(
+    () => (panelOrder ? orderLinesOnBoard(sections, panelOrder.orderId) : new Set<string>()),
+    [sections, panelOrder],
+  );
+  const closePanel = useCallback(() => setPanelOrder(null), []);
+  const showOrderOnBoard = useCallback(() => {
+    if (!panelOrder) return;
+    const { orderId } = panelOrder;
+    setPanelOrder(null);
+    // A type filter hiding the order's sections is cleared first.
+    const hiddenByFilter = sections.some(
+      (s) =>
+        activeTypes.size > 0 &&
+        !activeTypes.has(s.key) &&
+        s.groups.some((g) => g.lines.some((l) => l.orderId === orderId)),
+    );
+    if (hiddenByFilter) setActiveTypes([]);
+    setHighlight({ orderId, nonce: Date.now() });
+  }, [panelOrder, sections, activeTypes, setActiveTypes]);
+  // After the groups expanded: scroll to the first card of the order, then let the highlight fade.
+  useEffect(() => {
+    if (!highlight) return;
+    const frame = requestAnimationFrame(() => {
+      const el = document.querySelector(`[data-board-order="${CSS.escape(highlight.orderId)}"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    const timer = setTimeout(() => setHighlight(null), BOARD_HIGHLIGHT_MS);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  }, [highlight]);
+  const orderPanelApi = useMemo(
+    () => ({
+      openOrder: (orderId: string, orderLineId: string) => setPanelOrder({ orderId, orderLineId }),
+      highlight,
+    }),
+    [highlight],
+  );
+
   return (
     <LineStatusContext.Provider value={lineStatusContext}>
+    <BoardOrderPanelContext.Provider value={orderPanelApi}>
     <OpenFileContext.Provider value={setLightboxFile}>
       <StatusWriteNotice notice={statusNotice} onClose={hideStatusNotice} />
       {lightboxFile && (
@@ -1556,6 +1319,19 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
         />
       )}
 
+      {/* «Весь заказ» panel (comments and the file viewer open above it) */}
+      {panelOrder && (
+        <OrderOverviewDrawer
+          orderId={panelOrder.orderId}
+          focusLineId={panelOrder.orderLineId}
+          linesOnBoard={panelLinesOnBoard}
+          escSuspended={commentOrder !== null || lightboxFile !== null}
+          onClose={closePanel}
+          onShowOnBoard={showOrderOnBoard}
+          onOpenComments={(id, orderNumber) => setCommentOrder({ id, orderNumber })}
+        />
+      )}
+
       {/* Comment panel */}
       {commentOrder && (
         <CommentPanel
@@ -1666,6 +1442,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
         ))}
       </main>
     </OpenFileContext.Provider>
+    </BoardOrderPanelContext.Provider>
     </LineStatusContext.Provider>
   );
 }

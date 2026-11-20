@@ -477,6 +477,14 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
     applySearch(searchInput);
   }, [applySearch, searchInput]);
 
+  // `?q=10389` (the workshop board's «Открыть в списке заказов»): prefill the search once.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("q")?.trim();
+    if (!q) return;
+    setSearchInput(q);
+    setSearch(q);
+  }, [setSearch]);
+
   useEffect(() => {
     if (!searchInput) return;
     const timer = setTimeout(() => applySearch(searchInput), 300);
