@@ -12,6 +12,7 @@ import { checkArtworkSize } from "@/lib/files/artworkSizeCheck";
 import type { PrintSizeCm } from "@/lib/files/declaredPrintSize";
 import { readLocalFileMetaCached, useLocalFileMeta } from "@/lib/files/useLocalFileMeta";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /**
  * «Заменить файл» on a «Нужен макет» line (cabinet, dealer or retail client).
@@ -74,6 +75,7 @@ export function ReplaceLayoutFileDialog({
   onDone: () => void | Promise<unknown>;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const L = t.layoutIssue;
   const isReplace = mode === "replace";
   const [file, setFile] = useState<File | null>(null);
@@ -173,7 +175,7 @@ export function ReplaceLayoutFileDialog({
         aria-modal="true"
         aria-labelledby="replace-layout-title"
         data-testid="replace-file-dialog"
-        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:rounded-2xl sm:p-5"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:rounded-2xl sm:p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-2 flex items-start justify-between gap-3">

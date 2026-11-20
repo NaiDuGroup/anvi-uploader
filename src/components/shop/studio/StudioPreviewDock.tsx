@@ -7,6 +7,7 @@ import { studioPreviewT } from "@/lib/studio/i18n.preview";
 import type { StudioEditorApi } from "./StudioApp";
 import { StudioLive3DLazy } from "./StudioLive3DLazy";
 import { useIsMagicMug, useMugViewControls } from "./StudioMugViewBar";
+import { lockBodyScroll } from "@/hooks/useBodyScrollLock";
 
 /**
  * The floating live preview over the editor canvas (`extensions.canvasOverlay`):
@@ -106,8 +107,7 @@ function PreviewModal({ api, mode, setMode, onClose }: { api: StudioEditorApi; m
   useEffect(() => {
     const back = document.activeElement as HTMLElement | null;
     closeBtn.current?.focus();
-    const prevOverflow: string = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -132,7 +132,7 @@ function PreviewModal({ api, mode, setMode, onClose }: { api: StudioEditorApi; m
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
       back?.focus?.();
     };
   }, [onClose]);

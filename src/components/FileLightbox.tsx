@@ -3,6 +3,7 @@
 import { useEffect, useCallback, useRef } from "react";
 import { X, Download, Printer } from "lucide-react";
 import { FileMetaLine } from "@/components/FileMetaLine";
+import { lockBodyScroll } from "@/hooks/useBodyScrollLock";
 
 interface FileLightboxProps {
   fileId: string;
@@ -40,10 +41,10 @@ export function FileLightbox({ fileId, fileName, onClose }: FileLightboxProps) {
 
   useEffect(() => {
     document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
+      unlockScroll();
     };
   }, [handleKeyDown]);
 
@@ -81,7 +82,7 @@ export function FileLightbox({ fileId, fileName, onClose }: FileLightboxProps) {
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="absolute inset-0 touch-none bg-black/70" onClick={onClose} />
 
       <div className="relative z-10 flex flex-col max-w-[90vw] max-h-[90vh]">
         <div className="flex items-center justify-between bg-gray-900 text-white px-4 py-2 rounded-t-lg">

@@ -39,6 +39,7 @@ import { STATUS_VARIANT_MAP, TRIGGER_COLORS } from "@/app/admin/_lib/orderStatus
 import { LINE_STATUS_BADGE_CLASS } from "./OrderLineStatusBadges";
 import type { OrderStatus } from "@/lib/validations";
 import type { LineProductionStatus } from "@/lib/orderLineProductionStatus";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 export type { HistoryEntry } from "@/lib/orderHistoryFormat";
 
@@ -98,6 +99,7 @@ export default function HistoryPanel({
   t: T;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const locale = useLanguageStore((s) => s.locale);
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,7 +130,7 @@ export default function HistoryPanel({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 touch-none bg-black/30" onClick={onClose} />
       <div className="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
         <div className="flex items-start justify-between gap-2 border-b bg-gray-50 px-4 py-3">
           <div className="flex min-w-0 items-start gap-2">
@@ -160,7 +162,7 @@ export default function HistoryPanel({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
           {loading && entries.length === 0 && (
             <p className="py-8 text-center text-sm text-gray-400">{t.common.loading}</p>
           )}

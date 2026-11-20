@@ -30,6 +30,7 @@ import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /** Catalog photo, or a color swatch when the SKU has no image yet. */
 function catalogThumb(imageUrl: string | null, fallbackColor: string): ReactNode {
@@ -351,6 +352,7 @@ function CreateDesignDialog({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
+  useBodyScrollLock();
   const { t, locale } = useLanguageStore();
   const ds = t.admin.designStudio;
   const [targetType, setTargetType] = useState<DesignTargetType>("notebook");
@@ -435,7 +437,7 @@ function CreateDesignDialog({
 
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center p-3 sm:p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={() => !busy && onClose()} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={() => !busy && onClose()} />
       <div
         role="dialog"
         aria-modal="true"

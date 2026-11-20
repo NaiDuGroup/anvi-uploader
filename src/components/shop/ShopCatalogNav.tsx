@@ -9,6 +9,7 @@ import { shopRelPath } from "@/lib/storefront/shopHost";
 import { BriefcaseIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, GiftIcon, GridIcon, PrinterIcon, SnowflakeIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 import { LangRow } from "./ShopLangSwitch";
+import { lockBodyScroll } from "@/hooks/useBodyScrollLock";
 
 /**
  * Category navigation: the header bar with the «Catalog» mega-menu (≥ 768 px)
@@ -269,8 +270,7 @@ function CatalogSheet({ nav, onClose }: { nav: ShopNav; onClose: () => void }) {
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     closeBtn.current?.focus();
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         onClose();
@@ -295,7 +295,7 @@ function CatalogSheet({ nav, onClose }: { nav: ShopNav; onClose: () => void }) {
     document.addEventListener("keydown", onKey);
     mq.addEventListener("change", onMq);
     return () => {
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
       document.removeEventListener("keydown", onKey);
       mq.removeEventListener("change", onMq);
       if (opener?.isConnected) opener.focus();

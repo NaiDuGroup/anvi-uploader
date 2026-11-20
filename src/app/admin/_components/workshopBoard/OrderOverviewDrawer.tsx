@@ -16,6 +16,8 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import { STATUS_VARIANT_MAP, TRIGGER_COLORS } from "@/app/admin/_lib/orderStatus";
@@ -71,6 +73,7 @@ export function OrderOverviewDrawer({
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const focusRef = useRef<HTMLLIElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  useBodyScrollLock();
 
   const load = useCallback(async () => {
     setState({ kind: "loading" });
@@ -110,7 +113,7 @@ export function OrderOverviewDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" data-testid="order-overview-drawer">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 touch-none bg-black/30" onClick={onClose} aria-hidden />
       <aside
         role="dialog"
         aria-modal="true"
@@ -150,7 +153,7 @@ export function OrderOverviewDrawer({
               ref={closeRef}
               type="button"
               onClick={onClose}
-              className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
               aria-label={p.close}
               title={p.close}
             >
@@ -160,7 +163,7 @@ export function OrderOverviewDrawer({
         </div>
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
           {state.kind === "loading" && (
             <p className="flex items-center justify-center gap-2 py-10 text-sm text-gray-400">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -170,13 +173,9 @@ export function OrderOverviewDrawer({
           {state.kind === "error" && (
             <div className="py-10 text-center">
               <p className="text-sm text-red-600">{p.loadFailed}</p>
-              <button
-                type="button"
-                onClick={() => void load()}
-                className="mt-3 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-              >
+              <Button variant="outline" size="sm" className="mt-3" onClick={() => void load()}>
                 {p.retry}
-              </button>
+              </Button>
             </div>
           )}
           {loaded && (
@@ -211,15 +210,16 @@ export function OrderOverviewDrawer({
               <section>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{p.notes}</h3>
-                  <button
-                    type="button"
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => onOpenComments(loaded.order.id, loaded.order.orderNumber)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                    className="h-7 gap-1 px-2 text-xs"
                     title={p.openComments}
                   >
                     <MessageCircle className="h-3.5 w-3.5" aria-hidden />
                     {p.comments(loaded.order.commentCount)}
-                  </button>
+                  </Button>
                 </div>
                 {loaded.order.notes ? (
                   <p className="whitespace-pre-wrap rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-700">{loaded.order.notes}</p>
@@ -264,37 +264,24 @@ export function OrderOverviewDrawer({
               </p>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={onShowOnBoard}
-                disabled={onBoardCount === 0}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <LocateFixed className="h-3.5 w-3.5" aria-hidden />
+              <Button size="sm" onClick={onShowOnBoard} disabled={onBoardCount === 0}>
+                <LocateFixed className="h-4 w-4" aria-hidden />
                 {p.showOnBoard}
-              </button>
+              </Button>
               {loaded.order.canEdit ? (
-                <a
-                  href={`/admin/orders/${loaded.order.id}/edit`}
-                  target="_blank"
-                  rel="noopener"
-                  title={p.newTab}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <Pencil className="h-3.5 w-3.5" aria-hidden />
-                  {p.edit}
-                </a>
+                <Button variant="outline" size="sm" asChild>
+                  <a href={`/admin/orders/${loaded.order.id}/edit`} target="_blank" rel="noopener" title={p.newTab}>
+                    <Pencil className="h-4 w-4" aria-hidden />
+                    {p.edit}
+                  </a>
+                </Button>
               ) : null}
-              <a
-                href={ordersListSearchHref(loaded.order.orderNumber)}
-                target="_blank"
-                rel="noopener"
-                title={p.newTab}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-              >
-                <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                {p.openInList}
-              </a>
+              <Button variant="outline" size="sm" asChild>
+                <a href={ordersListSearchHref(loaded.order.orderNumber)} target="_blank" rel="noopener" title={p.newTab}>
+                  <ExternalLink className="h-4 w-4" aria-hidden />
+                  {p.openInList}
+                </a>
+              </Button>
             </div>
           </div>
         )}
@@ -396,12 +383,12 @@ function OverviewLine({
           {t.lineStatus[status]}
         </span>
         {focused ? (
-          <span className="rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+          <span className="inline-flex items-center whitespace-nowrap rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 ring-1 ring-inset ring-amber-300">
             {p.openedFromHere}
           </span>
         ) : null}
         {!onBoard ? (
-          <span className="rounded-md border border-dashed border-gray-300 px-1.5 py-0.5 text-[10px] text-gray-500">
+          <span className="inline-flex items-center whitespace-nowrap rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 ring-1 ring-inset ring-gray-300">
             {p.notOnBoard}
           </span>
         ) : null}

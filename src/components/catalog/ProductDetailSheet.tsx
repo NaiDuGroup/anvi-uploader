@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Check, ChevronLeft, ChevronRight, X, ZoomIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { lockBodyScroll } from "@/hooks/useBodyScrollLock";
 
 /** Main photo then the gallery, without repeats. */
 export function productImageList(main: string | null | undefined, gallery: readonly string[] | undefined): string[] {
@@ -70,10 +71,9 @@ function SheetBody({
 
   // Lock the page behind; Escape closes the zoom first, then the window.
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     return () => {
-      document.body.style.overflow = prev;
+      unlockScroll();
     };
   }, []);
   useEffect(() => {
@@ -101,7 +101,7 @@ function SheetBody({
 
   return (
     <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label={name}>
-      <button type="button" aria-label={t.close} className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <button type="button" aria-label={t.close} className="absolute inset-0 touch-none bg-black/50" onClick={onClose} />
       <div
         className={cn(
           "absolute inset-x-0 bottom-0 flex max-h-[92dvh] flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl",
@@ -201,7 +201,7 @@ function SheetBody({
           </div>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
           <h2 className="text-base font-semibold leading-snug text-gray-900">{name}</h2>
           {extra ? <div className="mt-1">{extra}</div> : null}
           {price ? <p className="mt-1 text-lg font-semibold tabular-nums text-gold">{price}</p> : null}

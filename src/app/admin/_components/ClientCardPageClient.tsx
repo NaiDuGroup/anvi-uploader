@@ -27,6 +27,7 @@ import { fetcher } from "@/lib/swr/fetcher";
 import { ClientInvoicesSection } from "./ClientsPageClient";
 import { storedPriceToStaff } from "@/lib/dealerUrgency";
 import DealerUrgencyCardSection, { type DealerUrgencyCardValue } from "./DealerUrgencyCardSection";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 interface ClientInfo {
   id: string;
@@ -182,6 +183,8 @@ export default function ClientCardPageClient({
       setBulkBusy(false);
     }
   }, [clientId, mutateOrders, t]);
+
+  useBodyScrollLock(Boolean(confirmAllOpen && ordersData?.summary));
 
   if (clientLoading) {
     return (
@@ -439,7 +442,7 @@ export default function ClientCardPageClient({
       {confirmAllOpen && summary ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 touch-none bg-black/50"
             onClick={() => (bulkBusy ? null : setConfirmAllOpen(false))}
           />
           <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">

@@ -49,6 +49,7 @@ import { normalizeExternalLink } from "@/lib/uploads/externalLink";
 import { GUEST_MAX_COPIES, isValidOrderPhone } from "@/lib/guestOrderLimits";
 import { OrderConsentCheckbox } from "@/components/upload/OrderConsentCheckbox";
 import { orderConsentPayload, privacyPolicyUrl } from "@/lib/orderConsent";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 interface FileEntry {
   file: File;
@@ -229,11 +230,12 @@ function ProductNavCard({
 }
 
 function PrivacyModal({ onClose }: { onClose: () => void }) {
+  useBodyScrollLock();
   const { t, locale } = useLanguageStore();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-gray-900">
         <button
           onClick={onClose}

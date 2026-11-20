@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { Loader2, Undo2, X } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /**
  * In-page confirm for «Снять отметку» on a «Нужен макет» line (studio orders
@@ -22,6 +23,7 @@ export default function ClearLayoutIssueDialog({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
   const li = t.layoutIssue;
   const close = () => {
@@ -38,7 +40,7 @@ export default function ClearLayoutIssueDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" data-testid="clear-layout-issue-dialog">
-      <div className="absolute inset-0 bg-black/50" onClick={close} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={close} />
       <div
         role="alertdialog"
         aria-modal="true"
@@ -81,7 +83,7 @@ export default function ClearLayoutIssueDialog({
             disabled={isSubmitting}
             onClick={onConfirm}
             autoFocus
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-gray-800 px-4 text-sm font-semibold text-white shadow-sm hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm hover:bg-gold-dark disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Undo2 className="h-4 w-4" aria-hidden />}
             {li.clear}

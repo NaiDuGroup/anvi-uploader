@@ -26,6 +26,7 @@ import {
   type GiftSetChoice,
 } from "@/lib/giftSet/giftSetWizard";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100).replace(".", ",");
@@ -145,6 +146,7 @@ export function GiftSetDialog({
   onApply: (template: GiftSetTemplate, choice: GiftSetChoice) => void;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const g = t.giftSet;
   const active = useMemo(() => templates.filter((x) => x.active || x.id === initial?.templateId), [templates, initial]);
   const [choice, setChoice] = useState<GiftSetChoice | null>(() =>
@@ -191,7 +193,7 @@ export function GiftSetDialog({
 
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-3 sm:p-6">
-      <button type="button" className="absolute inset-0 bg-black/45" aria-label={g.cancel} onClick={onClose} />
+      <button type="button" className="absolute inset-0 touch-none bg-black/45" aria-label={g.cancel} onClick={onClose} />
       <div
         className="relative flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white text-gray-900 shadow-xl"
         role="dialog"
@@ -208,7 +210,7 @@ export function GiftSetDialog({
             <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
-        <div className="flex flex-col gap-4 overflow-y-auto px-4 py-4">
+        <div className="flex flex-col gap-4 overflow-y-auto overscroll-contain px-4 py-4">
           <div>
             <p className="mb-1 text-xs font-medium text-gray-700">{g.template}</p>
             <div className="grid gap-1.5">

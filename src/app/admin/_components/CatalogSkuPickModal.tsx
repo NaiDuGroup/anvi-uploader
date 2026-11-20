@@ -23,6 +23,7 @@ import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
 import { penProductDisplayName } from "@/lib/pen/penProductLabels";
 import type { Locale, TranslationDictionary } from "@/lib/i18n/types";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 export type CatalogSkuPickModalKind = "mug" | "notebook" | "pen";
 
@@ -104,6 +105,7 @@ interface CatalogSkuPickModalContentProps {
 function CatalogSkuPickModalOpen(
   props: CatalogSkuPickModalContentProps,
 ): ReactElement {
+  useBodyScrollLock();
   const {
     kind,
     locale,
@@ -156,7 +158,7 @@ function CatalogSkuPickModalOpen(
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-3 sm:p-6">
       <button
         type="button"
-        className="absolute inset-0 bg-black/45"
+        className="absolute inset-0 touch-none bg-black/45"
         aria-label={t.admin.newOrderPage.cancel}
         onClick={onClose}
       />
@@ -189,7 +191,7 @@ function CatalogSkuPickModalOpen(
             className="border-gray-200 text-base sm:text-[15px]"
           />
         </div>
-        <div className="min-h-[min(60vh,480px)] flex-1 overflow-y-auto px-3 py-4 sm:px-5">
+        <div className="min-h-[min(60vh,480px)] flex-1 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5">
           {kind === "mug" &&
             mugItems.length > 0 &&
             filteredMugs.length === 0 &&

@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import type { ShopLang } from "@/lib/storefront/i18n";
 import { studioApparelT } from "@/lib/studio/i18n.apparel";
 import type { ApparelPhotoViews } from "./useApparelPhotos";
+import { lockBodyScroll } from "@/hooks/useBodyScrollLock";
 
 // three.js only when the customer opens the 3D view.
 const ApparelRotate3D = dynamic(() => import("./ApparelRotate3D").then((m) => m.ApparelRotate3D), {
@@ -23,14 +24,10 @@ export function ApparelRotateButton({ front, back, views, label, lang }: { front
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
     // The page under the dialog does not scroll.
-    const html = document.documentElement;
-    const prev = { html: html.style.overflow, body: document.body.style.overflow };
-    html.style.overflow = "hidden";
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     return () => {
       window.removeEventListener("keydown", onKey);
-      html.style.overflow = prev.html;
-      document.body.style.overflow = prev.body;
+      unlockScroll();
     };
   }, [open]);
   if (!views.front || !views.back) return null;

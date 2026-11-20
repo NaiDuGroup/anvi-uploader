@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, X, Send } from "lucide-react";
 import type { ClientMessageDTO } from "@/lib/clientMessages";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /** Slide-over for the client-facing message channel (separate from internal comments). */
 type ClientMessage = Omit<ClientMessageDTO, "createdAt" | "editedAt"> & {
@@ -25,6 +26,7 @@ export default function ClientMessagePanel({
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const [messages, setMessages] = useState<ClientMessage[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -89,7 +91,7 @@ export default function ClientMessagePanel({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 touch-none bg-black/30" onClick={onClose} />
       <div className="relative flex h-full w-full max-w-md flex-col bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b bg-gray-50 px-4 py-3">
           <div className="flex items-center gap-2">
@@ -103,7 +105,7 @@ export default function ClientMessagePanel({
           </button>
         </div>
 
-        <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-4">
           {messages.length === 0 && (
             <p className="py-8 text-center text-sm text-gray-400">
               {t.admin.clientChatEmpty}

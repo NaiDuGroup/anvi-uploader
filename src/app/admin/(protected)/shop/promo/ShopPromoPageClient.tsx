@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { promoAdminState, type PromoAdminRow, type PromoAdminState } from "@/lib/shop/promo/promoAdmin";
 import type { PromoType } from "@/lib/shop/promo/promoCore";
 import { dayKeyOf } from "@/lib/shop/report/period";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 interface Options {
   categories: { slug: string; ru: string; ro: string; en: string }[];
@@ -90,6 +91,7 @@ export default function ShopPromoPageClient() {
   const [options, setOptions] = useState<Options>({ categories: [], products: [] });
   const [loadError, setLoadError] = useState(false);
   const [form, setForm] = useState<FormState | null>(null);
+  useBodyScrollLock(Boolean(form));
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<PromoAdminRow | null>(null);

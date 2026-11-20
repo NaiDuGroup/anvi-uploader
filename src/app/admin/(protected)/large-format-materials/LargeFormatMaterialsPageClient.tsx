@@ -54,6 +54,7 @@ import {
   LF_SHEET_DEFAULT_MARGIN_MM,
   LF_SHEET_DEFAULT_WIDTH_CM,
 } from "@/lib/largeFormat/lfSheet";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 type Row = AdminLargeFormatMaterialJson;
 
@@ -542,6 +543,7 @@ function LfRollReceiptModal({
   onClose: () => void;
   onReceiptSaved: () => Promise<void>;
 }) {
+  useBodyScrollLock();
   const { t, locale } = useLanguageStore();
   const lf = t.admin;
   /** Sheet material (VATMAN A1): whole sheets, average per sheet. */
@@ -665,7 +667,7 @@ function LfRollReceiptModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <button
         type="button"
-        className="absolute inset-0 bg-black/45"
+        className="absolute inset-0 touch-none bg-black/45"
         aria-label={t.cabinet.orderFileClose}
         onClick={() => {
           if (!saving) onClose();
@@ -700,7 +702,7 @@ function LfRollReceiptModal({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
           <div className="rounded-xl border border-gray-200 bg-gray-50/70 p-4 shadow-sm">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-xs font-medium text-gray-600 sm:col-span-2">
@@ -958,6 +960,7 @@ function LfMaterialModal({
   saving: boolean;
   setSaving: (v: boolean) => void;
 }) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
   const lf = t.admin;
   const [name, setName] = useState(initial?.name ?? "");
@@ -1120,7 +1123,7 @@ function LfMaterialModal({
       role="dialog"
       aria-modal
     >
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
         <h2 className="text-lg font-semibold text-gray-900">
           {mode === "add" ? lf.lfMaterialCatalogModalAddTitle : lf.lfMaterialCatalogModalEditTitle}
         </h2>
@@ -1385,6 +1388,7 @@ function LfSizePresetsModal({
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
   const lf = t.admin;
   const [drafts, setDrafts] = useState<DraftPresetRow[]>(() =>
@@ -1501,7 +1505,7 @@ function LfSizePresetsModal({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
           {drafts.length === 0 ? (
             <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
               {lf.lfSizePresetsEmpty}

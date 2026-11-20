@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 type StockModalShellProps = {
   titleId: string;
@@ -26,6 +27,7 @@ export function StockModalShell({
   footer,
   className,
 }: StockModalShellProps) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function StockModalShell({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <button
         type="button"
-        className="absolute inset-0 bg-black/45"
+        className="absolute inset-0 touch-none bg-black/45"
         aria-label={t.cabinet.orderFileClose}
         onClick={() => {
           if (!busy) onClose();
@@ -77,7 +79,7 @@ export function StockModalShell({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">{children}</div>
 
         {footer ? (
           <div className="shrink-0 border-t border-gray-100 bg-gray-50/90 px-4 py-3 sm:px-5">

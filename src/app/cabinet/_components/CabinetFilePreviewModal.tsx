@@ -10,6 +10,7 @@ import {
 import type { TranslationDictionary } from "@/lib/i18n";
 import { FileMetaLine } from "@/components/FileMetaLine";
 import { CABINET_FILE_META_ENDPOINT } from "@/lib/files/useFileMeta";
+import { lockBodyScroll } from "@/hooks/useBodyScrollLock";
 
 /**
  * Full-screen preview of a file on one of the customer's own orders. Always
@@ -49,11 +50,10 @@ export function CabinetFilePreviewModal({
 
   useEffect(() => {
     document.addEventListener("keydown", handleKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     return () => {
       document.removeEventListener("keydown", handleKey);
-      document.body.style.overflow = prev;
+      unlockScroll();
     };
   }, [handleKey]);
 

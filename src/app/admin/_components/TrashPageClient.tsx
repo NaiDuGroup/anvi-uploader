@@ -13,6 +13,7 @@ import {
   ChevronRight,
   AlertTriangle,
 } from "lucide-react";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 function PermanentDeleteModal({
   t,
@@ -23,6 +24,7 @@ function PermanentDeleteModal({
   onConfirm: () => void;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
@@ -32,7 +34,7 @@ function PermanentDeleteModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-gray-900">
         <div className="flex items-center gap-2 mb-4">
           <AlertTriangle className="w-5 h-5 text-red-500" />

@@ -7,6 +7,7 @@ import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { UvStockItemJson } from "@/lib/uv/dto";
 import { cn } from "@/lib/utils";
+import { lockBodyScroll } from "@/hooks/useBodyScrollLock";
 
 function formatNumber(value: number, locale: string): string {
   return value.toLocaleString(locale, { maximumFractionDigits: 2 });
@@ -203,15 +204,14 @@ function PickerDialog({
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
-    const prevOverflow: string = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     const raf = window.requestAnimationFrame(() => {
       searchRef.current?.focus();
       scrollRef.current?.querySelector<HTMLElement>("[data-selected='true']")?.scrollIntoView({ block: "center" });
     });
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
       window.cancelAnimationFrame(raf);
     };
   }, [onClose]);
@@ -370,7 +370,7 @@ function PickerDialog({
 
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-3 sm:p-6">
-      <button type="button" className="absolute inset-0 bg-black/45" aria-label={p.close} onClick={onClose} />
+      <button type="button" className="absolute inset-0 touch-none bg-black/45" aria-label={p.close} onClick={onClose} />
       <div
         className="relative flex h-[min(90vh,860px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white text-gray-900 shadow-xl"
         role="dialog"

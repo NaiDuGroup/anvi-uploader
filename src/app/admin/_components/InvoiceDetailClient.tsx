@@ -26,6 +26,7 @@ import type { SerializedCompanyProfile } from "@/lib/invoice/companyProfile";
 import { useInvoiceDetail, useCompanyProfile, FetchError } from "@/lib/swr";
 import { isSuperAdmin } from "@/lib/roles";
 import { PageSkeleton } from "./PageSkeleton";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 export default function InvoiceDetailClient({
   invoiceId,
@@ -561,6 +562,7 @@ function ConfirmModal({
   onCancel: () => void;
   children: React.ReactNode;
 }) {
+  useBodyScrollLock();
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"

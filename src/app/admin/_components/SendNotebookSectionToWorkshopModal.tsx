@@ -33,6 +33,7 @@ import {
   type BatchProgress,
   type BatchRunResult,
 } from "@/lib/workshopBoard/runNotebookSectionBatch";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 interface Props {
   section: WorkshopBoardSection;
@@ -76,6 +77,7 @@ export default function SendNotebookSectionToWorkshopModal({
   section,
   onClose,
 }: Props) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
 
   // Snapshot the section once at mount — new orders landing afterwards
@@ -185,7 +187,7 @@ export default function SendNotebookSectionToWorkshopModal({
       aria-labelledby="send-nb-modal-title"
     >
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 touch-none bg-black/50"
         onClick={close}
       />
       <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-gray-900">

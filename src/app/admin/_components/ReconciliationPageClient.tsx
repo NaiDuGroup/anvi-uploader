@@ -63,6 +63,7 @@ import { cn } from "@/lib/utils";
 import FiscalInvoiceDetailDrawer from "./FiscalInvoiceDetailDrawer";
 import { DateRangeFilter } from "./DateRangeFilter";
 import { Input } from "@/components/ui/input";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 type ActKindFilter = "all" | "invoices" | "payments";
 
@@ -602,6 +603,7 @@ function CrossPayerModal({
   onClose: () => void;
   onConfirm: (note: string) => void | Promise<void>;
 }) {
+  useBodyScrollLock(Boolean(row.suggestions[0]));
   const [note, setNote] = useState("");
   const best = row.suggestions[0];
   const tx = row.transaction;
@@ -609,11 +611,11 @@ function CrossPayerModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={onClose} />
       <div
         role="dialog"
         aria-labelledby="cross-payer-title"
-        className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 text-gray-900 shadow-xl"
+        className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 text-gray-900 shadow-xl"
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <h2 id="cross-payer-title" className="text-lg font-bold">
@@ -1605,6 +1607,7 @@ function ActModal({
   L: Labels;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const { statement, isLoading } = useClientStatement(idno);
   const [fiscalId, setFiscalId] = useState<string | null>(null);
 
@@ -1621,7 +1624,7 @@ function ActModal({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6">
       <div
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 touch-none bg-black/40"
         onClick={onClose}
         aria-hidden
       />
@@ -1677,7 +1680,7 @@ function ActModal({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
           {isLoading ? (
             <div className="flex justify-center py-16">
               <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
@@ -2035,6 +2038,7 @@ function PosSettleModal({
   onClose: () => void;
   onSettled: () => void | Promise<void>;
 }) {
+  useBodyScrollLock();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [invoices, setInvoices] = useState<OpenInvoiceRow[]>([]);
@@ -2157,11 +2161,11 @@ function PosSettleModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={onClose} />
       <div
         role="dialog"
         aria-labelledby="pos-settle-title"
-        className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 text-gray-900 shadow-xl"
+        className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 text-gray-900 shadow-xl"
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
@@ -3072,13 +3076,14 @@ function StatementDrawer({
   locale: Loc;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const { statement, transactions, isLoading } =
     useBankStatementTransactions(id);
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} aria-hidden />
-      <aside className="relative flex h-full w-full max-w-3xl flex-col overflow-y-auto bg-white shadow-xl">
+      <div className="absolute inset-0 touch-none bg-black/30" onClick={onClose} aria-hidden />
+      <aside className="relative flex h-full w-full max-w-3xl flex-col overflow-y-auto overscroll-contain bg-white shadow-xl">
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-100 bg-white px-5 py-4">
           <div className="min-w-0">
             <h2 className="break-all text-lg font-bold text-gray-900 md:break-normal">

@@ -183,7 +183,7 @@ function BoardLineCard({
             title={t.orderPanel.openWholeOrder}
             aria-label={`${t.orderPanel.openWholeOrder} ${ref}`}
             data-testid={`board-line-ref-${line.orderLineId}`}
-            className="cursor-pointer rounded font-mono text-[10px] font-bold uppercase tracking-wide text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+            className="cursor-pointer rounded font-mono text-[10px] font-bold uppercase tracking-wide text-gray-500 underline-offset-2 hover:text-gray-800 hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950"
           >
             {ref}
           </button>

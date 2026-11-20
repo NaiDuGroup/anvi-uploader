@@ -27,6 +27,7 @@ import type {
   DtfLineFacts,
   WorkshopBoardGroup,
 } from "@/lib/workshopBoard/types";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 const DTF_FILM_URL = "/api/workshop-board/dtf-film";
 
@@ -242,6 +243,7 @@ function DtfFilmLayoutModal({
   onClose: () => void;
   method?: FilmMethod;
 }) {
+  useBodyScrollLock();
   const { t, locale } = useLanguageStore();
   const copy = t.dtf.workshop;
   const title: string = method === "uv_dtf" ? t.uv.workshop.filmLayoutTitle : copy.filmLayoutTitle;
@@ -372,7 +374,7 @@ function DtfFilmLayoutModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:max-h-[90vh] sm:rounded-xl sm:pb-4"
+        className="max-h-[92dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl sm:max-h-[90vh] sm:rounded-xl sm:pb-4"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

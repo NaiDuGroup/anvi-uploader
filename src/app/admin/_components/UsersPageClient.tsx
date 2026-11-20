@@ -9,6 +9,7 @@ import { Plus, Pencil, Trash2, X, Shield, ShieldCheck, Wrench } from "lucide-rea
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useUsers, type UserRow } from "@/lib/swr";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 const ROLE_OPTIONS = ["admin", "workshop", "superadmin"] as const;
 
@@ -34,8 +35,10 @@ export default function UsersPageClient({ currentUserId }: { currentUserId: stri
   const { users: rows, error: loadError, isLoading: loading, mutate } = useUsers();
   const error = loadError ? (loadError instanceof Error ? loadError.message : "Failed to load users") : null;
   const [formOpen, setFormOpen] = useState(false);
+  useBodyScrollLock(formOpen);
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  useBodyScrollLock(Boolean(deleteTarget));
 
   const [fName, setFName] = useState("");
   const [fDisplayName, setFDisplayName] = useState("");
@@ -239,8 +242,8 @@ export default function UsersPageClient({ currentUserId }: { currentUserId: stri
       {/* Create / Edit Form (slide-over panel) */}
       {formOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-end">
-          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={closeForm} />
-          <div className="relative z-10 h-full w-full max-w-md overflow-y-auto border-l border-gray-200 bg-white shadow-xl">
+          <div className="absolute inset-0 touch-none bg-black/20 backdrop-blur-sm" onClick={closeForm} />
+          <div className="relative z-10 h-full w-full max-w-md overflow-y-auto overscroll-contain border-l border-gray-200 bg-white shadow-xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-5 py-4">
               <h2 className="text-lg font-semibold text-gray-900">
                 {editing ? t.admin.usersEdit : t.admin.usersAdd}
@@ -345,7 +348,7 @@ export default function UsersPageClient({ currentUserId }: { currentUserId: stri
       {/* Delete Confirmation Modal */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setDeleteTarget(null)} />
+          <div className="absolute inset-0 touch-none bg-black/20 backdrop-blur-sm" onClick={() => setDeleteTarget(null)} />
           <div className="relative z-10 w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-gray-900">{t.admin.usersDeleteConfirm}</h3>
             <p className="mt-2 text-sm text-gray-500">

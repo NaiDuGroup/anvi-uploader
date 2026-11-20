@@ -35,6 +35,7 @@ import {
   type MugBatchProgress,
   type MugBatchRunResult,
 } from "@/lib/workshopBoard/runMugSectionBatch";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 interface Props {
   section: WorkshopBoardSection;
@@ -75,6 +76,7 @@ export default function SendMugSectionToWorkshopModal({
   section,
   onClose,
 }: Props) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
 
   // Snapshot the section once at mount — new orders landing afterwards show
@@ -183,7 +185,7 @@ export default function SendMugSectionToWorkshopModal({
       aria-modal="true"
       aria-labelledby="send-mug-modal-title"
     >
-      <div className="absolute inset-0 bg-black/50" onClick={close} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={close} />
       <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-gray-900">
         <button
           type="button"

@@ -13,6 +13,7 @@ import {
   type DuplicateClientField,
   type DuplicateClientInfo,
 } from "@/lib/clientDuplicates";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /** Minimal record returned by `POST /api/admin/clients` and `PATCH /api/admin/clients/[id]`. */
 export interface ClientFormSavedClient {
@@ -55,6 +56,7 @@ export function ClientFormModal({
   renderHeaderExtras?: (initial: ClientFormSavedClient) => React.ReactNode;
   onUseExisting?: (existing: DuplicateClientInfo) => void;
 }) {
+  useBodyScrollLock();
   const [kind, setKind] = useState<ClientKind>(
     (initial?.kind as ClientKind) ?? "INDIVIDUAL",
   );
@@ -132,8 +134,8 @@ export function ClientFormModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 text-gray-900 shadow-xl">
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={onClose} />
+      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 text-gray-900 shadow-xl">
         <button
           type="button"
           onClick={onClose}

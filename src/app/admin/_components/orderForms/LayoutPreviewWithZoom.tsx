@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Maximize2, Trash2, X } from "lucide-react";
 import type { TranslationDictionary } from "@/lib/i18n/types";
+import { lockBodyScroll } from "@/hooks/useBodyScrollLock";
 
 export interface LayoutPreviewWithZoomProps {
   /** `blob:` URL or remote image URL of the uploaded layout. */
@@ -37,14 +38,13 @@ export function LayoutPreviewWithZoom({
 
   useEffect(() => {
     if (!zoomed) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setZoomed(false);
     }
     document.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = previousOverflow;
+      unlockScroll();
       document.removeEventListener("keydown", onKey);
     };
   }, [zoomed]);
@@ -87,7 +87,7 @@ export function LayoutPreviewWithZoom({
       {zoomed ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
           <div
-            className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+            className="absolute inset-0 touch-none bg-black/75 backdrop-blur-sm"
             onClick={() => setZoomed(false)}
             aria-hidden
           />

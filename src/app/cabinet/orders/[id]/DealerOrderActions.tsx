@@ -11,6 +11,7 @@ import {
   type DealerOrderActionsState,
 } from "@/lib/dealerOrderModify";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /** Id of the order chat's text box (the «Написать цеху» button focuses it). */
 export const ORDER_CHAT_INPUT_ID = "order-chat-input";
@@ -156,6 +157,7 @@ export function DealerCancelDialog({
   onConfirm: (reason: string) => void;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const d = t.dealerOrder;
   const [reason, setReason] = useState("");
   const [touched, setTouched] = useState(false);

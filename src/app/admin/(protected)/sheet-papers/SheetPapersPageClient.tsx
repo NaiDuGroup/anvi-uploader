@@ -48,6 +48,7 @@ import {
   SHEET_PAPER_GSM_OPTIONS,
   sheetPaperDisplayName,
 } from "@/lib/sheetProduct/sheetProductConfig";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 type Row = AdminSheetPaperJson;
 
@@ -427,6 +428,7 @@ function ModalShell({
   children: React.ReactNode;
   footer?: React.ReactNode;
 }) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
 
   useEffect(() => {
@@ -441,7 +443,7 @@ function ModalShell({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
       <button
         type="button"
-        className="absolute inset-0 bg-black/45"
+        className="absolute inset-0 touch-none bg-black/45"
         aria-label={t.cabinet.orderFileClose}
         onClick={() => {
           if (!busy) onClose();
@@ -480,7 +482,7 @@ function ModalShell({
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
           {children}
         </div>
 

@@ -26,6 +26,7 @@ import {
   buildOrderColorMap,
   buildTileFileEntries,
 } from "./LayoutPlannerModal";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 const MIN_LABEL_SIZE_CM = 8;
 const SHEET_RENDER_WIDTH_PX = 230;
@@ -164,6 +165,7 @@ export interface SheetLayoutPlannerModalProps {
  * behaviour as the roll {@link LayoutPlannerModal}.
  */
 export function SheetLayoutPlannerModal({ group, onClose, onStockChanged }: SheetLayoutPlannerModalProps) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
   const wb = t.workshopBoard;
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -430,7 +432,7 @@ export function SheetLayoutPlannerModal({ group, onClose, onStockChanged }: Shee
         </div>
 
         {/* Body */}
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6 lg:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-6 lg:flex-row">
           <div className="min-w-0 flex-1">
             {!spec || !result || tiles.length === 0 ? (
               <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-gray-200 text-sm text-gray-400">

@@ -10,6 +10,7 @@ import { eFacturaStatusLabel, formatMoney, formatShortDate } from "@/lib/reconci
 import type { Locale } from "@/lib/i18n/types";
 import { cn } from "@/lib/utils";
 import { isNonDeliveryFiscal } from "@/lib/reconciliation/fiscalFlags";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 function net(total: string | null, vat: string | null): string | null {
   if (total == null) return null;
@@ -37,6 +38,7 @@ export default function FiscalInvoiceDetailDrawer({
   /** Override stacking when nested above another modal (default z-50). */
   overlayClassName?: string;
 }) {
+  useBodyScrollLock();
   const { detail, isLoading, mutate } = useFiscalInvoiceDetail(id);
   const [fetching, setFetching] = useState(false);
 
@@ -69,11 +71,11 @@ export default function FiscalInvoiceDetailDrawer({
       )}
     >
       <div
-        className="absolute inset-0 bg-black/30"
+        className="absolute inset-0 touch-none bg-black/30"
         onClick={onClose}
         aria-hidden
       />
-      <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-xl">
+      <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto overscroll-contain bg-white shadow-xl">
         <div className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-gray-100 bg-white px-4 py-4 md:gap-0 md:px-5">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">

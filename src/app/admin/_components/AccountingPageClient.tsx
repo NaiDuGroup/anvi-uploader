@@ -17,6 +17,7 @@ import {
   type BusinessExpenseType,
 } from "@/lib/accounting/types";
 import { useAccountingReport, type AccountingReportOrder, type AccountingExpenseRow } from "@/lib/swr";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /** Today as a Chișinău calendar day (the report counts orders by the studio's day). */
 function chisinauTodayKey(): string {
@@ -61,8 +62,10 @@ export default function AccountingPageClient() {
   const error = reportError ? (reportError instanceof Error ? reportError.message : t.accounting.loadError) : null;
 
   const [detailOrder, setDetailOrder] = useState<ReportOrder | null>(null);
+  useBodyScrollLock(Boolean(detailOrder));
 
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
+  useBodyScrollLock(expenseModalOpen);
   const [editingExpense, setEditingExpense] = useState<ExpenseRow | null>(null);
   const [expenseFormError, setExpenseFormError] = useState<string | null>(null);
   const [expenseSaving, setExpenseSaving] = useState(false);
@@ -76,6 +79,7 @@ export default function AccountingPageClient() {
   const [eNotes, setENotes] = useState("");
 
   const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
+  useBodyScrollLock(Boolean(deleteExpenseId));
 
   const setDateFilter = useCallback((from: string, to: string) => {
     setDateFrom(from);
@@ -557,7 +561,7 @@ export default function AccountingPageClient() {
           aria-modal="true"
           aria-labelledby="acct-br-title"
         >
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white shadow-xl">
             <div className="flex items-start justify-between gap-2 border-b border-gray-100 px-4 py-3">
               <h2 id="acct-br-title" className="text-sm font-semibold text-gray-900">
                 {t.accounting.breakdownTitle(detailOrder.orderNumber)}

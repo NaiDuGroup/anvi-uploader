@@ -18,6 +18,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { OrdersPaginationBar } from "@/components/orders/OrdersListControls";
 import type { OrderPageSize } from "@/lib/orderPagination";
 import { pageCount } from "@/lib/listPagination";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 type Row = ClientRow;
 
@@ -408,6 +409,7 @@ function InvitePortalModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  useBodyScrollLock();
   const [password, setPassword] = useState(() => generatePortalPassword());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -451,7 +453,7 @@ function InvitePortalModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={onClose} />
       <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         <button
           type="button"
@@ -544,13 +546,14 @@ function DeleteClientModal({
   onClose: () => void;
   onDeleted: () => void;
 }) {
+  useBodyScrollLock();
   const [busy, setBusy] = useState(false);
   // Shown in the dialog (it stays open) — e.g. 403 «only the main administrator».
   const [error, setError] = useState<string | null>(null);
   const locale = useLanguageStore((s) => s.locale);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={onClose} />
       <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
         <h2 className="text-lg font-bold">{t.admin.clientsConfirmDeleteTitle}</h2>
         <p className="mt-2 text-sm text-gray-600">{t.admin.clientsConfirmDeleteBody}</p>

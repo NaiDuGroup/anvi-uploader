@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /**
  * Modal for the library dialogs: a bottom sheet on phones, a centred card on
@@ -31,6 +32,7 @@ export function LibrarySheet({
   footer?: ReactNode;
   testId?: string;
 }) {
+  useBodyScrollLock();
   const closeLabel = useLanguageStore((s) => s.t.library.close);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -75,7 +77,7 @@ export function LibrarySheet({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-6">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6">{children}</div>
         {footer ? (
           <div className="flex flex-col-reverse gap-2 border-t border-gray-100 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:px-6">
             {footer}

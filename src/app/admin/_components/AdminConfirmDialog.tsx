@@ -3,6 +3,7 @@
 import { useEffect, useCallback } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 export type AdminConfirmDialogProps = {
   open: boolean;
@@ -53,6 +54,7 @@ export function AdminConfirmDialog({
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, [open, handleEscape]);
+  useBodyScrollLock(open);
 
   if (!open) return null;
 

@@ -18,6 +18,7 @@ import { studioDesignerT } from "@/lib/studio/i18n.designer";
 import { turnstileHeaders, turnstileRejected } from "@/lib/turnstile/client";
 import { TURNSTILE_ERROR } from "@/lib/turnstile/config";
 import { useShopLang } from "../ShopLangProvider";
+import { lockBodyScroll } from "@/hooks/useBodyScrollLock";
 
 /**
  * «Помощь дизайнера» / «We design it for you» (Studio v2, item 6): the button
@@ -149,12 +150,11 @@ export function DesignerHelpDialog({
       if (e.key === "Escape") closeRef.current();
     };
     window.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     return () => {
       alive = false;
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
     };
   }, []);
 
@@ -252,7 +252,7 @@ export function DesignerHelpDialog({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[92vh] w-full max-w-[520px] flex-col gap-3 overflow-y-auto rounded-t-2xl bg-white p-4 sm:p-5 md:rounded-2xl"
+        className="flex max-h-[92vh] w-full max-w-[520px] flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl bg-white p-4 sm:p-5 md:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">

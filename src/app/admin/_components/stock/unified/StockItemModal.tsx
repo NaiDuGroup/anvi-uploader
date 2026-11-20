@@ -55,6 +55,7 @@ import type { StockItemDescription } from "@/lib/stock/unified/itemDescription";
 import { StockTierEditor } from "./StockTierEditor";
 import { isStockPhotoKey } from "@/lib/stock/unified/photoKey";
 import { VariantPhotoCell } from "./VariantPhotoCell";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 type Mode = "single" | "grid";
 
@@ -163,6 +164,7 @@ export function StockItemModal({
   onClose: () => void;
   onSaved: () => Promise<void> | void;
 }) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
   const s = t.stock;
   const unit: StockUnit = category.unit;
@@ -456,7 +458,7 @@ export function StockItemModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={() => !saving && onClose()} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={() => !saving && onClose()} />
       <div
         role="dialog"
         aria-modal="true"

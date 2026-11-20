@@ -28,6 +28,7 @@ import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import { boardLineStatus } from "@/lib/orderStatusFromLines";
 import { heldForLayoutCount, lfPlannerLines } from "@/lib/workshopBoard/productionPick";
 import { buildRollLayoutPdfFileName } from "@/lib/largeFormat/rollLayoutPdfFileName";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 // ─── Colour palette for tiles (cycled by order number) ────────────────────────
 
@@ -487,6 +488,7 @@ export function LayoutPlannerModal({
   onStockChanged,
   onClose,
 }: LayoutPlannerModalProps) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
   const wb = t.workshopBoard;
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -927,7 +929,7 @@ export function LayoutPlannerModal({
         </div>
 
         {/* Body */}
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6 lg:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain p-6 lg:flex-row">
           {/* SVG preview */}
           <div className="min-w-0 flex-1">
             {tiles.length === 0 ? (

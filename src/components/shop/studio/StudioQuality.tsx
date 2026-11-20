@@ -12,6 +12,7 @@ import {
 } from "@/lib/studio/quality";
 import { studioPhotoSampler } from "@/lib/studio/photoSampler";
 import type { StudioEditorApi } from "./StudioApp";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /**
  * «Verificare calitate»: the print checks of the current design in plain
@@ -139,6 +140,7 @@ export function StudioQualityDialog({
   onAccept: () => void;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const t = studioShopT(lang);
   // Keyboard: focus goes into the dialog (the main button), Escape closes it, focus returns where it was.
   const first = useRef<HTMLButtonElement>(null);
@@ -165,7 +167,7 @@ export function StudioQualityDialog({
   return (
     <div role="dialog" aria-modal="true" aria-label={t("qualityDialog")} className="fixed inset-0 z-[80] flex items-end justify-center bg-[rgba(20,33,61,0.45)] md:items-center" onClick={onClose}>
       <div
-        className="flex max-h-[85vh] w-full max-w-[460px] flex-col gap-3 overflow-y-auto rounded-t-2xl bg-white p-4 md:rounded-2xl"
+        className="flex max-h-[85vh] w-full max-w-[460px] flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl bg-white p-4 md:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <StudioQualityList q={q} lang={lang} onPick={onPick} />

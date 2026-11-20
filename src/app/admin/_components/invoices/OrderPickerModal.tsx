@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 export interface PickerOrder {
   id: string;
@@ -46,6 +47,7 @@ export default function OrderPickerModal({
   onClose: () => void;
   onPick: (payload: OrderPickerPickPayload) => void;
 }) {
+  useBodyScrollLock();
   const { t, locale } = useLanguageStore();
   const [orders, setOrders] = useState<PickerOrder[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +92,7 @@ export default function OrderPickerModal({
             <X className="h-5 w-5" />
           </button>
         </header>
-        <div className="max-h-[60vh] overflow-y-auto px-5 py-3">
+        <div className="max-h-[60vh] overflow-y-auto overscroll-contain px-5 py-3">
           {error ? (
             <p className="py-6 text-center text-sm text-red-600">{error}</p>
           ) : orders === null ? (

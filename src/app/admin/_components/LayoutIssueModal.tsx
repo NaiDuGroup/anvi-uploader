@@ -5,6 +5,7 @@ import { Clock, FileQuestion, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { LAYOUT_ISSUE_NOTE_MAX, LAYOUT_ISSUE_REASONS, type LayoutIssueReason } from "@/lib/layoutIssue";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /**
  * «Проблема с файлом» on one order line (→ «Ждёт файл»): reason (required) + optional comment.
@@ -25,6 +26,7 @@ export default function LayoutIssueModal({
   onConfirm: (reason: LayoutIssueReason, note: string | null) => void;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
   const li = t.layoutIssue;
   const [selected, setSelected] = useState<LayoutIssueReason | null>(null);
@@ -41,11 +43,11 @@ export default function LayoutIssueModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" data-testid="layout-issue-modal">
-      <div className="absolute inset-0 bg-black/50" onClick={close} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={close} />
       <div
         role="dialog"
         aria-modal="true"
-        className="relative max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 text-gray-900 shadow-xl sm:p-6"
+        className="relative max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-2xl bg-white p-5 text-gray-900 shadow-xl sm:p-6"
       >
         <button
           type="button"

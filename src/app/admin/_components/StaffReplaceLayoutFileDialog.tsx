@@ -13,6 +13,7 @@ import { layoutLinkAllowed } from "@/lib/layoutIssue";
 import { staffReplaceLineFile } from "@/lib/layoutIssueClient";
 import { isHttpLink } from "@/lib/validations";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 export interface StaffReplaceTarget {
   orderId: string;
@@ -59,6 +60,7 @@ export default function StaffReplaceLayoutFileDialog({
   onDone: () => void | Promise<unknown>;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const { t } = useLanguageStore();
   const L = t.layoutIssue;
   const { declared } = target;
@@ -159,7 +161,7 @@ export default function StaffReplaceLayoutFileDialog({
         aria-modal="true"
         aria-labelledby="staff-replace-layout-title"
         data-testid="staff-replace-file-dialog"
-        className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-gray-900 shadow-xl sm:rounded-2xl sm:p-6"
+        className="max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-gray-900 shadow-xl sm:rounded-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-2 flex items-start justify-between gap-3">

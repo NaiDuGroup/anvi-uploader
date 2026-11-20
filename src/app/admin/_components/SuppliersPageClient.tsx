@@ -22,6 +22,7 @@ import {
 } from "@/lib/reconciliation/labels";
 import { cn } from "@/lib/utils";
 import { DateRangeFilter } from "./DateRangeFilter";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 const PAGE_SIZE = 25;
 const CUR = "MDL";
@@ -292,6 +293,7 @@ function SupplierPaymentsDrawer({
   L: ReturnType<typeof getReconLabels>;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const { payments, total, count, isLoading } = useSupplierPayments(
     { idno: supplier.idno, name: supplier.name },
     { kind, dateFrom, dateTo },
@@ -299,8 +301,8 @@ function SupplierPaymentsDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} aria-hidden />
-      <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto bg-white shadow-xl">
+      <div className="absolute inset-0 touch-none bg-black/30" onClick={onClose} aria-hidden />
+      <aside className="relative flex h-full w-full max-w-xl flex-col overflow-y-auto overscroll-contain bg-white shadow-xl">
         <div className="sticky top-0 z-10 flex items-start justify-between gap-2 border-b border-gray-100 bg-white px-4 py-4 md:gap-0 md:px-5">
           <div className="min-w-0">
             <h2 className="break-words text-lg font-bold text-gray-900">{supplier.name}</h2>

@@ -60,6 +60,7 @@ import { StudioCartProgressLine, StudioPhotosMissing, uploadStudioPhotos } from 
 import { FlyerFormatChips, SheetRecalculating, flyerFormatOfSpecs, useSheetSidePrices } from "./StudioFlyer";
 import { SheetFieldsNotShownNote } from "./StudioCardFields";
 import type { StudioCartProgress } from "@/lib/studio/cartProgress";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /**
  * ANVI Studio for business cards (`card`, staff / tester only — `flag.ts`):
@@ -178,11 +179,12 @@ function CardBackChooser({ api, fields, extra, onClose, onPick }: { api: StudioE
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  useBodyScrollLock(Boolean(backSpec));
   if (!backSpec) return null;
   // On the body: the sides bar sits in a transformed box, which would hold a `fixed` dialog inside it.
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-[rgba(20,33,61,0.45)] md:items-center" role="dialog" aria-modal="true" aria-labelledby="studio-back-title" data-studio-back-chooser>
-      <div className="flex max-h-[90vh] w-full max-w-[760px] flex-col gap-3 overflow-y-auto rounded-t-2xl bg-white p-4 md:rounded-2xl md:p-5">
+      <div className="flex max-h-[90vh] w-full max-w-[760px] flex-col gap-3 overflow-y-auto overscroll-contain rounded-t-2xl bg-white p-4 md:rounded-2xl md:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-0.5">
             <h2 id="studio-back-title" className="m-0 text-xl font-extrabold">

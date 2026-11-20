@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 export type ShopConfirmDialogProps = {
   open: boolean;
@@ -44,6 +45,8 @@ export function ShopConfirmDialog({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, busy, onClose]);
+
+  useBodyScrollLock(open);
 
   if (!open || typeof document === "undefined") return null;
   return createPortal(

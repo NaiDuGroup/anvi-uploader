@@ -72,6 +72,7 @@ import {
   sanitizeMoneyInput,
 } from "@/lib/money";
 import { useMugProducts } from "@/lib/swr";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 type Row = {
   id: string;
@@ -900,6 +901,7 @@ function MugCatalogEditModal({
   onClose: () => void;
   onSave: (payload: ModalPayload) => Promise<void>;
 }) {
+  useBodyScrollLock();
   const [sku, setSku] = useState(initialRow?.sku ?? "");
   const [nameRo, setNameRo] = useState(initialRow?.nameRo ?? "");
   const [nameRu, setNameRu] = useState(initialRow?.nameRu ?? "");
@@ -1114,7 +1116,7 @@ function MugCatalogEditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={() => !busy && onClose()} />
+      <div className="absolute inset-0 touch-none bg-black/50" onClick={() => !busy && onClose()} />
       <div
         role="dialog"
         aria-modal="true"

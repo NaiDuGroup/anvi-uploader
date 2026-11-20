@@ -6,6 +6,7 @@ import { friendlyErrorText } from "@/lib/http/apiErrorMessage";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MessageCircle, X, Send, Pencil, Trash2, Check } from "lucide-react";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 interface CommentMessage {
   id: string;
@@ -71,6 +72,7 @@ export default function CommentPanel({
   onClose: () => void;
   initialComments?: CommentMessage[];
 }) {
+  useBodyScrollLock();
   const [messages, setMessages] = useState<CommentMessage[]>(initialComments ?? []);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -231,7 +233,7 @@ export default function CommentPanel({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 touch-none bg-black/30" onClick={onClose} />
       <div className="relative w-full max-w-md bg-white shadow-2xl flex flex-col h-full">
         <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
           <div className="flex items-center gap-2">
@@ -245,7 +247,7 @@ export default function CommentPanel({
           </button>
         </div>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain px-4 py-4 space-y-3">
           {messages.length === 0 && (
             <p className="text-center text-sm text-gray-400 py-8">{t.admin.noComments}</p>
           )}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { X, AlertTriangle, Loader2 } from "lucide-react";
 import type { IssueReasonKey } from "../_lib/constants";
 import { ISSUE_REASON_KEYS } from "../_lib/constants";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 export default function IssueReasonModal({
   t,
@@ -19,6 +20,7 @@ export default function IssueReasonModal({
   onConfirm: (reason: string, code: IssueReasonKey) => void;
   onClose: () => void;
 }) {
+  useBodyScrollLock();
   const [selected, setSelected] = useState<IssueReasonKey | null>(null);
   const [customText, setCustomText] = useState("");
 
@@ -34,7 +36,7 @@ export default function IssueReasonModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 touch-none bg-black/50"
         onClick={() => !isSubmitting && onClose()}
       />
       <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-gray-900">
