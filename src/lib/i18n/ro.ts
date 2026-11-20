@@ -210,6 +210,8 @@ export const ro: TranslationDictionary = {
     clientsCompanyIdno: "IDNO",
     clientsEdit: "Editează",
     clientsDelete: "Șterge",
+    clientsDeleteHasInvoices: "Clientul are facturi ({n}). Deschideți fișa și mutați-le la clientul corect sau ștergeți-le, apoi ștergeți clientul.",
+    clientsDeleteHasLinks: "Clientul este legat de alte înregistrări — nu poate fi șters.",
     clientsSave: "Salvează",
     clientsCreating: "Se creează…",
     clientsUpdating: "Se salvează…",

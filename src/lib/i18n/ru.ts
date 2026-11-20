@@ -226,6 +226,8 @@ export const ru: TranslationDictionary = {
     clientsCompanyIdno: "IDNO компании",
     clientsEdit: "Изменить",
     clientsDelete: "Удалить",
+    clientsDeleteHasInvoices: "У клиента есть счета ({n}). Откройте карточку и перенесите их на нужного клиента или удалите, потом удалите клиента.",
+    clientsDeleteHasLinks: "Клиент связан с другими записями — удалить нельзя.",
     clientsSave: "Сохранить",
     clientsCreating: "Создание…",
     clientsUpdating: "Сохранение…",

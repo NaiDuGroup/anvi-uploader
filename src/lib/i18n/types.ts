@@ -240,6 +240,8 @@ export interface TranslationDictionary {
     clientsCompanyIdno: string;
     clientsEdit: string;
     clientsDelete: string;
+    clientsDeleteHasInvoices: string;
+    clientsDeleteHasLinks: string;
     clientsSave: string;
     clientsCreating: string;
     clientsUpdating: string;

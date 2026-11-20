@@ -573,7 +573,17 @@ function DeleteClientModal({
               try {
                 const res = await fetch(`/api/admin/clients/${row.id}`, { method: "DELETE" });
                 if (res.ok) onDeleted();
-                else setError(await friendlyErrorText(res, locale));
+                else if (res.status === 409) {
+                  const body = (await res.json().catch(() => null)) as {
+                    error?: string;
+                    invoiceCount?: number;
+                  } | null;
+                  setError(
+                    body?.error === "client_has_invoices"
+                      ? t.admin.clientsDeleteHasInvoices.replace("{n}", String(body.invoiceCount ?? ""))
+                      : t.admin.clientsDeleteHasLinks,
+                  );
+                } else setError(await friendlyErrorText(res, locale));
               } catch {
                 setError(await friendlyErrorText(null, locale));
               } finally {

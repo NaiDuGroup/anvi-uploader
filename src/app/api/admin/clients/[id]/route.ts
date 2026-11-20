@@ -194,13 +194,33 @@ export async function DELETE(
     if (!client) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    if (client.userAccount) {
-      await prisma.session.deleteMany({ where: { userId: client.userAccount.id } });
-      await prisma.user.delete({ where: { id: client.userAccount.id } });
+    // Invoices reference the client with ON DELETE RESTRICT: say so instead of
+    // failing the delete (it used to surface as a misleading «Не найдено»).
+    const invoiceCount = await prisma.invoice.count({ where: { clientId: id } });
+    if (invoiceCount > 0) {
+      return NextResponse.json(
+        { error: "client_has_invoices", invoiceCount },
+        { status: 409 },
+      );
     }
-    await prisma.studioCustomer.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      if (client.userAccount) {
+        await tx.session.deleteMany({ where: { userId: client.userAccount.id } });
+        await tx.user.delete({ where: { id: client.userAccount.id } });
+      }
+      await tx.studioCustomer.delete({ where: { id } });
+    });
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  } catch (error) {
+    console.error("DELETE /api/admin/clients/[id]:", error);
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === "P2025") {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      if (error.code === "P2003") {
+        return NextResponse.json({ error: "client_has_links" }, { status: 409 });
+      }
+    }
+    return NextResponse.json({ error: "Failed to delete client" }, { status: 500 });
   }
 }

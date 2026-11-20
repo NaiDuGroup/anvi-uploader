@@ -210,6 +210,8 @@ export const en: TranslationDictionary = {
     clientsCompanyIdno: "Company ID (IDNO)",
     clientsEdit: "Edit",
     clientsDelete: "Delete",
+    clientsDeleteHasInvoices: "This client has invoices ({n}). Open the client card and move them to the right client or delete them, then delete the client.",
+    clientsDeleteHasLinks: "The client is linked to other records and cannot be deleted.",
     clientsSave: "Save",
     clientsCreating: "Creating…",
     clientsUpdating: "Saving…",
