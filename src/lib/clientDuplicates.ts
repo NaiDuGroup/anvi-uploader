@@ -5,8 +5,9 @@ import { stripMoldovaPrefix } from "./phoneNormalize";
  * for client components; the Prisma lookup lives in `clientDuplicatesServer.ts`.
  *
  * A client is a duplicate when another record has the same IDNO (legal entity)
- * or the same phone (any kind — a company and a person sharing one number are
- * still the same contact for the studio).
+ * or the same phone within the same kind (a person and their company often share
+ * one number but are separate clients for invoices; two persons or two companies
+ * with one number are duplicates).
  */
 
 export type DuplicateClientField = "idno" | "phone";
@@ -59,7 +60,12 @@ export interface DuplicateCandidate extends DuplicateClientInfo {
  */
 export function pickDuplicateClient(
   candidates: readonly DuplicateCandidate[],
-  input: { phoneNormalized?: string | null; companyIdno?: string | null; excludeId?: string | null },
+  input: {
+    kind?: string | null;
+    phoneNormalized?: string | null;
+    companyIdno?: string | null;
+    excludeId?: string | null;
+  },
 ): DuplicateClientMatch | null {
   const idno = normalizeIdno(input.companyIdno);
   const phone = phoneMatchKey(input.phoneNormalized);
@@ -78,7 +84,9 @@ export function pickDuplicateClient(
     if (hit) return { field: "idno", existing: toInfo(hit) };
   }
   if (phone) {
-    const hit = pool.find((c) => phoneMatchKey(c.phoneNormalized) === phone);
+    const hit = pool.find(
+      (c) => (!input.kind || c.kind === input.kind) && phoneMatchKey(c.phoneNormalized) === phone,
+    );
     if (hit) return { field: "phone", existing: toInfo(hit) };
   }
   return null;

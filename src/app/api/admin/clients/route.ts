@@ -154,6 +154,7 @@ export async function POST(request: NextRequest) {
         : normalizedPhoneForDb(validated.phone?.trim() ?? "") ?? null;
 
     const dup = await findDuplicateClient({
+      kind: validated.kind,
       phoneNormalized: phoneNorm,
       companyIdno: validated.kind === "LEGAL" ? validated.companyIdno : null,
     });

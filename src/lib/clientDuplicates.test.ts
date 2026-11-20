@@ -68,7 +68,20 @@ describe("pickDuplicateClient", () => {
     expect(m?.existing).not.toHaveProperty("phoneNormalized");
   });
 
-  it("matches phone across kinds and prefixes", () => {
+  it("matches phone only within the same kind", () => {
+    expect(pickDuplicateClient(pool, { kind: "LEGAL", phoneNormalized: "078000111" })).toBeNull();
+    expect(pickDuplicateClient(pool, { kind: "INDIVIDUAL", phoneNormalized: "069123456" })).toBeNull();
+    expect(pickDuplicateClient(pool, { kind: "INDIVIDUAL", phoneNormalized: "37378000111" })).toMatchObject({
+      field: "phone",
+      existing: { id: "c-person" },
+    });
+    expect(pickDuplicateClient(pool, { kind: "LEGAL", phoneNormalized: "069123456" })).toMatchObject({
+      field: "phone",
+      existing: { id: "c-lastory" },
+    });
+  });
+
+  it("without kind matches phone across kinds and prefixes", () => {
     expect(pickDuplicateClient(pool, { phoneNormalized: "069123456" })).toMatchObject({
       field: "phone",
       existing: { id: "c-lastory" },

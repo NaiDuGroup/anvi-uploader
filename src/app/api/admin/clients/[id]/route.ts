@@ -108,11 +108,15 @@ export async function PATCH(
     // Only a phone / IDNO that changed is checked: dealer / email toggles and
     // name edits must keep working on duplicates that already exist in the DB.
     const nextIdno = validated.kind === "LEGAL" ? validated.companyIdno : null;
-    const phoneChanged = phoneMatchKey(phoneNorm) !== phoneMatchKey(existing.phoneNormalized);
+    // A kind change (person ↔ company) re-checks the phone against the new kind.
+    const phoneChanged =
+      phoneMatchKey(phoneNorm) !== phoneMatchKey(existing.phoneNormalized) ||
+      validated.kind !== existing.kind;
     const idnoChanged = normalizeIdno(nextIdno) !== normalizeIdno(existing.companyIdno);
     const dup =
       phoneChanged || idnoChanged
         ? await findDuplicateClient({
+            kind: validated.kind,
             phoneNormalized: phoneChanged ? phoneNorm : null,
             companyIdno: idnoChanged ? nextIdno : null,
             excludeId: id,

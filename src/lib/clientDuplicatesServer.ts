@@ -22,11 +22,12 @@ const CANDIDATE_SELECT = {
 
 /**
  * Existing client with the same IDNO (digits compared, spaces / dashes ignored)
- * or the same phone (local part, any client kind). `excludeId` = the client
+ * or the same phone (local part) on a client of the same kind. `excludeId` = the client
  * being edited. No DB unique constraint exists (prod may already hold dupes),
  * so create / edit routes call this before writing.
  */
 export async function findDuplicateClient(input: {
+  kind?: string | null;
   phoneNormalized?: string | null;
   companyIdno?: string | null;
   excludeId?: string | null;
@@ -37,7 +38,12 @@ export async function findDuplicateClient(input: {
   // IDNOs are stored as typed: a few hundred legal clients, so compare digits in JS
   // instead of guessing every spacing in SQL.
   if (idno) or.push({ companyIdno: { not: null } });
-  if (phone) or.push({ phoneNormalized: { endsWith: phone } });
+  if (phone) {
+    or.push({
+      phoneNormalized: { endsWith: phone },
+      ...(input.kind ? { kind: input.kind } : {}),
+    });
+  }
   if (or.length === 0) return null;
 
   const candidates = await prisma.studioCustomer.findMany({
