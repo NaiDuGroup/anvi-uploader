@@ -99,7 +99,7 @@ const BUSINESS_CARD_CONFIG: SheetProductConfig = {
   sheetPresets: BUSINESS_CARD_SHEET_PRESETS,
   generatesMissingBleed: false,
   appliesMinimumLineTotal: true,
-  layoutFilePrefix: "vizitki",
+  layoutFilePrefix: "business-cards",
 };
 
 const FLYER_CONFIG: SheetProductConfig = {
@@ -113,7 +113,7 @@ const FLYER_CONFIG: SheetProductConfig = {
   sheetPresets: FLYER_SHEET_PRESETS,
   generatesMissingBleed: true,
   appliesMinimumLineTotal: false,
-  layoutFilePrefix: "flaery",
+  layoutFilePrefix: "flyers",
 };
 
 /**
@@ -151,7 +151,7 @@ const POSTCARD_CONFIG: SheetProductConfig = {
   sheetPresets: POSTCARD_SHEET_PRESETS,
   generatesMissingBleed: true,
   appliesMinimumLineTotal: false,
-  layoutFilePrefix: "otkrytki",
+  layoutFilePrefix: "postcards",
 };
 
 const CONFIG_BY_TYPE: Record<SheetProductType, SheetProductConfig> = {

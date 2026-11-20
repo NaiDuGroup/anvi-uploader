@@ -392,7 +392,7 @@ describe.skipIf(!isLocalDb)("integration audit: «Нужен макет» gaps",
           productType: "flyer",
           productionStatus: "WAITING",
           businessCardLineData: {
-            paperSnapshot: { id: "p", name: "A4+ 150", sheetWidthCm: 22.5, sheetHeightCm: 32, costPerSheet: 1, retailPricePerSheet: 5, dealerPricePerSheet: 4 },
+            paperSnapshot: { id: "p", name: "A4+ 150", gsm: 150, sheetWidthCm: 22.5, sheetHeightCm: 32, costPerSheet: 1, retailPricePerSheet: 5, dealerPricePerSheet: 4 },
             cardWidthCm: 10.7,
             cardHeightCm: 15.2,
             cardTrimWidthCm: 10.5,
@@ -432,7 +432,7 @@ describe.skipIf(!isLocalDb)("integration audit: «Нужен макет» gaps",
       const r = await asWorkshop(() => sheetLayout(req("/x", "POST", { orderLineId: line.id })));
       expect(r.status).toBe(200);
       const order = await prisma.order.findUniqueOrThrow({ where: { id: o.id }, select: { orderNumber: true } });
-      expect(r.body.fileName).toBe(`flaery-${order.orderNumber}-200sht-50listov.pdf`);
+      expect(r.body.fileName).toBe(`flyers-${order.orderNumber}-150gsm-200pcs-50sheets.pdf`);
       const key = new URL(String(r.body.downloadUrl), "http://localhost").searchParams.get("key")!;
       const file = path.join(LOCAL_UPLOADS, key);
       writtenKeys.push(file);

@@ -164,8 +164,13 @@ export async function POST(request: NextRequest) {
     });
 
     const orderNumber = line.order?.orderNumber ?? "order";
-    // Run size in the name so the workshop can check the sheet count at a glance.
-    const baseName = `${config.layoutFilePrefix}-${orderNumber}-${data.quantity}sht-${data.sheetsUsed}listov`;
+    // Paper weight + run size in the name so the workshop can check paper and
+    // sheet count at a glance. ASCII/English only (no transliterated Russian).
+    const gsm =
+      data.paperSnapshot.gsm ??
+      Number(/(\d{2,3})\s*g/i.exec(data.paperSnapshot.name ?? "")?.[1] ?? NaN);
+    const gsmPart = Number.isFinite(gsm) && gsm > 0 ? `-${gsm}gsm` : "";
+    const baseName = `${config.layoutFilePrefix}-${orderNumber}${gsmPart}-${data.quantity}pcs-${data.sheetsUsed}sheets`;
     // Sheets come back in `wanted` order: front, then back.
     const pdf = await buildBusinessCardSheetPdf(
       sheets.map(({ png }) => ({
