@@ -6,6 +6,7 @@ import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { isPayOnDeliveryShopOrder, isShopTestOrder, splitShopOrderNotes } from "@/lib/shop/orderFlags";
 import { cn } from "@/lib/utils";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 /**
  * Storefront (source='shop') orders in the admin orders list: a «Сайт» badge
@@ -295,26 +296,27 @@ export function ShopOrderRow({
               className="h-7 w-36 rounded-md border border-gray-200 bg-white px-2 text-xs focus:border-indigo-400 focus:outline-none"
             />
             {dirty && (
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 type="button"
                 onClick={() => void saveTracking()}
                 disabled={saving != null}
-                className="inline-flex h-7 items-center rounded-md border border-gray-200 bg-white px-2 text-xs font-medium hover:bg-gray-50 disabled:opacity-60"
+                className="h-7 px-2 text-xs"
               >
                 {saving === "tracking" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : l.save}
-              </button>
+              </Button>
             )}
             <button
               type="button"
               onClick={() => void toggleShipped()}
               disabled={saving != null}
               title={order.shippedAt ? l.unship : undefined}
-              className={cn(
-                "inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md px-2 text-xs font-semibold disabled:opacity-60",
+              className={
                 order.shippedAt
-                  ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                  : "bg-indigo-600 text-white hover:bg-indigo-700",
-              )}
+                  ? "inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md bg-emerald-100 px-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-200 disabled:opacity-60"
+                  : cn(buttonVariants({ size: "sm" }), "h-7 px-2 text-xs")
+              }
             >
               {saving === "ship" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               {order.shippedAt

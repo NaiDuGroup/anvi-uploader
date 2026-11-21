@@ -14,6 +14,7 @@ import { staffReplaceLineFile } from "@/lib/layoutIssueClient";
 import { isHttpLink } from "@/lib/validations";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { Button } from "@/components/ui/button";
 
 export interface StaffReplaceTarget {
   orderId: string;
@@ -173,7 +174,7 @@ export default function StaffReplaceLayoutFileDialog({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:opacity-40"
             aria-label={L.replaceCancel}
           >
             <X className="h-5 w-5" />
@@ -324,24 +325,23 @@ export default function StaffReplaceLayoutFileDialog({
         ) : null}
 
         <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button
+          <Button
+            variant="outline"
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
             {L.replaceCancel}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             data-testid="staff-replace-file-confirm"
             onClick={() => void handleSave()}
             disabled={!canSave}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             {phase === "uploading" ? L.replaceUploading : phase === "saving" ? L.replaceSaving : L.replaceConfirm}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

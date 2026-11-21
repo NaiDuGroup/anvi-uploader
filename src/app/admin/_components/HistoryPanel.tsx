@@ -149,14 +149,15 @@ export default function HistoryPanel({
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <button
+              type="button"
               onClick={fetchHistory}
-              className="p-1 text-gray-400 hover:text-gray-600"
+              className="rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
               title={t.common.refresh}
               aria-label={t.common.refresh}
             >
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
-            <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600" aria-label="×">
+            <button type="button" onClick={onClose} className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600" aria-label="×">
               <X className="h-5 w-5" />
             </button>
           </div>

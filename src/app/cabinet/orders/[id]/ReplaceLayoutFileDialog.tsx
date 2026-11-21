@@ -13,6 +13,7 @@ import type { PrintSizeCm } from "@/lib/files/declaredPrintSize";
 import { readLocalFileMetaCached, useLocalFileMeta } from "@/lib/files/useLocalFileMeta";
 import { cn } from "@/lib/utils";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { Button } from "@/components/ui/button";
 
 /**
  * «Заменить файл» on a «Нужен макет» line (cabinet, dealer or retail client).
@@ -186,10 +187,10 @@ export function ReplaceLayoutFileDialog({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded p-1 text-gray-400 hover:text-gray-700"
+            className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
             aria-label={L.replaceCancel}
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
         </div>
         {fileName ? (
@@ -259,24 +260,23 @@ export function ReplaceLayoutFileDialog({
         ) : null}
 
         <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button
+          <Button
+            variant="outline"
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="inline-flex h-11 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50 sm:h-10"
           >
             {L.replaceCancel}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             data-testid="replace-file-confirm"
             onClick={() => void handleSave()}
             disabled={!file || busy || tooLarge}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm hover:bg-gold-dark disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             {phase === "uploading" ? L.replaceUploading : phase === "saving" ? L.replaceSaving : L.replaceConfirm}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

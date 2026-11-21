@@ -28,6 +28,7 @@ import type {
   WorkshopBoardGroup,
 } from "@/lib/workshopBoard/types";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { Button } from "@/components/ui/button";
 
 const DTF_FILM_URL = "/api/workshop-board/dtf-film";
 
@@ -399,9 +400,9 @@ function DtfFilmLayoutModal({
             type="button"
             onClick={onClose}
             aria-label={copy.close}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+            className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
           >
-            <X className="h-4 w-4" aria-hidden />
+            <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
 
@@ -429,15 +430,15 @@ function DtfFilmLayoutModal({
                   }
                 />
               </label>
-              <button
+              <Button
+                variant="outline"
                 type="button"
                 disabled={!dirty || gapInvalid || selected.size === 0}
                 onClick={relayout}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-fuchsia-300 bg-white px-3 text-xs font-semibold text-fuchsia-700 hover:bg-fuchsia-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                <RefreshCw className="h-4 w-4" aria-hidden />
                 {copy.relayout}
-              </button>
+              </Button>
             </div>
             {gapInvalid && <p className="text-[11px] text-red-600">{copy.gapInvalid}</p>}
             {selected.size === 0 && <p className="text-[11px] text-amber-700">{copy.nothingSelected}</p>}
@@ -481,15 +482,14 @@ function DtfFilmLayoutModal({
         {error && <p className="mt-2 text-[11px] text-red-600">{error}</p>}
 
         <div className="mt-3 flex justify-end">
-          <button
+          <Button
             type="button"
             disabled={!canDownload || busy}
             onClick={() => void download()}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-fuchsia-300 bg-fuchsia-50 px-3 text-xs font-semibold text-fuchsia-700 hover:bg-fuchsia-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Download className="h-3.5 w-3.5" aria-hidden />}
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
             {busy ? copy.building : uvDtf ? t.uv.workshop.downloadPng : copy.download}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -504,14 +504,16 @@ export function DtfFilmLayoutButton({ group }: { group: WorkshopBoardGroup }) {
   if (!film) return null;
   return (
     <>
-      <button
+      <Button
+        variant="outline"
+        size="sm"
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-fuchsia-300 bg-fuchsia-50 px-2.5 py-1.5 text-[11px] font-medium text-fuchsia-700 transition-colors hover:border-fuchsia-400 hover:bg-fuchsia-100"
+        className="h-7 px-2 text-xs"
       >
         <ScanLine className="h-3.5 w-3.5 shrink-0" aria-hidden />
         {t.dtf.workshop.filmLayout}
-      </button>
+      </Button>
       {open && <DtfFilmLayoutModal group={group} onClose={() => setOpen(false)} />}
     </>
   );
@@ -524,14 +526,16 @@ export function UvDtfFilmLayoutButton({ group }: { group: WorkshopBoardGroup }) 
   if (!hasUvDtfLines(group.lines)) return null;
   return (
     <>
-      <button
+      <Button
+        variant="outline"
+        size="sm"
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-fuchsia-300 bg-fuchsia-50 px-2.5 py-1.5 text-[11px] font-medium text-fuchsia-700 transition-colors hover:border-fuchsia-400 hover:bg-fuchsia-100"
+        className="h-7 px-2 text-xs"
       >
         <ScanLine className="h-3.5 w-3.5 shrink-0" aria-hidden />
         {t.uv.workshop.filmLayout}
-      </button>
+      </Button>
       {open && <DtfFilmLayoutModal group={group} method="uv_dtf" onClose={() => setOpen(false)} />}
     </>
   );

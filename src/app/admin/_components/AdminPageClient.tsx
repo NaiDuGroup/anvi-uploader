@@ -1249,7 +1249,8 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
               {t.admin.order} #{String(toast.orderNumber).padStart(4, "0")}
             </p>
           </div>
-          <button
+          <Button
+            size="sm"
             type="button"
             onClick={() => {
               const tid = toast.orderId;
@@ -1257,17 +1258,17 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
               if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
               setCommentOrderId(tid);
             }}
-            className="ml-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap"
+            className="ml-1 h-7 px-2 text-xs"
           >
             {t.admin.viewComments}
-          </button>
+          </Button>
           <button
             type="button"
             onClick={() => {
               setToast(null);
               if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
             }}
-            className="ml-1 text-gray-400 hover:text-gray-600"
+            className="ml-1 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
           >
             <X className="h-4 w-4" />
           </button>

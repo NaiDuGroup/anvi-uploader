@@ -4,6 +4,7 @@ import { Lightbulb } from "lucide-react";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { TypeHint, TypeHintTarget } from "@/lib/orderTypeHint/orderTypeHint";
 import { PRODUCT_TYPE_ICONS, lineTypeLabel } from "@/lib/productTypeIcons";
+import { Button } from "@/components/ui/button";
 
 /** Mug / notebook / pen are stock items: switching opens the item picker; «set» opens the «Набор» dialog. */
 export function typeHintPicksItem(target: TypeHintTarget): boolean {
@@ -56,14 +57,15 @@ export function LineTypeHint({
         </span>
       </div>
       <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-5">
-        <button
+        <Button
+          size="sm"
           type="button"
-          className="inline-flex items-center gap-1 rounded-md bg-amber-500 px-2 py-0.5 font-medium text-white hover:bg-amber-600"
+          className="h-7 px-2 text-xs"
           onClick={() => onSwitch(first.target)}
         >
           {isSet ? <Icon className="h-3 w-3" aria-hidden /> : null}
           {isSet ? th.makeSet : typeHintPicksItem(first.target) ? th.pickItem : th.switchTo}
-        </button>
+        </Button>
         <button type="button" className="text-amber-800 underline-offset-2 hover:underline" onClick={onDismiss}>
           {th.dismiss}
         </button>

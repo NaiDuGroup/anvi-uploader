@@ -72,6 +72,7 @@ import {
 import { CabinetFilePreviewModal } from "@/app/cabinet/_components/CabinetFilePreviewModal";
 import { CABINET_STATUS_STYLES } from "@/app/cabinet/_components/cabinetStatusStyles";
 import { cabinetStatusHint } from "@/lib/cabinetStatusHint";
+import { Button } from "@/components/ui/button";
 import {
   CABINET_PRODUCT_ICONS,
   cabinetLineIconKey,
@@ -693,18 +694,18 @@ function LayoutIssueCallout({
           <p className="text-sm text-amber-800">{L.cabinetBannerHint}</p>
         </div>
       </div>
-      <button
+      <Button
         type="button"
         onClick={() =>
           document
             .getElementById(positionDomId(lineIds[0]!))
             ?.scrollIntoView({ behavior: "smooth", block: "center" })
         }
-        className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gold-dark sm:w-auto"
+        className="w-full shrink-0 sm:w-auto"
       >
         <Upload className="h-4 w-4" aria-hidden />
         {L.replaceButton}
-      </button>
+      </Button>
     </section>
   );
 }
@@ -806,15 +807,16 @@ function PositionFrame({
       {!issue && ((layout?.canReplaceFile && !perFileReplace) || inWork || replacedAt) ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           {layout?.canReplaceFile && !perFileReplace ? (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               type="button"
               data-testid={`cabinet-owner-replace-${line.id}`}
               onClick={replaceSingle}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:border-gold hover:bg-amber-50/40"
             >
               <Upload className="h-3.5 w-3.5" aria-hidden />
               {t.layoutIssue.ownerReplaceButton}
-            </button>
+            </Button>
           ) : null}
           {inWork ? (
             <span data-testid={`cabinet-line-in-work-${line.id}`} className="text-xs text-gray-400">
@@ -846,21 +848,18 @@ function PositionFrame({
                 <div className="min-w-0 flex-1">
                   <CabinetOrderFileRow file={f} t={t} onPreview={onPreview} size="md" />
                 </div>
-                <button
+                <Button
+                  variant={issue ? "default" : "outline"}
+                  size="sm"
                   type="button"
                   data-testid={`cabinet-replace-file-${line.id}-${f.id}`}
                   onClick={() => onReplace(f.id)}
                   aria-label={`${t.layoutIssue.replaceFileButton}: ${f.fileName}`}
-                  className={cn(
-                    "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold shadow-sm transition-colors",
-                    issue
-                      ? "border-gold bg-gold text-white hover:bg-gold-dark"
-                      : "border-gray-300 bg-white text-gray-700 hover:border-gold hover:bg-amber-50/40",
-                  )}
+                  className="shrink-0"
                 >
                   <Upload className="h-3.5 w-3.5" aria-hidden />
                   {t.layoutIssue.replaceFileButton}
-                </button>
+                </Button>
               </div>
             ) : (
               <CabinetOrderFileRow key={f.id} file={f} t={t} onPreview={onPreview} size="md" />
@@ -945,15 +944,15 @@ function LayoutIssueBlock({
         ) : null}
       </p>
       {onReplace ? (
-        <button
+        <Button
           type="button"
           data-testid={`cabinet-replace-file-${lineId}`}
           onClick={onReplace}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gold-dark sm:h-10 sm:w-auto"
+          className="w-full sm:w-auto"
         >
           <Upload className="h-4 w-4" aria-hidden />
           {L.replaceButton}
-        </button>
+        </Button>
       ) : (
         <p data-testid={`cabinet-replace-pick-hint-${lineId}`} className="text-sm font-medium text-gray-800">
           {L.replacePickFileHint}
@@ -1211,10 +1210,10 @@ function OrderMessagesSection({
           placeholder={t.cabinet.messagePlaceholder}
           className="max-h-32 min-h-[40px] flex-1 resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
         />
-        <button
+        <Button
           type="submit"
           disabled={!text.trim() || sending}
-          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gold-dark disabled:cursor-not-allowed disabled:opacity-50"
+          className="shrink-0"
         >
           {sending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -1224,7 +1223,7 @@ function OrderMessagesSection({
           <span className="hidden sm:inline">
             {sending ? t.cabinet.messageSending : t.cabinet.messageSend}
           </span>
-        </button>
+        </Button>
       </form>
       {sendError ? (
         <p role="alert" className="mt-2 text-sm text-red-600">

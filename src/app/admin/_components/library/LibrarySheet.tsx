@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
@@ -71,7 +72,7 @@ export function LibrarySheet({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
+            className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
             aria-label={closeLabel}
           >
             <X className="h-5 w-5" />
@@ -89,9 +90,8 @@ export function LibrarySheet({
   );
 }
 
-export const sheetCancelClass =
-  "h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50";
-export const sheetPrimaryClass =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50";
+/** Footer buttons of the sheet dialogs: exactly the shared Button classes (outline / primary). */
+export const sheetCancelClass = buttonVariants({ variant: "outline" });
+export const sheetPrimaryClass = buttonVariants();
 export const sheetInputClass =
   "h-10 w-full rounded-lg border border-gray-300 px-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200";

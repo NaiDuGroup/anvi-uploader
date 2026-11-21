@@ -11,6 +11,7 @@ import type { TranslationDictionary } from "@/lib/i18n";
 import { FileMetaLine } from "@/components/FileMetaLine";
 import { CABINET_FILE_META_ENDPOINT } from "@/lib/files/useFileMeta";
 import { lockBodyScroll } from "@/hooks/useBodyScrollLock";
+import { Button } from "@/components/ui/button";
 
 /**
  * Full-screen preview of a file on one of the customer's own orders. Always
@@ -128,13 +129,12 @@ export function CabinetFilePreviewModal({
             <p className="mt-3 text-sm text-gray-700">
               {t.cabinet.orderFilePreviewUnavailable}
             </p>
-            <a
-              href={downloadUrl}
-              className="mt-4 inline-flex h-10 items-center gap-2 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gold-dark"
-            >
-              <DownloadIcon className="h-4 w-4" />
-              {t.cabinet.orderFileDownload}
-            </a>
+            <Button asChild className="mt-4">
+              <a href={downloadUrl}>
+                <DownloadIcon className="h-4 w-4" />
+                {t.cabinet.orderFileDownload}
+              </a>
+            </Button>
           </div>
         )}
       </div>

@@ -60,6 +60,7 @@ import {
   skuLinePiecesQty,
 } from "@/components/orders/OrderLineSummaries";
 import type { CabinetOrderLineView } from "@/lib/cabinetOrderLineView";
+import { Button } from "@/components/ui/button";
 import {
   CABINET_PRODUCT_ICONS,
   cabinetLineIconKey,
@@ -343,25 +344,24 @@ export default function OrdersListClient({
         ) : null}
 
         <div className="flex shrink-0 items-center gap-2 lg:ml-0">
-          <button
+          <Button
+            variant="outline"
             type="button"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
           >
             <RefreshCw
               className={cn("h-4 w-4", refreshing && "animate-spin")}
             />
             <span className="hidden sm:inline">{t.common.refresh}</span>
-          </button>
+          </Button>
 
-          <Link
-            href="/cabinet/orders/new"
-            className="hidden h-10 items-center gap-2 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gold-dark sm:inline-flex"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2.5} />
-            {t.cabinet.newOrderButton}
-          </Link>
+          <Button asChild className="hidden sm:inline-flex">
+            <Link href="/cabinet/orders/new">
+              <Plus className="h-4 w-4" strokeWidth={2.5} />
+              {t.cabinet.newOrderButton}
+            </Link>
+          </Button>
         </div>
       </header>
 
@@ -1316,13 +1316,12 @@ function EmptyState({
         </p>
         <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
       </div>
-      <Link
-        href="/cabinet/orders/new"
-        className="inline-flex h-10 items-center gap-2 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gold-dark"
-      >
-        <Plus className="h-4 w-4" strokeWidth={2.5} />
-        {ctaLabel}
-      </Link>
+      <Button asChild>
+        <Link href="/cabinet/orders/new">
+          <Plus className="h-4 w-4" strokeWidth={2.5} />
+          {ctaLabel}
+        </Link>
+      </Button>
     </div>
   );
 }

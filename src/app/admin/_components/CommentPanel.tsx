@@ -242,7 +242,7 @@ export default function CommentPanel({
               {t.admin.comments} — #{String(orderNumber).padStart(4, "0")}
             </h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button type="button" onClick={onClose} className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>
         </div>

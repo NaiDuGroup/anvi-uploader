@@ -7,6 +7,7 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import { libraryOrderNumber } from "./libraryClient";
 import { SaveToLibraryDialog } from "./SaveToLibraryDialog";
 import type { LibraryOwner } from "./LibraryOwnerField";
+import { Button } from "@/components/ui/button";
 
 export interface LibraryHintOrder {
   orderId: string;
@@ -86,28 +87,31 @@ export function LibraryCompletionHint({ order, onClose }: { order: LibraryHintOr
           <p className="text-sm font-semibold">{d.hintTitle}</p>
           <p className="mt-0.5 text-xs text-gray-600">{d.hintText(libraryOrderNumber(order.orderNumber), missing)}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <button
+            <Button
               type="button"
+              size="sm"
               onClick={() => setDialogOpen(true)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-3 text-xs font-semibold text-white hover:bg-amber-700"
+              className="h-7 px-2 text-xs"
               data-testid="library-hint-open"
             >
               <BookmarkPlus className="h-3.5 w-3.5" aria-hidden />
               {d.hintAction}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               type="button"
               onClick={onClose}
-              className="h-8 rounded-lg px-3 text-xs font-medium text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50"
+              className="h-7 px-2 text-xs"
             >
               {d.hintDismiss}
-            </button>
+            </Button>
           </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100"
+          className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
           aria-label={d.close}
         >
           <X className="h-4 w-4" />

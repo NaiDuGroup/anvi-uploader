@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { LAYOUT_ISSUE_NOTE_MAX, LAYOUT_ISSUE_REASONS, type LayoutIssueReason } from "@/lib/layoutIssue";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { Button } from "@/components/ui/button";
 
 /**
  * «Проблема с файлом» on one order line (→ «Ждёт файл»): reason (required) + optional comment.
@@ -54,7 +55,7 @@ export default function LayoutIssueModal({
           onClick={close}
           disabled={isSubmitting}
           aria-label={li.cancel}
-          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
+          className="absolute right-3 top-3 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <X className="h-5 w-5" />
         </button>
@@ -120,20 +121,19 @@ export default function LayoutIssueModal({
         ) : null}
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button
+          <Button
+            variant="outline"
             type="button"
             onClick={close}
             disabled={isSubmitting}
-            className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
             {li.cancel}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             data-testid="layout-issue-confirm"
             disabled={!selected || isSubmitting}
             onClick={submit}
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
@@ -141,7 +141,7 @@ export default function LayoutIssueModal({
               <Clock className="h-4 w-4" aria-hidden />
             )}
             {li.confirm}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

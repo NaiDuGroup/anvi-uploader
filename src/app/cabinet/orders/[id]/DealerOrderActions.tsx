@@ -11,6 +11,7 @@ import {
   type DealerOrderActionsState,
 } from "@/lib/dealerOrderModify";
 import { cn } from "@/lib/utils";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 
 /** Id of the order chat's text box (the «Написать цеху» button focuses it). */
@@ -55,8 +56,9 @@ export function DealerOrderActionsView({
   if (state === "hidden") return null;
   const locked = state === "locked";
   const d = t.dealerOrder;
-  const buttonBase =
-    "inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold shadow-sm transition-colors sm:w-auto";
+  /** Shared Button classes, full width on phones. */
+  const primaryClass = cn(buttonVariants(), "w-full sm:w-auto");
+  const outlineClass = cn(buttonVariants({ variant: "outline" }), "w-full sm:w-auto");
   return (
     <section
       data-testid="dealer-order-actions"
@@ -94,7 +96,7 @@ export function DealerOrderActionsView({
             disabled
             aria-disabled="true"
             data-testid="dealer-order-edit"
-            className={cn(buttonBase, "cursor-not-allowed bg-gray-100 text-gray-400")}
+            className={outlineClass}
           >
             <Pencil className="h-4 w-4" aria-hidden />
             {d.edit}
@@ -103,7 +105,7 @@ export function DealerOrderActionsView({
           <Link
             href={`/cabinet/orders/${orderId}/edit`}
             data-testid="dealer-order-edit"
-            className={cn(buttonBase, "bg-gold text-white hover:bg-gold-dark")}
+            className={primaryClass}
           >
             <Pencil className="h-4 w-4" aria-hidden />
             {d.edit}
@@ -115,12 +117,7 @@ export function DealerOrderActionsView({
           aria-disabled={locked ? "true" : undefined}
           data-testid="dealer-order-cancel"
           onClick={locked ? undefined : onCancelClick}
-          className={cn(
-            buttonBase,
-            locked
-              ? "cursor-not-allowed bg-gray-100 text-gray-400"
-              : "border border-red-200 bg-white text-red-700 hover:bg-red-50",
-          )}
+className={outlineClass}
         >
           <Ban className="h-4 w-4" aria-hidden />
           {d.cancel}
@@ -130,7 +127,7 @@ export function DealerOrderActionsView({
             type="button"
             data-testid="dealer-order-write-workshop"
             onClick={onWriteWorkshop}
-            className={cn(buttonBase, "border border-amber-300 bg-white text-amber-900 hover:bg-amber-100")}
+            className={outlineClass}
           >
             <MessageCircle className="h-4 w-4" aria-hidden />
             {d.writeWorkshop}
@@ -193,10 +190,10 @@ export function DealerCancelDialog({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded p-1 text-gray-400 hover:text-gray-700"
+            className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
             aria-label={d.cancelKeep}
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
         </div>
         <p className="mb-3 text-sm text-gray-600">{d.cancelDialogText}</p>
@@ -225,22 +222,22 @@ export function DealerCancelDialog({
           {touched && tooShort ? <p className="mt-1 text-xs text-red-600">{d.cancelReasonRequired}</p> : null}
           {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
           <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <button
+            <Button
+              variant="outline"
               type="button"
               onClick={onClose}
               disabled={busy}
-              className="inline-flex h-10 items-center justify-center rounded-lg border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50"
             >
               {d.cancelKeep}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="destructive"
               type="submit"
               disabled={busy || tooShort}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
               {busy ? d.cancelling : d.cancelConfirm}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

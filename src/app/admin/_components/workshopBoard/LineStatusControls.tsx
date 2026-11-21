@@ -13,6 +13,7 @@ import { canFlagLayoutIssue, isLayoutRecentlyFixed } from "@/lib/layoutIssue";
 import { formatLayoutFixedTime, layoutIssueReasonLabel, layoutIssueWaitLabel } from "@/lib/layoutIssueClient";
 import { isOwnerReplaceMarkerVisible } from "@/lib/ownerLineFileReplace";
 import { OwnerReplacedBadge } from "@/app/admin/_components/OwnerReplacedBadge";
+import { Button } from "@/components/ui/button";
 import {
   LINE_MENU_ICONS,
   LineMoreMenu,
@@ -201,16 +202,18 @@ export function LineStatusControls({ line }: { line: WorkshopBoardLine }) {
             </button>
           )}
           {status === "NEEDS_LAYOUT" && (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               type="button"
               disabled={busy}
               data-testid={`line-replace-layout-${id}`}
               onClick={() => replaceLayoutFile(line)}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
+              className="h-7 px-2 text-xs"
             >
               <FilePen className="h-3.5 w-3.5" aria-hidden />
               {t.layoutIssue.staffReplaceButton}
-            </button>
+            </Button>
           )}
           {menuItems.length > 0 && (
             <LineMoreMenu

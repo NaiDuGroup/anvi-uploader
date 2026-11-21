@@ -42,7 +42,8 @@ export default function DeleteConfirmModal({
             {t.admin.cancel}
           </Button>
           <Button
-            className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+            variant="destructive"
+            className="flex-1"
             onClick={handleDelete}
             disabled={deleting}
           >

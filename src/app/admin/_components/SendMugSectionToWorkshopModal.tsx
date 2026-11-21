@@ -191,7 +191,7 @@ export default function SendMugSectionToWorkshopModal({
           type="button"
           onClick={close}
           disabled={isRunning}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="absolute top-4 right-4 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40"
           aria-label={t.workshopBoard.sendMugSectionClose}
         >
           <X className="w-5 h-5" />
@@ -334,7 +334,7 @@ export default function SendMugSectionToWorkshopModal({
           )}
           {!isDone && (
             <Button
-              className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+              className="flex-1"
               onClick={handleStart}
               disabled={!canStart}
             >
@@ -348,7 +348,8 @@ export default function SendMugSectionToWorkshopModal({
           )}
           {isDone && (
             <Button
-              className="w-full bg-amber-600 hover:bg-amber-700 text-white"
+              variant="outline"
+              className="w-full"
               onClick={close}
             >
               {t.workshopBoard.sendMugSectionClose}

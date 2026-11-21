@@ -409,24 +409,23 @@ function BusinessCardLayoutButton({
 
   return (
     <>
-      <button
+      <Button
+        variant="outline"
+        size="sm"
         type="button"
         disabled={busy || held}
         title={held ? t.layoutIssue.sheetDownloadHeld : undefined}
         data-testid={`line-sheet-layout-download-${orderLineId}`}
         onClick={() => void build()}
-        className={cn(
-          "inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-800 transition-colors hover:bg-teal-100 disabled:opacity-60",
-          held ? "disabled:cursor-not-allowed" : "disabled:cursor-wait",
-        )}
+        className={cn("h-7 px-2 text-xs", held && "disabled:pointer-events-auto disabled:cursor-not-allowed")}
       >
         {busy ? (
-          <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
         ) : (
-          <Download className="h-3 w-3" aria-hidden />
+          <Download className="h-3.5 w-3.5" aria-hidden />
         )}
         {busy ? t.admin.bcLayoutBuilding : t.admin.bcLayoutDownloadBtn}
-      </button>
+      </Button>
       {held ? (
         <p className="mt-1 text-[11px] text-amber-800" data-testid={`line-sheet-layout-held-${orderLineId}`}>
           {t.layoutIssue.sheetDownloadHeld}
@@ -602,25 +601,29 @@ function BoardGroupCard({
         <div className="flex items-center gap-2 shrink-0">
           {/* Layout button: sheet layout for sheet materials, roll layout for rolls */}
           {isLfSheet && (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               type="button"
               onClick={() => onAssembleLayout(group)}
               data-testid="lf-sheet-layout-open"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-1.5 text-[11px] font-medium text-sky-600 hover:bg-sky-100 hover:border-sky-400 transition-colors"
+              className="h-7 px-2 text-xs"
             >
               <ScanLine className="h-3.5 w-3.5 shrink-0" aria-hidden />
               {t.workshopBoard.sheetLayoutCta}
-            </button>
+            </Button>
           )}
           {isLf && !isLfSheet && (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               type="button"
               onClick={() => onAssembleLayout(group)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-1.5 text-[11px] font-medium text-sky-600 hover:bg-sky-100 hover:border-sky-400 transition-colors"
+              className="h-7 px-2 text-xs"
             >
               <ScanLine className="h-3.5 w-3.5 shrink-0" aria-hidden />
               {t.workshopBoard.assembleLayoutCta}
-            </button>
+            </Button>
           )}
           {productType === "dtf_apparel" && <DtfFilmLayoutButton group={group} />}
           {sectionKey === "uv_dtf" && <UvDtfFilmLayoutButton group={group} />}
@@ -745,7 +748,9 @@ function BoardSection({
         </div>
         <div className="flex items-center gap-2">
           {pt === "notebook" && (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               type="button"
               onClick={() => onSendNotebookSection(section)}
               disabled={freshTileCount < 2}
@@ -754,19 +759,16 @@ function BoardSection({
                   ? t.workshopBoard.sendNotebookSectionNeedMore
                   : undefined
               }
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
-                freshTileCount >= 2
-                  ? "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50"
-                  : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed",
-              )}
+              className="h-7 px-2 text-xs disabled:pointer-events-auto disabled:cursor-not-allowed"
             >
-              <Send className="h-3 w-3" aria-hidden />
+              <Send className="h-3.5 w-3.5" aria-hidden />
               {t.workshopBoard.sendNotebookSectionCta(freshTileCount)}
-            </button>
+            </Button>
           )}
           {pt === "mug" && (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               type="button"
               onClick={() => onSendMugSection(section)}
               disabled={freshTileCount < 1}
@@ -775,16 +777,11 @@ function BoardSection({
                   ? t.workshopBoard.sendMugSectionNeedMore
                   : undefined
               }
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
-                freshTileCount >= 1
-                  ? "border-amber-300 bg-white text-amber-700 hover:bg-amber-100"
-                  : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed",
-              )}
+              className="h-7 px-2 text-xs disabled:pointer-events-auto disabled:cursor-not-allowed"
             >
-              <Send className="h-3 w-3" aria-hidden />
+              <Send className="h-3.5 w-3.5" aria-hidden />
               {t.workshopBoard.sendMugSectionCta(freshTileCount)}
-            </button>
+            </Button>
           )}
           <button
             type="button"
@@ -867,14 +864,16 @@ function LineStatusTip() {
           <span className="font-semibold">{t.lineStatus.boardTipTitle}</span> {t.lineStatus.boardTipText}
         </span>
       </p>
-      <button
+      <Button
+        variant="outline"
+        size="sm"
         type="button"
         data-testid="line-status-tip-dismiss"
         onClick={dismiss}
-        className="h-8 shrink-0 self-end rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 sm:self-auto"
+        className="h-7 shrink-0 self-end px-2 text-xs sm:self-auto"
       >
         {t.lineStatus.boardTipDismiss}
-      </button>
+      </Button>
     </div>
   );
 }

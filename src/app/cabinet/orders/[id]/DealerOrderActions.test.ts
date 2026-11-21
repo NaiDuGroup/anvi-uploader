@@ -51,7 +51,7 @@ describe("DealerOrderActionsView", () => {
     const html = render("SENT_TO_WORKSHOP");
     expect(html).toContain('data-state="editable"');
     expect(tagOf(html, "dealer-order-edit")).toContain('href="/cabinet/orders/order-1/edit"');
-    expect(tagOf(html, "dealer-order-cancel")).not.toContain("disabled");
+    expect(tagOf(html, "dealer-order-cancel")).not.toContain('disabled=""');
     expect(html).toContain("Изменить");
     expect(html).toContain("Отменить заказ");
     expect(html).not.toContain('data-testid="dealer-order-locked"');
@@ -66,20 +66,20 @@ describe("DealerOrderActionsView", () => {
     const edit = tagOf(html, "dealer-order-edit");
     const cancel = tagOf(html, "dealer-order-cancel");
     expect(edit).toMatch(/^<button/);
-    expect(edit).toContain("disabled");
+    expect(edit).toContain('disabled=""');
     expect(edit).not.toContain("href=");
-    expect(cancel).toContain("disabled");
+    expect(cancel).toContain('disabled=""');
     // «Изменить уже нельзя…» is shown under the status (cabinetStatusHint), not repeated here.
     expect(html).not.toContain('data-testid="dealer-order-locked"');
     expect(html).not.toContain("Изменить уже нельзя");
-    expect(tagOf(html, "dealer-order-write-workshop")).not.toContain("disabled");
+    expect(tagOf(html, "dealer-order-write-workshop")).not.toContain('disabled=""');
     expect(html).toContain("Написать цеху");
   });
 
   it("paid order: disabled buttons with the «already paid» plaque", () => {
     const html = render("SENT_TO_WORKSHOP", { isPaid: true });
     expect(html).toContain('data-state="locked"');
-    expect(tagOf(html, "dealer-order-cancel")).toContain("disabled");
+    expect(tagOf(html, "dealer-order-cancel")).toContain('disabled=""');
     expect(html).toContain('data-testid="dealer-order-locked"');
     expect(html).toContain("Заказ уже оплачен");
   });
@@ -118,8 +118,8 @@ describe("DealerOrderActionsView", () => {
       expect(html).toContain('data-testid="dealer-order-locked"');
       expect(html).toContain('data-testid="dealer-order-locked-files-hint"');
       expect(html).toContain(ru.layoutIssue.lockedWaitingFilesHint);
-      expect(tagOf(html, "dealer-order-edit")).toContain("disabled");
-      expect(tagOf(html, "dealer-order-cancel")).toContain("disabled");
+      expect(tagOf(html, "dealer-order-edit")).toContain('disabled=""');
+      expect(tagOf(html, "dealer-order-cancel")).toContain('disabled=""');
       // Printing is explained under the status, not repeated here.
       expect(html).not.toContain(ru.dealerOrder.lockedPrinting);
     });

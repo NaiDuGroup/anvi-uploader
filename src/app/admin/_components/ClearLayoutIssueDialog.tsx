@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { Loader2, Undo2, X } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
+import { Button } from "@/components/ui/button";
 
 /**
  * In-page confirm for «Снять отметку» on a «Нужен макет» line (studio orders
@@ -69,25 +70,24 @@ export default function ClearLayoutIssueDialog({
           </p>
         ) : null}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button
+          <Button
+            variant="outline"
             type="button"
             onClick={close}
             disabled={isSubmitting}
-            className="h-10 rounded-lg border border-gray-200 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
           >
             {li.cancel}
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             data-testid="clear-layout-issue-confirm"
             disabled={isSubmitting}
             onClick={onConfirm}
             autoFocus
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm hover:bg-gold-dark disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Undo2 className="h-4 w-4" aria-hidden />}
             {li.clear}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

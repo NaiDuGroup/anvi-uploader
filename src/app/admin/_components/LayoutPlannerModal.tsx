@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X, AlertTriangle, Download, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
 import { resolveLayoutBorderCm } from "@/lib/largeFormat/lfLayoutBorder";
@@ -921,7 +922,7 @@ export function LayoutPlannerModal({
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
             aria-label={wb.layoutClose}
           >
             <X className="h-5 w-5" aria-hidden />
@@ -1094,9 +1095,11 @@ export function LayoutPlannerModal({
           )}
           <div className="flex flex-wrap items-center justify-end gap-2">
             {rollChoice && (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={handleConfirmRoll}
+                className="disabled:pointer-events-auto disabled:cursor-not-allowed"
                 disabled={!canConfirmRoll || confirmBusy}
                 title={
                   tiles.length === 0
@@ -1105,15 +1108,15 @@ export function LayoutPlannerModal({
                       ? wb.layoutPdfUnplacedBlocked
                       : undefined
                 }
-                className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <CheckCircle2 className="h-4 w-4" aria-hidden />
                 {confirmBusy ? wb.layoutConfirmRollBusy : wb.layoutConfirmRollCta}
-              </button>
+              </Button>
             )}
-            <button
+            <Button
               type="button"
               onClick={handleDownloadPdf}
+              className="disabled:pointer-events-auto disabled:cursor-not-allowed"
               disabled={!canDownloadPdf || pdfLoading}
               title={
                 tiles.length === 0
@@ -1122,18 +1125,17 @@ export function LayoutPlannerModal({
                     ? wb.layoutPdfUnplacedBlocked
                     : undefined
               }
-              className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Download className="h-4 w-4" aria-hidden />
               {pdfLoading ? wb.layoutGeneratingPdf : wb.layoutDownloadPdf}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
               onClick={onClose}
-              className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
             >
               {wb.layoutClose}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

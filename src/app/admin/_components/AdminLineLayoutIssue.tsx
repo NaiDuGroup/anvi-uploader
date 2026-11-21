@@ -10,6 +10,7 @@ import type { StaffReplaceTarget } from "./StaffReplaceLayoutFileDialog";
 import { isOwnerReplaceMarkerVisible } from "@/lib/ownerLineFileReplace";
 import { OwnerReplacedBadge } from "./OwnerReplacedBadge";
 import { LINE_MENU_ICONS, LineMoreMenu, lineMenuItemKeys, type LineMoreMenuItem } from "./LineMoreMenu";
+import { Button } from "@/components/ui/button";
 
 /**
  * Studio orders list: «Ждёт файл» (NEEDS_LAYOUT) on one order line (step 3). The
@@ -137,15 +138,17 @@ export function AdminLineLayoutIssue({
       <p className="mt-1 text-[11px] leading-snug text-amber-800">{li.staffReplaceHint}</p>
       {ctx ? (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             type="button"
             data-testid={`admin-line-replace-file-${line.id}`}
             onClick={() => ctx.replaceFile(staffReplaceTargetOf(orderId, line, lineCode))}
-            className="inline-flex h-8 items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 text-xs font-semibold normal-case tracking-normal text-gray-700 shadow-sm transition-colors hover:bg-gray-50"
+            className="h-7 px-2 text-xs normal-case tracking-normal"
           >
             <FilePen className="h-3.5 w-3.5" aria-hidden />
             {li.staffReplaceButton}
-          </button>
+          </Button>
         </div>
       ) : null}
     </div>

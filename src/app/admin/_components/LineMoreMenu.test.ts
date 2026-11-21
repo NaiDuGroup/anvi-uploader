@@ -121,7 +121,7 @@ describe("board line controls: calm «Ждёт файл»", () => {
     expect(html).not.toMatch(/rose-|red-|violet-/);
     const at = html.indexOf('data-testid="line-replace-layout-l1"');
     const tag = html.slice(html.lastIndexOf("<", at), html.indexOf(">", at));
-    expect(tag).toContain("border-gray-300");
+    expect(tag).toContain("border-gray-200 bg-white"); // shared outline Button
   });
 
   it("flagged note: amber reason · «comment» · wait, no AlertTriangle", () => {

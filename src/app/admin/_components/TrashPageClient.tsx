@@ -236,11 +236,13 @@ export default function TrashPageClient() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button
+                        <Button
+                          variant="outline"
+                          size="sm"
                           type="button"
                           onClick={() => handleRestore(order.id)}
                           disabled={restoringId === order.id}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors disabled:opacity-60 disabled:cursor-wait"
+                          className="h-7 px-2 text-xs"
                           title={t.admin.trashRestore}
                         >
                           {restoringId === order.id ? (
@@ -253,15 +255,17 @@ export default function TrashPageClient() {
                               ? t.admin.trashRestoring
                               : t.admin.trashRestore}
                           </span>
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
                           type="button"
                           onClick={() => setPermanentDeleteId(order.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+                          className="h-7 px-2 text-xs"
                           title={t.admin.trashPermanentDelete}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>

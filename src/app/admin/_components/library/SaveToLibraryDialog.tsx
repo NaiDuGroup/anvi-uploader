@@ -87,7 +87,7 @@ export function SaveToLibraryDialog({ target, onClose }: { target: SaveToLibrary
         onClose={onClose}
         footer={
           <>
-            <Link href="/admin/library" className={sheetCancelClass + " inline-flex items-center justify-center"}>
+            <Link href="/admin/library" className={sheetCancelClass}>
               {d.openLibrary}
             </Link>
             <button type="button" className={sheetPrimaryClass} onClick={onClose}>
