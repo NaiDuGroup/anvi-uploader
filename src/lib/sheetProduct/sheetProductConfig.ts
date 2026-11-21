@@ -86,6 +86,12 @@ export interface SheetProductConfig {
   readonly appliesMinimumLineTotal: boolean;
   /** Transliterated file-name prefix for the workshop layout. */
   readonly layoutFilePrefix: string;
+  /**
+   * Turn of the back page in the Ricoh layout PDF. Business cards: 0 — the
+   * workshop wants the back laid out exactly like the front (2026-11-21).
+   * Others keep the 180° turn for a flipped sheet.
+   */
+  readonly layoutBackRotateDeg: 0 | 180;
 }
 
 const BUSINESS_CARD_CONFIG: SheetProductConfig = {
@@ -100,6 +106,7 @@ const BUSINESS_CARD_CONFIG: SheetProductConfig = {
   generatesMissingBleed: false,
   appliesMinimumLineTotal: true,
   layoutFilePrefix: "business-cards",
+  layoutBackRotateDeg: 0,
 };
 
 const FLYER_CONFIG: SheetProductConfig = {
@@ -114,6 +121,7 @@ const FLYER_CONFIG: SheetProductConfig = {
   generatesMissingBleed: true,
   appliesMinimumLineTotal: false,
   layoutFilePrefix: "flyers",
+  layoutBackRotateDeg: 180,
 };
 
 /**
@@ -132,7 +140,8 @@ const STICKER_SHEET_CONFIG: SheetProductConfig = {
   sheetPresets: [1, 5, 10, 30, 100],
   generatesMissingBleed: false,
   appliesMinimumLineTotal: false,
-  layoutFilePrefix: "nakleyki",
+  layoutFilePrefix: "sticker-sheets",
+  layoutBackRotateDeg: 180,
 };
 
 /**
@@ -152,6 +161,7 @@ const POSTCARD_CONFIG: SheetProductConfig = {
   generatesMissingBleed: true,
   appliesMinimumLineTotal: false,
   layoutFilePrefix: "postcards",
+  layoutBackRotateDeg: 180,
 };
 
 const CONFIG_BY_TYPE: Record<SheetProductType, SheetProductConfig> = {
